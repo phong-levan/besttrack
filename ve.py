@@ -5,8 +5,8 @@ from streamlit_folium import st_folium
 import os
 
 # Cấu hình giao diện Streamlit
-st.set_page_config(page_title="Hệ thống Theo dõi Bão - Le Van Phong", layout="wide")
-st.title("🌀 Bản đồ Theo dõi Bão")
+st.set_page_config(page_title="Hệ thống theo dõi xoáy thuận nhiệt đới", layout="wide")
+st.title("🌀 Bản đồ theo dõi xoáy thuận nhiệt đới")
 
 # 1. Đọc dữ liệu từ file Excel của bạn
 FILE_PATH = "besttrack.xlsx"
@@ -71,3 +71,4 @@ if df is not None:
 else:
 
     st.error(f"Không tìm thấy file {FILE_PATH}. Vui lòng kiểm tra lại thư mục dự án.")
+
