@@ -122,7 +122,7 @@ def get_right_dashboard_html(df, img_base64):
         
         <div style="background: rgba(255,255,255,0.9); border: 2px solid black; border-radius: 5px; padding: 8px; font-family: Arial, sans-serif; font-size: 11px;">
             <div style="text-align: center; font-size: 14px; font-weight: bold; color: black; margin-bottom: 5px; text-transform: uppercase;">
-                Tin dự báo bão chi tiết
+                Tin bão trên biển Đông
             </div>
             <table style="width: 100%; border-collapse: collapse; text-align: center; color: black; border: 1px solid black;">
                 <thead>
@@ -172,3 +172,4 @@ if os.path.exists(DATA_FILE):
     st_folium(m, width=None, height=2000, use_container_width=True)
 else:
     st.error("Thiếu file besttrack.xlsx")
+
