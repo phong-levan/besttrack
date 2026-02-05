@@ -6,7 +6,7 @@ import folium
 from streamlit_folium import st_folium
 import os
 import io
-import matplotlib.pyplot as plt
+import base64
 from math import radians, sin, cos, asin, sqrt
 from folium.plugins import FloatImage
 
@@ -18,12 +18,13 @@ from cartopy import geodesic
 # --- CẤU HÌNH HỆ THỐNG ---
 ICON_DIR = "icon"
 DATA_FILE = "besttrack.xlsx"
-CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
+# Lưu ý: Kiểm tra file của bạn là .png hay .PNG để tránh lỗi trên Linux
+CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.png") 
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
-st.set_page_config(page_title="Hệ thống Theo dõi Bão", layout="wide")
+st.set_page_config(page_title="Hệ thống Theo dõi Bão - Phong Le", layout="wide")
 
-# --- 1. HÀM HỖ TRỢ (Đã tích hợp vào app.py để tránh lỗi dòng 66) ---
+# --- 1. HÀM HỖ TRỢ ---
 def haversine_km(lat1, lon1, lat2, lon2):
     R = 6371.0
     p1, p2 = radians(lat1), radians(lat2)
@@ -67,7 +68,6 @@ def create_storm_swaths(dense_df):
     geo = geodesic.Geodesic()
 
     for _, row in dense_df.iterrows():
-        # Tạo đa giác cho từng điểm nội suy
         for r, target_list in [(row.get('r6', 0), polys_r6), 
                                (row.get('r10', 0), polys_r10), 
                                (row.get('rc', 0), polys_rc)]:
@@ -75,17 +75,13 @@ def create_storm_swaths(dense_df):
                 circle = geo.circle(lon=row['lon'], lat=row['lat'], radius=r*1000, n_samples=60)
                 target_list.append(Polygon(circle))
 
-    # Hợp nhất các vòng tròn thành dải hành lang
     u6 = unary_union(polys_r6) if polys_r6 else None
     u10 = unary_union(polys_r10) if polys_r10 else None
     uc = unary_union(polys_rc) if polys_rc else None
 
-    # --- KHOÉT LỖ (Sửa lỗi lộ lớp bên dưới) ---
-    # 1. Xanh lá (RC): Giữ nguyên
+    # Khoét lỗ để tránh chồng màu
     final_rc = uc
-    # 2. Đỏ (R10): Lấy vùng R10 TRỪ đi vùng RC
     final_r10 = u10.difference(uc) if u10 and uc else u10
-    # 3. Hồng (R6): Lấy vùng R6 TRỪ đi vùng R10 (vốn đã chứa RC)
     final_r6 = u6.difference(u10) if u6 and u10 else u6
 
     return final_r6, final_r10, final_rc
@@ -99,10 +95,8 @@ if os.path.exists(DATA_FILE):
 
     m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap")
 
-    # Vẽ các vùng gió đã được khoét lỗ
     f6, f10, fc = create_storm_swaths(dense_df)
     
-    # Vẽ theo thứ tự GeoJson để đảm bảo hiển thị đúng
     for geom, color, opacity in [(f6, COL_R6, 0.5), (f10, COL_R10, 0.6), (fc, COL_RC, 0.7)]:
         if geom and not geom.is_empty:
             folium.GeoJson(
@@ -112,14 +106,20 @@ if os.path.exists(DATA_FILE):
                 }
             ).add_to(m)
 
-    # Quỹ đạo và Icon
     folium.PolyLine(raw_df[['lat', 'lon']].values.tolist(), color="black", weight=2).add_to(m)
     for _, row in raw_df.iterrows():
         icon = get_storm_icon(row)
         if icon: folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m)
 
+    # --- HIỂN THỊ CHÚ THÍCH (Mã hóa Base64) ---
     if os.path.exists(CHUTHICH_IMG):
-        FloatImage(CHUTHICH_IMG, bottom=5, left=2).add_to(m)
+        with open(CHUTHICH_IMG, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode()
+        # Tạo URL dạng data-uri để FloatImage có thể đọc trực tiếp
+        img_url = f"data:image/png;base64,{encoded}"
+        FloatImage(img_url, bottom=5, left=2).add_to(m)
+    else:
+        st.sidebar.error(f"Không tìm thấy file: {CHUTHICH_IMG}")
 
     st_folium(m, width="100%", height=750)
 else:
