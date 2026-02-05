@@ -8,7 +8,6 @@ import os
 import io
 import base64
 from math import radians, sin, cos, asin, sqrt
-from folium.plugins import FloatImage
 
 # Thư viện hình học để xử lý "khoét lỗ" vùng gió
 from shapely.geometry import Polygon, mapping
@@ -18,7 +17,7 @@ from cartopy import geodesic
 # --- CẤU HÌNH HỆ THỐNG ---
 ICON_DIR = "icon"
 DATA_FILE = "besttrack.xlsx"
-# SỬA LỖI: Đổi thành .PNG (viết hoa) theo đúng thực tế trên GitHub
+# Đảm bảo file .PNG viết hoa khớp với thực tế trên GitHub của bạn
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG") 
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
@@ -79,7 +78,7 @@ def create_storm_swaths(dense_df):
     u10 = unary_union(polys_r10) if polys_r10 else None
     uc = unary_union(polys_rc) if polys_rc else None
 
-    # Khoét lỗ để lớp trên đè mất lớp dưới
+    # Khoét lỗ để lớp trên đè mất lớp dưới hoàn toàn
     final_rc = uc
     final_r10 = u10.difference(uc) if u10 and uc else u10
     final_r6 = u6.difference(u10) if u6 and u10 else u6
@@ -112,12 +111,27 @@ if os.path.exists(DATA_FILE):
         icon = get_storm_icon(row)
         if icon: folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m)
 
-    # --- SỬA LỖI HIỂN THỊ CHÚ THÍCH ---
+    # --- SỬA LỖI VÀ DI CHUYỂN CHÚ THÍCH LÊN GÓC TRÊN BÊN PHẢI ---
     if os.path.exists(CHUTHICH_IMG):
         with open(CHUTHICH_IMG, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
         img_url = f"data:image/png;base64,{encoded}"
-        FloatImage(img_url, bottom=5, left=2).add_to(m)
+        
+        # Sử dụng HTML/CSS để đưa chú thích lên góc trên bên phải, kích thước 220px (vừa phải)
+        legend_html = f'''
+        <div style="
+            position: fixed; 
+            top: 20px; right: 20px; width: 220px;
+            z-index: 9999; 
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 2px solid grey;
+            border-radius: 6px;
+            padding: 5px;
+        ">
+            <img src="{img_url}" style="width: 100%;">
+        </div>
+        '''
+        m.get_root().html.add_child(folium.Element(legend_html))
     else:
         st.sidebar.warning(f"Không tìm thấy file chú thích: {CHUTHICH_IMG}")
 
