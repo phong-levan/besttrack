@@ -17,30 +17,25 @@ from cartopy import geodesic
 # --- CẤU HÌNH HỆ THỐNG ---
 ICON_DIR = "icon"
 DATA_FILE = "besttrack.xlsx"
-CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG") # Phân biệt hoa thường
+CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG") 
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
 st.set_page_config(page_title="Hệ thống Theo dõi Bão - Phong Le", layout="wide")
 
-# --- CSS INJECTION: FIX CỨNG MÀN HÌNH, CHỐNG CUỘN TRANG ---
+# --- CSS INJECTION: FIX CỨNG MÀN HÌNH, TRÀN VIỀN ---
 st.markdown("""
     <style>
-    /* Khóa chiều cao toàn app và ẩn thanh cuộn trình duyệt */
     html, body, [data-testid="stAppViewContainer"] {
         overflow: hidden;
         height: 100vh;
         width: 100vw;
     }
-    /* Loại bỏ padding mặc định của container chính */
     .main .block-container {
         padding: 0 !important;
         max-width: 100% !important;
         height: 100vh !important;
     }
-    /* Ẩn các thành phần thừa của Streamlit */
     header, footer, #MainMenu {visibility: hidden;}
-    
-    /* Ép iframe bản đồ chiếm trọn vẹn màn hình */
     iframe {
         height: 100vh !important;
         width: 100vw !important;
@@ -87,7 +82,46 @@ def get_storm_icon(row):
         return folium.CustomIcon(path, icon_size=(35, 35) if bf >= 8 else (22, 22))
     return None
 
-# --- 2. LOGIC HÌNH HỌC: LỚP TRÊN ĐÈ MẤT LỚP DƯỚI ---
+# --- 2. BẢNG THÔNG TIN DỰ BÁO (THEO MẪU ẢNH) ---
+def get_info_table_html(df):
+    # Lọc chỉ lấy dữ liệu dự báo
+    f_df = df[df['Thời điểm'].str.contains("dự báo", case=False, na=False)]
+    
+    rows_html = ""
+    for _, r in f_df.iterrows():
+        rows_html += f"""
+        <tr style="border-bottom: 1px solid #ddd;">
+            <td style="padding: 5px; border-right: 1px solid #ddd;">{r['Ngày - giờ']}</td>
+            <td style="padding: 5px; border-right: 1px solid #ddd;">{float(r['lon']):.1f}E</td>
+            <td style="padding: 5px; border-right: 1px solid #ddd;">{float(r['lat']):.1f}N</td>
+            <td style="padding: 5px; border-right: 1px solid #ddd;">Cấp {int(r['cường độ (cấp BF)'])}</td>
+            <td style="padding: 5px;">{int(r.get('Pmin (mb)', 0))}</td>
+        </tr>
+        """
+    
+    # Tiêu đề bảng lấy từ điểm dự báo cuối cùng hoặc mặc định
+    table_html = f"""
+    <div style="position: fixed; top: 15px; left: 60px; width: 420px; z-index: 9999; 
+                background: rgba(255,255,255,0.9); padding: 10px; border: 2px solid #000; 
+                border-radius: 5px; font-family: 'Arial Black', sans-serif; font-size: 11px;
+                box-shadow: 3px 3px 10px rgba(0,0,0,0.3);">
+        <div style="text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 2px;">TIN VỀ CƠN BÃO</div>
+        <div style="text-align: center; font-size: 12px; margin-bottom: 8px;">Tin phát lúc: {f_df.iloc[0]['Ngày - giờ'] if not f_df.empty else ""}</div>
+        <table style="width: 100%; border-collapse: collapse; text-align: center;">
+            <tr style="background: #f8f9fa; font-weight: bold; border-bottom: 2px solid #333;">
+                <th style="padding: 5px; border-right: 1px solid #ddd;">Ngày - giờ</th>
+                <th style="padding: 5px; border-right: 1px solid #ddd;">Kinh độ</th>
+                <th style="padding: 5px; border-right: 1px solid #ddd;">Vĩ độ</th>
+                <th style="padding: 5px; border-right: 1px solid #ddd;">Cấp gió</th>
+                <th style="padding: 5px;">Pmin(mb)</th>
+            </tr>
+            {rows_html}
+        </table>
+    </div>
+    """
+    return table_html
+
+# --- 3. LOGIC HÌNH HỌC & HIỂN THỊ ---
 def create_storm_swaths(dense_df):
     polys_r6, polys_r10, polys_rc = [], [], []
     geo = geodesic.Geodesic()
@@ -99,64 +133,39 @@ def create_storm_swaths(dense_df):
     u6 = unary_union(polys_r6) if polys_r6 else None
     u10 = unary_union(polys_r10) if polys_r10 else None
     uc = unary_union(polys_rc) if polys_rc else None
-    
-    # Khoét lỗ để tránh trộn màu
     final_rc = uc
     final_r10 = u10.difference(uc) if u10 and uc else u10
     final_r6 = u6.difference(u10) if u6 and u10 else u6
     return final_r6, final_r10, final_rc
 
-# --- 3. HIỂN THỊ BẢN ĐỒ ---
 if os.path.exists(DATA_FILE):
     raw_df = pd.read_excel(DATA_FILE)
     raw_df[['lat', 'lon']] = raw_df[['lat', 'lon']].apply(pd.to_numeric, errors='coerce')
     raw_df = raw_df.dropna(subset=['lat', 'lon'])
     dense_df = densify_track(raw_df, step_km=10)
 
-    # Khởi tạo bản đồ tương tác
     m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap", control_scale=True)
 
     f6, f10, fc = create_storm_swaths(dense_df)
     for geom, color, opacity in [(f6, COL_R6, 0.5), (f10, COL_R10, 0.6), (fc, COL_RC, 0.7)]:
         if geom and not geom.is_empty:
-            folium.GeoJson(
-                mapping(geom),
-                style_function=lambda x, c=color, o=opacity: {
-                    'fillColor': c, 'color': c, 'weight': 1, 'fillOpacity': o
-                }
-            ).add_to(m)
+            folium.GeoJson(mapping(geom), style_function=lambda x, c=color, o=opacity: {'fillColor': c, 'color': c, 'weight': 1, 'fillOpacity': o}).add_to(m)
 
     folium.PolyLine(raw_df[['lat', 'lon']].values.tolist(), color="black", weight=2).add_to(m)
     for _, row in raw_df.iterrows():
         icon = get_storm_icon(row)
         if icon: folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m)
 
-    # --- CHÚ THÍCH: TO, KHÔNG VIỀN, GÓC TRÊN PHẢI (Responsive) ---
+    # --- CHÈN BẢNG THÔNG TIN DỰ BÁO ---
+    m.get_root().html.add_child(folium.Element(get_info_table_html(raw_df)))
+
+    # --- CHÚ THÍCH (GÓC TRÊN PHẢI) ---
     if os.path.exists(CHUTHICH_IMG):
         with open(CHUTHICH_IMG, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
-        img_url = f"data:image/png;base64,{encoded}"
-        
-        legend_html = f'''
-        <div style="
-            position: fixed; 
-            top: 40px; right: 40px; width: 35%; max-width: 380px;
-            z-index: 9999; 
-            background-color: transparent;
-            border: none;
-            pointer-events: none;
-        ">
-            <img src="{img_url}" style="width: 100%; height: auto;">
-        </div>
-        '''
+        legend_html = f'''<div style="position: fixed; top: 15px; right: 15px; width: 35%; max-width: 380px; z-index: 9999; pointer-events: none;"><img src="data:image/png;base64,{encoded}" style="width: 100%;"></div>'''
         m.get_root().html.add_child(folium.Element(legend_html))
 
-    # HIỂN THỊ BẢN ĐỒ
-    st_folium(
-        m, 
-        width=None, 
-        height=2000, # Đặt chiều cao lớn, CSS 100vh sẽ tự động cắt ngắn lại cho vừa màn hình
-        use_container_width=True
-    )
+    st_folium(m, width=None, height=2000, use_container_width=True)
 else:
-    st.error("Lỗi: Không tìm thấy file besttrack.xlsx")
+    st.error("Thiếu file besttrack.xlsx")
