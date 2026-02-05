@@ -25,7 +25,7 @@ def haversine_km(lat1, lon1, lat2, lon2):
     return 2 * R * asin(sqrt(a))
 
 # --- HÀM NỘI SUY (Dày đặc 10km để tạo dải mịn) ---
-def densify_storm_data(df, step_km=20):
+def densify_storm_data(df, step_km=25):
     new_rows = []
     for i in range(len(df) - 1):
         p1, p2 = df.iloc[i], df.iloc[i+1]
@@ -100,5 +100,6 @@ if os.path.exists("besttrack.xlsx"):
     st_folium(m, width="100%", height=600)
 else:
     st.error("Thiếu file besttrack.xlsx")
+
 
 
