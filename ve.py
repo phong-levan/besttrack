@@ -22,7 +22,7 @@ COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90"
 
 st.set_page_config(page_title="Hệ thống Theo dõi Bão - Phong Le", layout="wide")
 
-# --- CSS: FIX CỨNG MÀN HÌNH, TRÀN VIỀN ---
+# --- CSS INJECTION: FIX CỨNG MÀN HÌNH, TRÀN VIỀN ---
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"] {
@@ -100,13 +100,16 @@ def create_storm_swaths(dense_df):
 
 # --- 2. HÀM TẠO GIAO DIỆN KHỐI PHẢI (CHÚ THÍCH + BẢNG) ---
 def get_right_dashboard_html(df, img_base64):
-    # Lọc dữ liệu dự báo
-    f_df = df[df['Thời điểm'].str.contains("dự báo", case=False, na=False)]
+    # Lấy dữ liệu hiện tại và dự báo để đưa vào bảng
+    current_df = df[df['Thời điểm'].str.contains("hiện tại", case=False, na=False)]
+    forecast_df = df[df['Thời điểm'].str.contains("dự báo", case=False, na=False)]
+    display_df = pd.concat([current_df, forecast_df])
     
     rows_html = ""
-    for _, r in f_df.iterrows():
+    for _, r in display_df.iterrows():
+        # Giữ nguyên màu hiển thị trắng đồng nhất cho mọi hàng
         rows_html += f"""
-        <tr style="border: 1px solid black;">
+        <tr style="border: 1px solid black; background: #ffffff;">
             <td style="border: 1px solid black; padding: 4px;">{r['Ngày - giờ']}</td>
             <td style="border: 1px solid black; padding: 4px;">{float(r['lon']):.1f}E</td>
             <td style="border: 1px solid black; padding: 4px;">{float(r['lat']):.1f}N</td>
@@ -115,12 +118,11 @@ def get_right_dashboard_html(df, img_base64):
         </tr>
         """
     
-    # Kết hợp Ảnh và Bảng vào 1 div duy nhất
     dashboard_html = f"""
     <div style="position: fixed; top: 20px; right: 20px; width: 32%; max-width: 400px; z-index: 9999; pointer-events: auto;">
         <img src="data:image/png;base64,{img_base64}" style="width: 100%; height: auto; margin-bottom: 10px;">
         
-        <div style="background: rgba(255,255,255,0.9); border: 2px solid black; border-radius: 5px; padding: 8px; font-family: Arial, sans-serif; font-size: 11px;">
+        <div style="background: rgba(255,255,255,0.95); border: 2px solid black; border-radius: 5px; padding: 8px; font-family: Arial, sans-serif; font-size: 11px;">
             <div style="text-align: center; font-size: 14px; font-weight: bold; color: black; margin-bottom: 5px; text-transform: uppercase;">
                 Tin bão trên biển Đông
             </div>
@@ -152,7 +154,6 @@ if os.path.exists(DATA_FILE):
 
     m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap", control_scale=True)
 
-    # Vùng gió nội suy không chồng lấn
     f6, f10, fc = create_storm_swaths(dense_df)
     for geom, color, opacity in [(f6, COL_R6, 0.5), (f10, COL_R10, 0.6), (fc, COL_RC, 0.7)]:
         if geom and not geom.is_empty:
@@ -163,7 +164,6 @@ if os.path.exists(DATA_FILE):
         icon = get_storm_icon(row)
         if icon: folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m)
 
-    # Xử lý ảnh chú thích và chèn Dashboard tổng hợp
     if os.path.exists(CHUTHICH_IMG):
         with open(CHUTHICH_IMG, "rb") as f:
             encoded_img = base64.b64encode(f.read()).decode()
@@ -172,4 +172,3 @@ if os.path.exists(DATA_FILE):
     st_folium(m, width=None, height=2000, use_container_width=True)
 else:
     st.error("Thiếu file besttrack.xlsx")
-
