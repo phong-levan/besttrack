@@ -9,7 +9,7 @@ import io
 import base64
 from math import radians, sin, cos, asin, sqrt
 
-# Thư viện hình học để xử lý "khoét lỗ" vùng gió
+# Thư viện hình học chuyên dụng
 from shapely.geometry import Polygon, mapping
 from shapely.ops import unary_union
 from cartopy import geodesic
@@ -17,11 +17,33 @@ from cartopy import geodesic
 # --- CẤU HÌNH HỆ THỐNG ---
 ICON_DIR = "icon"
 DATA_FILE = "besttrack.xlsx"
-# Đảm bảo file .PNG viết hoa khớp với thực tế trên GitHub của bạn
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG") 
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
+# Cấu hình Layout rộng
 st.set_page_config(page_title="Hệ thống theo dõi xoáy thuận nhiệt đới", layout="wide")
+
+# --- CSS INJECTION: XỬ LÝ TRÀN VIỀN & CHỐNG CUỘN TRANG ---
+st.markdown("""
+    <style>
+    /* Loại bỏ padding của container chính */
+    .main .block-container {
+        padding-top: 0rem;
+        padding-bottom: 0rem;
+        padding-left: 0rem;
+        padding-right: 0rem;
+    }
+    /* Ẩn Header và Footer của Streamlit để tăng diện tích hiển thị */
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
+    /* Ép iframe bản đồ chiếm 100% chiều cao màn hình */
+    iframe {
+        height: 100vh !important;
+        width: 100vw !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # --- 1. CÁC HÀM HỖ TRỢ ---
 def haversine_km(lat1, lon1, lat2, lon2):
@@ -61,11 +83,10 @@ def get_storm_icon(row):
         return folium.CustomIcon(path, icon_size=(35, 35) if bf >= 8 else (22, 22))
     return None
 
-# --- 2. LOGIC HÌNH HỌC: LỚP TRÊN ĐÈ MẤT LỚP DƯỚI (DONUT) ---
+# --- 2. LOGIC HÌNH HỌC: LỚP TRÊN ĐÈ MẤT LỚP DƯỚI ---
 def create_storm_swaths(dense_df):
     polys_r6, polys_r10, polys_rc = [], [], []
     geo = geodesic.Geodesic()
-
     for _, row in dense_df.iterrows():
         for r, target_list in [(row.get('r6', 0), polys_r6), 
                                (row.get('r10', 0), polys_r10), 
@@ -78,11 +99,9 @@ def create_storm_swaths(dense_df):
     u10 = unary_union(polys_r10) if polys_r10 else None
     uc = unary_union(polys_rc) if polys_rc else None
 
-    # Khoét lỗ để lớp trên đè mất lớp dưới hoàn toàn
     final_rc = uc
     final_r10 = u10.difference(uc) if u10 and uc else u10
     final_r6 = u6.difference(u10) if u6 and u10 else u6
-
     return final_r6, final_r10, final_rc
 
 # --- 3. HIỂN THỊ BẢN ĐỒ ---
@@ -92,11 +111,10 @@ if os.path.exists(DATA_FILE):
     raw_df = raw_df.dropna(subset=['lat', 'lon'])
     dense_df = densify_track(raw_df, step_km=10)
 
+    # Khởi tạo Map
     m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap")
 
     f6, f10, fc = create_storm_swaths(dense_df)
-    
-    # Vẽ các vùng gió không chồng lấn
     for geom, color, opacity in [(f6, COL_R6, 0.5), (f10, COL_R10, 0.6), (fc, COL_RC, 0.7)]:
         if geom and not geom.is_empty:
             folium.GeoJson(
@@ -111,31 +129,32 @@ if os.path.exists(DATA_FILE):
         icon = get_storm_icon(row)
         if icon: folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m)
 
-    # --- SỬA LỖI VÀ DI CHUYỂN CHÚ THÍCH LÊN GÓC TRÊN BÊN PHẢI ---
+    # --- CHÚ THÍCH CỐ ĐỊNH TRÊN MAP (TỐI ƯU MOBILE) ---
     if os.path.exists(CHUTHICH_IMG):
         with open(CHUTHICH_IMG, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
         img_url = f"data:image/png;base64,{encoded}"
         
-# Đã tăng width lên 280px và bỏ border
         legend_html = f'''
         <div style="
             position: fixed; 
-            top: 20px; right: 20px; width: 400px;
+            top: 10px; right: 10px; width: 35%; max-width: 380px;
             z-index: 9999; 
             background-color: transparent;
             border: none;
-            padding: 0px;
+            pointer-events: none; /* Tránh cản trở việc click vào bản đồ bên dưới */
         ">
-            <img src="{img_url}" style="width: 100%;">
+            <img src="{img_url}" style="width: 100%; height: auto;">
         </div>
         '''
         m.get_root().html.add_child(folium.Element(legend_html))
-    else:
-        st.sidebar.warning(f"Không tìm thấy file chú thích: {CHUTHICH_IMG}")
 
-    st_folium(m, width="100%", height=750)
+    # Gọi st_folium với thông số tràn màn hình
+    st_folium(
+        m, 
+        width=None,       # Tự động lấy 100% width container
+        height=None,      # Sẽ được ép theo CSS 100vh ở trên
+        use_container_width=True
+    )
 else:
     st.error("Thiếu file besttrack.xlsx")
-
-
