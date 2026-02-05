@@ -9,7 +9,7 @@ import io
 import base64
 from math import radians, sin, cos, asin, sqrt
 
-# Thư viện hình học
+# Thư viện hình học để xử lý "khoét lỗ" vùng gió
 from shapely.geometry import Polygon, mapping
 from shapely.ops import unary_union
 from cartopy import geodesic
@@ -17,29 +17,34 @@ from cartopy import geodesic
 # --- CẤU HÌNH HỆ THỐNG ---
 ICON_DIR = "icon"
 DATA_FILE = "besttrack.xlsx"
-CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG") 
+CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG") # Phân biệt hoa thường
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
-st.set_page_config(page_title="Hệ thống theo dõi bão", layout="wide")
+st.set_page_config(page_title="Hệ thống Theo dõi Bão - Phong Le", layout="wide")
 
-# --- CSS: LOẠI BỎ KHOẢNG TRẮNG NHƯNG GIỮ HIỂN THỊ ---
+# --- CSS INJECTION: FIX CỨNG MÀN HÌNH, CHỐNG CUỘN TRANG ---
 st.markdown("""
     <style>
-    /* Xóa khoảng lề của Streamlit */
-    .main .block-container {
-        padding-top: 0rem;
-        padding-bottom: 0rem;
-        padding-left: 0rem;
-        padding-right: 0rem;
+    /* Khóa chiều cao toàn app và ẩn thanh cuộn trình duyệt */
+    html, body, [data-testid="stAppViewContainer"] {
+        overflow: hidden;
+        height: 100vh;
+        width: 100vw;
     }
-    /* Ẩn các thành phần thừa */
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    #MainMenu {visibility: hidden;}
+    /* Loại bỏ padding mặc định của container chính */
+    .main .block-container {
+        padding: 0 !important;
+        max-width: 100% !important;
+        height: 100vh !important;
+    }
+    /* Ẩn các thành phần thừa của Streamlit */
+    header, footer, #MainMenu {visibility: hidden;}
     
-    /* Đảm bảo container chứa bản đồ chiếm hết chiều cao */
-    .element-container, .stApp {
-        margin: 0px;
+    /* Ép iframe bản đồ chiếm trọn vẹn màn hình */
+    iframe {
+        height: 100vh !important;
+        width: 100vw !important;
+        border: none;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -82,19 +87,20 @@ def get_storm_icon(row):
         return folium.CustomIcon(path, icon_size=(35, 35) if bf >= 8 else (22, 22))
     return None
 
+# --- 2. LOGIC HÌNH HỌC: LỚP TRÊN ĐÈ MẤT LỚP DƯỚI ---
 def create_storm_swaths(dense_df):
     polys_r6, polys_r10, polys_rc = [], [], []
     geo = geodesic.Geodesic()
     for _, row in dense_df.iterrows():
-        for r, target_list in [(row.get('r6', 0), polys_r6), 
-                               (row.get('r10', 0), polys_r10), 
-                               (row.get('rc', 0), polys_rc)]:
+        for r, target_list in [(row.get('r6', 0), polys_r6), (row.get('r10', 0), polys_r10), (row.get('rc', 0), polys_rc)]:
             if r > 0:
                 circle = geo.circle(lon=row['lon'], lat=row['lat'], radius=r*1000, n_samples=60)
                 target_list.append(Polygon(circle))
     u6 = unary_union(polys_r6) if polys_r6 else None
     u10 = unary_union(polys_r10) if polys_r10 else None
     uc = unary_union(polys_rc) if polys_rc else None
+    
+    # Khoét lỗ để tránh trộn màu
     final_rc = uc
     final_r10 = u10.difference(uc) if u10 and uc else u10
     final_r6 = u6.difference(u10) if u6 and u10 else u6
@@ -107,7 +113,8 @@ if os.path.exists(DATA_FILE):
     raw_df = raw_df.dropna(subset=['lat', 'lon'])
     dense_df = densify_track(raw_df, step_km=10)
 
-    m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap")
+    # Khởi tạo bản đồ tương tác
+    m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap", control_scale=True)
 
     f6, f10, fc = create_storm_swaths(dense_df)
     for geom, color, opacity in [(f6, COL_R6, 0.5), (f10, COL_R10, 0.6), (fc, COL_RC, 0.7)]:
@@ -124,23 +131,32 @@ if os.path.exists(DATA_FILE):
         icon = get_storm_icon(row)
         if icon: folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m)
 
-    # CHÚ THÍCH
+    # --- CHÚ THÍCH: TO, KHÔNG VIỀN, GÓC TRÊN PHẢI (Responsive) ---
     if os.path.exists(CHUTHICH_IMG):
         with open(CHUTHICH_IMG, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
         img_url = f"data:image/png;base64,{encoded}"
+        
         legend_html = f'''
-        <div style="position: fixed; top: 10px; right: 10px; width: 30%; max-width: 350px; z-index: 9999; pointer-events: none;">
-            <img src="{img_url}" style="width: 100%;">
-        </div>'''
+        <div style="
+            position: fixed; 
+            top: 40px; right: 40px; width: 35%; max-width: 380px;
+            z-index: 9999; 
+            background-color: transparent;
+            border: none;
+            pointer-events: none;
+        ">
+            <img src="{img_url}" style="width: 100%; height: auto;">
+        </div>
+        '''
         m.get_root().html.add_child(folium.Element(legend_html))
 
-    # SỬA LỖI: Đặt height cố định thay vì None
+    # HIỂN THỊ BẢN ĐỒ
     st_folium(
         m, 
         width=None, 
-        height=720, # Chiều cao này giúp bản đồ hiện lên ngay lập tức
+        height=2000, # Đặt chiều cao lớn, CSS 100vh sẽ tự động cắt ngắn lại cho vừa màn hình
         use_container_width=True
     )
 else:
-    st.error("Thiếu file besttrack.xlsx")
+    st.error("Lỗi: Không tìm thấy file besttrack.xlsx")
