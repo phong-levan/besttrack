@@ -18,13 +18,13 @@ from cartopy import geodesic
 # --- CẤU HÌNH HỆ THỐNG ---
 ICON_DIR = "icon"
 DATA_FILE = "besttrack.xlsx"
-# Lưu ý: Kiểm tra file của bạn là .png hay .PNG để tránh lỗi trên Linux
+# SỬA LỖI: Đổi thành .PNG (viết hoa) theo đúng thực tế trên GitHub
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG") 
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
 st.set_page_config(page_title="Hệ thống Theo dõi Bão - Phong Le", layout="wide")
 
-# --- 1. HÀM HỖ TRỢ ---
+# --- 1. CÁC HÀM HỖ TRỢ ---
 def haversine_km(lat1, lon1, lat2, lon2):
     R = 6371.0
     p1, p2 = radians(lat1), radians(lat2)
@@ -62,7 +62,7 @@ def get_storm_icon(row):
         return folium.CustomIcon(path, icon_size=(35, 35) if bf >= 8 else (22, 22))
     return None
 
-# --- 2. LOGIC HÌNH HỌC: LỚP TRÊN ĐÈ MẤT LỚP DƯỚI ---
+# --- 2. LOGIC HÌNH HỌC: LỚP TRÊN ĐÈ MẤT LỚP DƯỚI (DONUT) ---
 def create_storm_swaths(dense_df):
     polys_r6, polys_r10, polys_rc = [], [], []
     geo = geodesic.Geodesic()
@@ -79,14 +79,14 @@ def create_storm_swaths(dense_df):
     u10 = unary_union(polys_r10) if polys_r10 else None
     uc = unary_union(polys_rc) if polys_rc else None
 
-    # Khoét lỗ để tránh chồng màu
+    # Khoét lỗ để lớp trên đè mất lớp dưới
     final_rc = uc
     final_r10 = u10.difference(uc) if u10 and uc else u10
     final_r6 = u6.difference(u10) if u6 and u10 else u6
 
     return final_r6, final_r10, final_rc
 
-# --- 3. GIAO DIỆN VÀ BẢN ĐỒ ---
+# --- 3. HIỂN THỊ BẢN ĐỒ ---
 if os.path.exists(DATA_FILE):
     raw_df = pd.read_excel(DATA_FILE)
     raw_df[['lat', 'lon']] = raw_df[['lat', 'lon']].apply(pd.to_numeric, errors='coerce')
@@ -97,6 +97,7 @@ if os.path.exists(DATA_FILE):
 
     f6, f10, fc = create_storm_swaths(dense_df)
     
+    # Vẽ các vùng gió không chồng lấn
     for geom, color, opacity in [(f6, COL_R6, 0.5), (f10, COL_R10, 0.6), (fc, COL_RC, 0.7)]:
         if geom and not geom.is_empty:
             folium.GeoJson(
@@ -111,17 +112,15 @@ if os.path.exists(DATA_FILE):
         icon = get_storm_icon(row)
         if icon: folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m)
 
-    # --- HIỂN THỊ CHÚ THÍCH (Mã hóa Base64) ---
+    # --- SỬA LỖI HIỂN THỊ CHÚ THÍCH ---
     if os.path.exists(CHUTHICH_IMG):
         with open(CHUTHICH_IMG, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
-        # Tạo URL dạng data-uri để FloatImage có thể đọc trực tiếp
         img_url = f"data:image/png;base64,{encoded}"
         FloatImage(img_url, bottom=5, left=2).add_to(m)
     else:
-        st.sidebar.error(f"Không tìm thấy file: {CHUTHICH_IMG}")
+        st.sidebar.warning(f"Không tìm thấy file chú thích: {CHUTHICH_IMG}")
 
     st_folium(m, width="100%", height=750)
 else:
     st.error("Thiếu file besttrack.xlsx")
-
