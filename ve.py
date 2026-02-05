@@ -38,7 +38,6 @@ def haversine_km(lat1, lon1, lat2, lon2):
     return 2 * R * asin(sqrt(a))
 
 def densify_track(df, step_km=10):
-    """Tạo các điểm trung gian để dải gió mịn màng"""
     new_rows = []
     for i in range(len(df) - 1):
         p1, p2 = df.iloc[i], df.iloc[i+1]
@@ -58,7 +57,6 @@ def densify_track(df, step_km=10):
 
 # --- 2. QUẢN LÝ ICON & LƯU TRỮ LỊCH SỬ ---
 def get_storm_icon(row):
-    """Lấy biểu tượng bão dựa trên cấp gió và trạng thái"""
     status = "daqua" if "quá khứ" in str(row.get('Thời điểm', '')).lower() else "dubao"
     bf = row.get('cường độ (cấp BF)', 0)
     if pd.isna(bf) or bf < 6: fname = f"vungthap{status}.png"
@@ -72,7 +70,6 @@ def get_storm_icon(row):
     return None
 
 def save_past_data(df):
-    """Tự động cập nhật file lịch sử vị trí đã qua"""
     past_df = df[df['Thời điểm'].str.contains("quá khứ", case=False, na=False)].copy()
     if os.path.exists(HISTORY_FILE):
         old = pd.read_excel(HISTORY_FILE)
@@ -107,7 +104,7 @@ def get_floating_dashboard_html(df):
         </table>
     </div>"""
 
-# --- 4. XUẤT ẢNH PNG CÓ NỀN ĐỊA LÝ (KHÔNG CÓ BẢNG DỮ LIỆU BÊN DƯỚI) ---
+# --- 4. XUẤT ẢNH PNG (KHÔNG CÓ BẢNG DỮ LIỆU) ---
 def export_pro_png(df):
     plt.switch_backend('Agg')
     fig = plt.figure(figsize=(12, 10), dpi=200)
@@ -116,14 +113,11 @@ def export_pro_png(df):
     
     ax.add_feature(cfeature.COASTLINE, linewidth=1)
     ax.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.7)
-    ax.stock_img() # Chèn nền trái đất vệ tinh
+    ax.stock_img() 
     
-    # Vẽ quỹ đạo và điểm bão lên ảnh tĩnh
     ax.plot(df['lon'], df['lat'], 'k-', linewidth=2, transform=ccrs.PlateCarree())
     ax.plot(df['lon'], df['lat'], 'ro', markersize=5, transform=ccrs.PlateCarree())
 
-    # --- ĐÃ LOẠI BỎ PHẦN VẼ BẢNG ax.table Ở ĐÂY THEO YÊU CẦU ---
-    
     buf = io.BytesIO()
     plt.savefig(buf, format="png", bbox_inches='tight', pad_inches=0.1)
     plt.close(fig)
@@ -141,19 +135,20 @@ if os.path.exists(DATA_FILE):
     with st.sidebar:
         st.header("💾 Tải Xuất Dữ Liệu")
         if HAS_CARTOPY:
-            # Nút tải ảnh giờ sẽ cho ra ảnh sạch, không có bảng bên dưới
             st.download_button("🖼️ Xuất ảnh png", export_pro_png(df), "storm_map_clean.png", "image/png")
         else:
-            st.warning("⚠️ Đang khởi tạo Cartopy. Hãy Reboot app sau khi đẩy packages.txt.")
+            st.warning("⚠️ Đang khởi tạo Cartopy...")
         st.download_button("📥 Xuất file excel", df.to_csv(index=False).encode('utf-8'), "besttrack_export.csv")
 
     m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap")
 
-    # Vẽ hành lang gió (Trong suốt xếp lớp chuẩn)
-    for k, c, o in [('r6', COL_R6, 0.4), ('r10', COL_R10, 0.5), ('rc', COL_RC, 0.6)]:
+    # --- ĐÃ CHỈNH ĐỘ TRONG SUỐT VỀ KHOẢNG 75% (fill_opacity quanh mức 0.25) ---
+    # R6 (Hồng): 0.2 | R10 (Đỏ): 0.25 | RC (Xanh): 0.3
+    for k, c, o in [('r6', COL_R6, 0.2), ('r10', COL_R10, 0.25), ('rc', COL_RC, 0.3)]:
         for _, row in dense_df.iterrows():
             if row[k] > 0:
-                folium.Circle([row['lat'], row['lon']], radius=row[k]*1000, color=c, fill=True, weight=0, fill_opacity=o).add_to(m)
+                folium.Circle([row['lat'], row['lon']], radius=row[k]*1000, 
+                              color=c, fill=True, weight=0, fill_opacity=o).add_to(m)
 
     # Quỹ đạo & Icon
     folium.PolyLine(df[['lat', 'lon']].values.tolist(), color="black", weight=2).add_to(m)
