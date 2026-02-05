@@ -9,7 +9,7 @@ import io
 import base64
 from math import radians, sin, cos, asin, sqrt
 
-# Thư viện hình học chuyên dụng
+# Thư viện hình học
 from shapely.geometry import Polygon, mapping
 from shapely.ops import unary_union
 from cartopy import geodesic
@@ -20,27 +20,26 @@ DATA_FILE = "besttrack.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG") 
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
-# Cấu hình Layout rộng
-st.set_page_config(page_title="Hệ thống theo dõi xoáy thuận nhiệt đới", layout="wide")
+st.set_page_config(page_title="Hệ thống theo dõi bão", layout="wide")
 
-# --- CSS INJECTION: XỬ LÝ TRÀN VIỀN & CHỐNG CUỘN TRANG ---
+# --- CSS: LOẠI BỎ KHOẢNG TRẮNG NHƯNG GIỮ HIỂN THỊ ---
 st.markdown("""
     <style>
-    /* Loại bỏ padding của container chính */
+    /* Xóa khoảng lề của Streamlit */
     .main .block-container {
         padding-top: 0rem;
         padding-bottom: 0rem;
         padding-left: 0rem;
         padding-right: 0rem;
     }
-    /* Ẩn Header và Footer của Streamlit để tăng diện tích hiển thị */
+    /* Ẩn các thành phần thừa */
     header {visibility: hidden;}
     footer {visibility: hidden;}
     #MainMenu {visibility: hidden;}
-    /* Ép iframe bản đồ chiếm 100% chiều cao màn hình */
-    iframe {
-        height: 100vh !important;
-        width: 100vw !important;
+    
+    /* Đảm bảo container chứa bản đồ chiếm hết chiều cao */
+    .element-container, .stApp {
+        margin: 0px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -83,7 +82,6 @@ def get_storm_icon(row):
         return folium.CustomIcon(path, icon_size=(35, 35) if bf >= 8 else (22, 22))
     return None
 
-# --- 2. LOGIC HÌNH HỌC: LỚP TRÊN ĐÈ MẤT LỚP DƯỚI ---
 def create_storm_swaths(dense_df):
     polys_r6, polys_r10, polys_rc = [], [], []
     geo = geodesic.Geodesic()
@@ -94,11 +92,9 @@ def create_storm_swaths(dense_df):
             if r > 0:
                 circle = geo.circle(lon=row['lon'], lat=row['lat'], radius=r*1000, n_samples=60)
                 target_list.append(Polygon(circle))
-
     u6 = unary_union(polys_r6) if polys_r6 else None
     u10 = unary_union(polys_r10) if polys_r10 else None
     uc = unary_union(polys_rc) if polys_rc else None
-
     final_rc = uc
     final_r10 = u10.difference(uc) if u10 and uc else u10
     final_r6 = u6.difference(u10) if u6 and u10 else u6
@@ -111,7 +107,6 @@ if os.path.exists(DATA_FILE):
     raw_df = raw_df.dropna(subset=['lat', 'lon'])
     dense_df = densify_track(raw_df, step_km=10)
 
-    # Khởi tạo Map
     m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap")
 
     f6, f10, fc = create_storm_swaths(dense_df)
@@ -129,31 +124,22 @@ if os.path.exists(DATA_FILE):
         icon = get_storm_icon(row)
         if icon: folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m)
 
-    # --- CHÚ THÍCH CỐ ĐỊNH TRÊN MAP (TỐI ƯU MOBILE) ---
+    # CHÚ THÍCH
     if os.path.exists(CHUTHICH_IMG):
         with open(CHUTHICH_IMG, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
         img_url = f"data:image/png;base64,{encoded}"
-        
         legend_html = f'''
-        <div style="
-            position: fixed; 
-            top: 10px; right: 10px; width: 35%; max-width: 380px;
-            z-index: 9999; 
-            background-color: transparent;
-            border: none;
-            pointer-events: none; /* Tránh cản trở việc click vào bản đồ bên dưới */
-        ">
-            <img src="{img_url}" style="width: 100%; height: auto;">
-        </div>
-        '''
+        <div style="position: fixed; top: 10px; right: 10px; width: 30%; max-width: 350px; z-index: 9999; pointer-events: none;">
+            <img src="{img_url}" style="width: 100%;">
+        </div>'''
         m.get_root().html.add_child(folium.Element(legend_html))
 
-    # Gọi st_folium với thông số tràn màn hình
+    # SỬA LỖI: Đặt height cố định thay vì None
     st_folium(
         m, 
-        width=None,       # Tự động lấy 100% width container
-        height=None,      # Sẽ được ép theo CSS 100vh ở trên
+        width=None, 
+        height=720, # Chiều cao này giúp bản đồ hiện lên ngay lập tức
         use_container_width=True
     )
 else:
