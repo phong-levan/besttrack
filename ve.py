@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from math import radians, sin, cos, asin, sqrt
 from folium.plugins import FloatImage
 
-# Import Cartopy cho chức năng xuất ảnh chuyên nghiệp
+# Import Cartopy
 try:
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -21,10 +21,9 @@ except ImportError:
 # --- CẤU HÌNH HỆ THỐNG ---
 ICON_DIR = "icon"
 DATA_FILE = "besttrack.xlsx"
-HISTORY_FILE = "history_tracking.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# Mã màu chuyên dụng từ kịch bản của Phong
+# Mã màu chuyên dụng
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
 st.set_page_config(page_title="Hệ thống Theo dõi Bão - Phong Le", layout="wide")
@@ -38,7 +37,6 @@ def haversine_km(lat1, lon1, lat2, lon2):
     return 2 * R * asin(sqrt(a))
 
 def densify_track(df, step_km=10):
-    """Nội suy dày đặc để tạo hành lang gió mịn màng cho nghiên cứu"""
     new_rows = []
     for i in range(len(df) - 1):
         p1, p2 = df.iloc[i], df.iloc[i+1]
@@ -56,7 +54,7 @@ def densify_track(df, step_km=10):
     new_rows.append(df.iloc[-1].to_dict())
     return pd.DataFrame(new_rows)
 
-# --- 2. QUẢN LÝ BIỂU TƯỢNG (ICON) ---
+# --- 2. QUẢN LÝ ICON ---
 def get_storm_icon(row):
     status = "daqua" if "quá khứ" in str(row.get('Thời điểm', '')).lower() else "dubao"
     bf = row.get('cường độ (cấp BF)', 0)
@@ -70,7 +68,7 @@ def get_storm_icon(row):
         return folium.CustomIcon(path, icon_size=(35, 35) if bf >= 8 else (22, 22))
     return None
 
-# --- 3. BẢNG TIN DỰ BÁO LƠ LỬNG (CHỈ HIỂN THỊ DỰ BÁO) ---
+# --- 3. BẢNG TIN DỰ BÁO ---
 def get_forecast_table_html(df):
     f_df = df[df['Thời điểm'].str.contains("dự báo", case=False, na=False)]
     rows_html = ""
@@ -97,7 +95,7 @@ def get_forecast_table_html(df):
         </table>
     </div>"""
 
-# --- 4. XUẤT ẢNH PNG SẠCH (THEO LOGIC PYTHON CỦA PHONG) ---
+# --- 4. XUẤT ẢNH PNG SẠCH ---
 def export_pro_png(df):
     plt.switch_backend('Agg')
     fig = plt.figure(figsize=(10, 8), dpi=150)
@@ -133,20 +131,28 @@ if os.path.exists(DATA_FILE):
 
     m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap")
 
-    # --- ĐỒNG BỘ THỨ TỰ LỚP & ĐỘ TRONG SUỐT (ALPHA) ---
-    # Lần lượt vẽ: Hồng (Dưới) -> Đỏ (Giữa) -> Xanh (Trên) để lớp trên đè lớp dưới.
-    for k, c, o in [('r6', COL_R6, 0.5), ('r10', COL_R10, 0.6), ('rc', COL_RC, 0.7)]:
+    # --- ĐIỀU CHỈNH ĐỘ ĐẬM ĐỂ LỚP TRÊN CHE LỚP DƯỚI TỐT HƠN ---
+    # Thứ tự vẽ: Hồng (Dưới) -> Đỏ (Giữa) -> Xanh (Trên)
+    # Tăng mạnh opacity của lớp trên cùng (Xanh) để nó lấn át các lớp dưới.
+    # R6 (Hồng): 0.4 (Nhạt) | R10 (Đỏ): 0.65 (Trung bình) | RC (Xanh): 0.85 (Rất đậm)
+    layer_settings = [
+        ('r6', COL_R6, 0.4), 
+        ('r10', COL_R10, 0.65), 
+        ('rc', COL_RC, 0.85)
+    ]
+
+    for k, c, fill_op in layer_settings:
         for _, row in dense_df.iterrows():
             if row[k] > 0:
                 folium.Circle(
                     [row['lat'], row['lon']], 
                     radius=row[k]*1000, 
-                    color=c,            # Viền sắc nét
-                    weight=1.5,         # Độ dày viền
-                    opacity=0.8,        # Độ đậm của viền
+                    color=c,            # Màu viền
+                    weight=2,           # Tăng độ dày viền lên 2 cho sắc nét
+                    opacity=1.0,        # Viền đặc hoàn toàn (không trong suốt)
                     fill=True, 
                     fill_color=c, 
-                    fill_opacity=o      # Độ trong suốt (Alpha) khớp code Python
+                    fill_opacity=fill_op # Độ trong suốt nền đã điều chỉnh
                 ).add_to(m)
 
     # Quỹ đạo & Icon
