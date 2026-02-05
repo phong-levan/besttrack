@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -17,7 +18,7 @@ DATA_FILE = "besttrack.xlsx"
 HISTORY_FILE = "history_tracking.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# Mã màu chuyên dụng
+# Mã màu chuyên dụng của Phong
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
 st.set_page_config(page_title="Hệ thống Theo dõi Bão - Phong Le", layout="wide")
@@ -30,7 +31,7 @@ def haversine_km(lat1, lon1, lat2, lon2):
     a = sin(dlat/2)**2 + cos(p1)*cos(p2)*sin(dlon/2)**2
     return 2 * R * asin(sqrt(a))
 
-def densify_track(df, step_km=1):
+def densify_track(df, step_km=10):
     new_rows = []
     for i in range(len(df) - 1):
         p1, p2 = df.iloc[i], df.iloc[i+1]
@@ -49,7 +50,7 @@ def densify_track(df, step_km=1):
     return pd.DataFrame(new_rows)
 
 # --- 2. QUẢN LÝ ICON & LƯU TRỮ ---
-def get_custom_icon(row):
+def get_storm_icon(row): # Đã đồng bộ tên hàm thành get_storm_icon
     status = "daqua" if "quá khứ" in str(row.get('Thời điểm', '')).lower() else "dubao"
     bf = row.get('cường độ (cấp BF)', 0)
     if pd.isna(bf) or bf < 6: fname = f"vungthap{status}.png"
@@ -70,11 +71,9 @@ def save_past_data(df):
     else:
         past_df.to_excel(HISTORY_FILE, index=False)
 
-# --- 3. GIAO DIỆN BẢNG TIN DỰ BÁO (NỔI & CUỘN) ---
+# --- 3. GIAO DIỆN BẢNG TIN DỰ BÁO ---
 def get_floating_dashboard_html(df):
-    # CHỈ LẤY DỮ LIỆU DỰ BÁO
     f_df = df[df['Thời điểm'].str.contains("dự báo", case=False, na=False)]
-    
     rows_html = ""
     for _, r in f_df.iterrows():
         rows_html += f"""
@@ -84,8 +83,7 @@ def get_floating_dashboard_html(df):
             <td style="border:1px solid #ccc; padding:4px;">Cấp {int(r['cường độ (cấp BF)'])}</td>
             <td style="border:1px solid #ccc; padding:4px;">{int(r.get('Vmax (km/h)', 0))}</td>
             <td style="border:1px solid #ccc; padding:4px;">{int(r.get('Pmin (mb)', 0))}</td>
-        </tr>
-        """
+        </tr>"""
     
     html = f"""
     <div style="position: fixed; top: 20px; right: 20px; width: 380px; z-index:9999; 
@@ -98,11 +96,10 @@ def get_floating_dashboard_html(df):
             </tr>
             {rows_html}
         </table>
-    </div>
-    """
+    </div>"""
     return html
 
-# --- 4. HÀM XUẤT ẢNH PNG CÓ NỀN ĐỊA LÝ ---
+# --- 4. HÀM XUẤT ẢNH PNG (Sửa lỗi Cartopy) ---
 def export_pro_png(df):
     plt.switch_backend('Agg')
     fig = plt.figure(figsize=(10, 8), dpi=150)
@@ -111,11 +108,10 @@ def export_pro_png(df):
     
     ax.add_feature(cfeature.COASTLINE, linewidth=1)
     ax.add_feature(cfeature.BORDERS, linestyle=':')
-    ax.stock_img() # Thêm nền bản đồ địa lý
+    ax.stock_img() 
     
     ax.plot(df['lon'], df['lat'], 'k-o', markersize=3, transform=ccrs.PlateCarree())
     
-    # Bảng thông tin ở chân ảnh
     data = df[['Ngày - giờ', 'lat', 'lon', 'cường độ (cấp BF)']].tail(5).values
     ax.table(cellText=data, colLabels=['Giờ', 'Vĩ độ', 'Kinh độ', 'Cấp'], loc='bottom', bbox=[0, -0.3, 1, 0.2])
     
@@ -134,12 +130,17 @@ if os.path.exists(DATA_FILE):
 
     with st.sidebar:
         st.header("💾 Tải Xuất Dữ Liệu")
-        st.download_button("🖼️ Tải bản đồ PNG (Pro)", export_pro_png(df), "bao_report.png", "image/png")
+        # Chỉ gọi hàm xuất khi thư viện đã có
+        try:
+            png_map = export_pro_png(df)
+            st.download_button("🖼️ Tải bản đồ PNG (Pro)", png_map, "bao_report.png", "image/png")
+        except:
+            st.error("Đang cài đặt thư viện bản đồ Cartopy...")
         st.download_button("📥 Tải Excel Dự báo", df.to_csv(index=False).encode('utf-8'), "besttrack_export.csv")
 
     m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap")
 
-    # Vẽ hành lang gió (Trong suốt xếp lớp)
+    # Vẽ hành lang gió
     for k, c, o in [('r6', COL_R6, 0.4), ('r10', COL_R10, 0.5), ('rc', COL_RC, 0.6)]:
         for _, row in dense_df.iterrows():
             if row[k] > 0:
@@ -148,11 +149,10 @@ if os.path.exists(DATA_FILE):
     # Quỹ đạo & Icon
     folium.PolyLine(df[['lat', 'lon']].values.tolist(), color="black", weight=2).add_to(m)
     for _, row in df.iterrows():
-        icon = get_storm_icon(row)
+        icon = get_storm_icon(row) # Đã gọi đúng tên hàm
         if icon:
-            folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m)
+            folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m) # Đã sửa thành add_to
 
-    # UI lơ lửng & Chú thích cố định
     m.get_root().html.add_child(folium.Element(get_floating_dashboard_html(df)))
     if os.path.exists(CHUTHICH_IMG):
         FloatImage(CHUTHICH_IMG, bottom=5, left=2).add_to(m)
