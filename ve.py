@@ -24,7 +24,7 @@ DATA_FILE = "besttrack.xlsx"
 HISTORY_FILE = "history_tracking.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# Mã màu chuyên dụng từ script của Phong
+# Mã màu chuyên dụng từ dự án của Phong
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
 st.set_page_config(page_title="Hệ thống Theo dõi Bão - Phong Le", layout="wide")
@@ -37,7 +37,7 @@ def haversine_km(lat1, lon1, lat2, lon2):
     a = sin(dlat/2)**2 + cos(p1)*cos(p2)*sin(dlon/2)**2
     return 2 * R * asin(sqrt(a))
 
-def densify_track(df, step_km=1):
+def densify_track(df, step_km=10):
     new_rows = []
     for i in range(len(df) - 1):
         p1, p2 = df.iloc[i], df.iloc[i+1]
@@ -69,7 +69,7 @@ def get_storm_icon(row):
         return folium.CustomIcon(path, icon_size=(35, 35) if bf >= 8 else (22, 22))
     return None
 
-# --- 3. BẢNG TIN DỰ BÁO LƠ LỬNG (CHỈ HIỂN THỊ DỰ BÁO) ---
+# --- 3. BẢNG TIN DỰ BÁO LƠ LỬNG ---
 def get_forecast_table_html(df):
     f_df = df[df['Thời điểm'].str.contains("dự báo", case=False, na=False)]
     rows_html = ""
@@ -132,13 +132,21 @@ if os.path.exists(DATA_FILE):
 
     m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap")
 
-    # --- ĐỒNG BỘ ĐỘ TRONG SUỐT VỚI CODE PYTHON ---
-    # R6: 0.3 (50%) | R10: 0.4 (40% trong suốt) | RC: 0.5 (30% trong suốt)
+    # --- ĐIỀU CHỈNH VIỀN SẮC NÉT ---
+    # Sử dụng color cho viền, weight=1.5 để làm sắc nét đường biên
     for k, c, o in [('r6', COL_R6, 0.3), ('r10', COL_R10, 0.4), ('rc', COL_RC, 0.5)]:
         for _, row in dense_df.iterrows():
             if row[k] > 0:
-                folium.Circle([row['lat'], row['lon']], radius=row[k]*1000, 
-                              color=c, fill=True, weight=0, fill_opacity=o).add_to(m)
+                folium.Circle(
+                    [row['lat'], row['lon']], 
+                    radius=row[k]*1000, 
+                    color=c,            # Màu của viền (trùng màu vùng gió)
+                    weight=1.5,         # Độ dày viền để tạo độ sắc nét
+                    opacity=0.8,        # Độ đậm của viền (80%)
+                    fill=True, 
+                    fill_color=c,       # Màu nền
+                    fill_opacity=o      # Giữ nguyên độ trong suốt của nền theo yêu cầu của Phong
+                ).add_to(m)
 
     # Quỹ đạo & Icon
     folium.PolyLine(df[['lat', 'lon']].values.tolist(), color="black", weight=2).add_to(m)
@@ -154,4 +162,3 @@ if os.path.exists(DATA_FILE):
     st_folium(m, width="100%", height=750)
 else:
     st.error("Không tìm thấy file besttrack.xlsx")
-
