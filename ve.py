@@ -35,16 +35,16 @@ st.markdown("""
         max-width: 100% !important;
         height: 100vh !important;
     }
-    header, footer, #MainMenu {visibility: hidden;}
-    iframe {
-        height: 100vh !important;
-        width: 100vw !important;
-        border: none;
+    /* Hiển thị thanh sidebar chuyên nghiệp */
+    [data-testid="stSidebar"] {
+        background-color: #f1f3f4;
+        border-right: 1px solid #d1d1d1;
     }
+    header, footer, #MainMenu {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- 1. CÁC HÀM HỖ TRỢ ---
+# --- 1. CÁC HÀM HỖ TRỢ (GIỮ NGUYÊN) ---
 def haversine_km(lat1, lon1, lat2, lon2):
     R = 6371.0
     p1, p2 = radians(lat1), radians(lat2)
@@ -98,16 +98,44 @@ def create_storm_swaths(dense_df):
     final_r6 = u6.difference(u10) if u6 and u10 else u6
     return final_r6, final_r10, final_rc
 
-# --- 2. HÀM TẠO GIAO DIỆN KHỐI PHẢI (CHÚ THÍCH + BẢNG) ---
+# --- 2. THANH TÙY CHỌN (SIDEBAR) ---
+with st.sidebar:
+    st.header("🛠️ Công cụ dữ liệu")
+    st.write("Tải dữ liệu bão hiện tại:")
+    
+    if os.path.exists(DATA_FILE):
+        # Xuất file Excel
+        df_to_export = pd.read_excel(DATA_FILE)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df_to_export.to_excel(writer, index=False, sheet_name='BestTrack')
+        
+        st.download_button(
+            label="📊 Xuất file Excel bão",
+            data=output.getvalue(),
+            file_name=f"BestTrack_{pd.Timestamp.now().strftime('%d%m%Y')}.xlsx",
+            mime="application/vnd.ms-excel"
+        )
+    
+    # Xuất ảnh PNG (Ảnh chú thích)
+    if os.path.exists(CHUTHICH_IMG):
+        with open(CHUTHICH_IMG, "rb") as f:
+            st.download_button(
+                label="🖼️ Tải ảnh chú thích (.png)",
+                data=f,
+                file_name="Chu_Thich_Bao.png",
+                mime="image/png"
+            )
+    st.divider()
+    st.info("Nhấn biểu tượng '>' ở góc trái để đóng/mở thanh công cụ.")
+
+# --- 3. HÀM TẠO GIAO DIỆN KHỐI PHẢI (GIỮ NGUYÊN) ---
 def get_right_dashboard_html(df, img_base64):
-    # Lấy dữ liệu hiện tại và dự báo để đưa vào bảng
     current_df = df[df['Thời điểm'].str.contains("hiện tại", case=False, na=False)]
     forecast_df = df[df['Thời điểm'].str.contains("dự báo", case=False, na=False)]
     display_df = pd.concat([current_df, forecast_df])
-    
     rows_html = ""
     for _, r in display_df.iterrows():
-        # Giữ nguyên màu hiển thị trắng đồng nhất cho mọi hàng
         rows_html += f"""
         <tr style="border: 1px solid black; background: #ffffff;">
             <td style="border: 1px solid black; padding: 4px;">{r['Ngày - giờ']}</td>
@@ -117,11 +145,9 @@ def get_right_dashboard_html(df, img_base64):
             <td style="border: 1px solid black; padding: 4px;">{int(r.get('Pmin (mb)', 0))}</td>
         </tr>
         """
-    
     dashboard_html = f"""
     <div style="position: fixed; top: 20px; right: 20px; width: 32%; max-width: 400px; z-index: 9999; pointer-events: auto;">
         <img src="data:image/png;base64,{img_base64}" style="width: 100%; height: auto; margin-bottom: 10px;">
-        
         <div style="background: rgba(255,255,255,0.95); border: 2px solid black; border-radius: 5px; padding: 8px; font-family: Arial, sans-serif; font-size: 11px;">
             <div style="text-align: center; font-size: 14px; font-weight: bold; color: black; margin-bottom: 5px; text-transform: uppercase;">
                 Tin bão trên biển Đông
@@ -145,7 +171,7 @@ def get_right_dashboard_html(df, img_base64):
     """
     return dashboard_html
 
-# --- 3. HIỂN THỊ BẢN ĐỒ ---
+# --- 4. HIỂN THỊ BẢN ĐỒ ---
 if os.path.exists(DATA_FILE):
     raw_df = pd.read_excel(DATA_FILE)
     raw_df[['lat', 'lon']] = raw_df[['lat', 'lon']].apply(pd.to_numeric, errors='coerce')
@@ -172,4 +198,3 @@ if os.path.exists(DATA_FILE):
     st_folium(m, width=None, height=2000, use_container_width=True)
 else:
     st.error("Thiếu file besttrack.xlsx")
-
