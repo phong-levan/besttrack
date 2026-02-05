@@ -21,7 +21,7 @@ DATA_FILE = "besttrack.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG") 
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
-st.set_page_config(page_title="Hệ thống Theo dõi Bão - Phong Le", layout="wide")
+st.set_page_config(page_title="Hệ thống theo dõi xoáy thuận nhiệt đới", layout="wide")
 
 # --- 1. CÁC HÀM HỖ TRỢ ---
 def haversine_km(lat1, lon1, lat2, lon2):
@@ -117,16 +117,15 @@ if os.path.exists(DATA_FILE):
             encoded = base64.b64encode(f.read()).decode()
         img_url = f"data:image/png;base64,{encoded}"
         
-        # Sử dụng HTML/CSS để đưa chú thích lên góc trên bên phải, kích thước 220px (vừa phải)
+# Đã tăng width lên 280px và bỏ border
         legend_html = f'''
         <div style="
             position: fixed; 
-            top: 20px; right: 20px; width: 220px;
+            top: 20px; right: 20px; width: 280px;
             z-index: 9999; 
-            background-color: rgba(255, 255, 255, 0.8);
-            border: 2px solid grey;
-            border-radius: 6px;
-            padding: 5px;
+            background-color: transparent;
+            border: none;
+            padding: 0px;
         ">
             <img src="{img_url}" style="width: 100%;">
         </div>
@@ -138,3 +137,4 @@ if os.path.exists(DATA_FILE):
     st_folium(m, width="100%", height=750)
 else:
     st.error("Thiếu file besttrack.xlsx")
+
