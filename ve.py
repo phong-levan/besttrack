@@ -24,7 +24,7 @@ DATA_FILE = "besttrack.xlsx"
 HISTORY_FILE = "history_tracking.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# Mã màu chuyên dụng từ dự án của Phong
+# Mã màu chuyên dụng từ kịch bản của Phong
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
 st.set_page_config(page_title="Hệ thống Theo dõi Bão - Phong Le", layout="wide")
@@ -38,6 +38,7 @@ def haversine_km(lat1, lon1, lat2, lon2):
     return 2 * R * asin(sqrt(a))
 
 def densify_track(df, step_km=10):
+    """Nội suy dày đặc để tạo hành lang gió mịn màng cho nghiên cứu"""
     new_rows = []
     for i in range(len(df) - 1):
         p1, p2 = df.iloc[i], df.iloc[i+1]
@@ -69,7 +70,7 @@ def get_storm_icon(row):
         return folium.CustomIcon(path, icon_size=(35, 35) if bf >= 8 else (22, 22))
     return None
 
-# --- 3. BẢNG TIN DỰ BÁO LƠ LỬNG ---
+# --- 3. BẢNG TIN DỰ BÁO LƠ LỬNG (CHỈ HIỂN THỊ DỰ BÁO) ---
 def get_forecast_table_html(df):
     f_df = df[df['Thời điểm'].str.contains("dự báo", case=False, na=False)]
     rows_html = ""
@@ -96,7 +97,7 @@ def get_forecast_table_html(df):
         </table>
     </div>"""
 
-# --- 4. XUẤT ẢNH PNG SẠCH ---
+# --- 4. XUẤT ẢNH PNG SẠCH (THEO LOGIC PYTHON CỦA PHONG) ---
 def export_pro_png(df):
     plt.switch_backend('Agg')
     fig = plt.figure(figsize=(10, 8), dpi=150)
@@ -132,20 +133,20 @@ if os.path.exists(DATA_FILE):
 
     m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap")
 
-    # --- ĐIỀU CHỈNH VIỀN SẮC NÉT ---
-    # Sử dụng color cho viền, weight=1.5 để làm sắc nét đường biên
-    for k, c, o in [('r6', COL_R6, 0.3), ('r10', COL_R10, 0.4), ('rc', COL_RC, 0.5)]:
+    # --- ĐỒNG BỘ THỨ TỰ LỚP & ĐỘ TRONG SUỐT (ALPHA) ---
+    # Lần lượt vẽ: Hồng (Dưới) -> Đỏ (Giữa) -> Xanh (Trên) để lớp trên đè lớp dưới.
+    for k, c, o in [('r6', COL_R6, 0.5), ('r10', COL_R10, 0.6), ('rc', COL_RC, 0.7)]:
         for _, row in dense_df.iterrows():
             if row[k] > 0:
                 folium.Circle(
                     [row['lat'], row['lon']], 
                     radius=row[k]*1000, 
-                    color=c,            # Màu của viền (trùng màu vùng gió)
-                    weight=1.5,         # Độ dày viền để tạo độ sắc nét
-                    opacity=0.8,        # Độ đậm của viền (80%)
+                    color=c,            # Viền sắc nét
+                    weight=1.5,         # Độ dày viền
+                    opacity=0.8,        # Độ đậm của viền
                     fill=True, 
-                    fill_color=c,       # Màu nền
-                    fill_opacity=o      # Giữ nguyên độ trong suốt của nền theo yêu cầu của Phong
+                    fill_color=c, 
+                    fill_opacity=o      # Độ trong suốt (Alpha) khớp code Python
                 ).add_to(m)
 
     # Quỹ đạo & Icon
