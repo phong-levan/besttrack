@@ -31,7 +31,7 @@ def haversine_km(lat1, lon1, lat2, lon2):
     a = sin(dlat/2)**2 + cos(p1)*cos(p2)*sin(dlon/2)**2
     return 2 * R * asin(sqrt(a))
 
-def densify_track(df, step_km=10):
+def densify_track(df, step_km=1):
     new_rows = []
     for i in range(len(df) - 1):
         p1, p2 = df.iloc[i], df.iloc[i+1]
