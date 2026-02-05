@@ -121,7 +121,7 @@ if os.path.exists(DATA_FILE):
         legend_html = f'''
         <div style="
             position: fixed; 
-            top: 20px; right: 20px; width: 280px;
+            top: 20px; right: 20px; width: 400px;
             z-index: 9999; 
             background-color: transparent;
             border: none;
@@ -137,4 +137,5 @@ if os.path.exists(DATA_FILE):
     st_folium(m, width="100%", height=750)
 else:
     st.error("Thiếu file besttrack.xlsx")
+
 
