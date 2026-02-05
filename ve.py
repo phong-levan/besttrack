@@ -19,7 +19,7 @@ from cartopy import geodesic
 ICON_DIR = "icon"
 DATA_FILE = "besttrack.xlsx"
 # Lưu ý: Kiểm tra file của bạn là .png hay .PNG để tránh lỗi trên Linux
-CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.png") 
+CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG") 
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
 st.set_page_config(page_title="Hệ thống Theo dõi Bão - Phong Le", layout="wide")
@@ -124,3 +124,4 @@ if os.path.exists(DATA_FILE):
     st_folium(m, width="100%", height=750)
 else:
     st.error("Thiếu file besttrack.xlsx")
+
