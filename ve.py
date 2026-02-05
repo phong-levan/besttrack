@@ -133,8 +133,8 @@ if os.path.exists(DATA_FILE):
     m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap")
 
     # --- ĐỒNG BỘ ĐỘ TRONG SUỐT VỚI CODE PYTHON ---
-    # R6: 0.5 (50%) | R10: 0.6 (40% trong suốt) | RC: 0.7 (30% trong suốt)
-    for k, c, o in [('r6', COL_R6, 0.5), ('r10', COL_R10, 0.6), ('rc', COL_RC, 0.7)]:
+    # R6: 0.3 (50%) | R10: 0.4 (40% trong suốt) | RC: 0.5 (30% trong suốt)
+    for k, c, o in [('r6', COL_R6, 0.3), ('r10', COL_R10, 0.4), ('rc', COL_RC, 0.5)]:
         for _, row in dense_df.iterrows():
             if row[k] > 0:
                 folium.Circle([row['lat'], row['lon']], radius=row[k]*1000, 
@@ -154,3 +154,4 @@ if os.path.exists(DATA_FILE):
     st_folium(m, width="100%", height=750)
 else:
     st.error("Không tìm thấy file besttrack.xlsx")
+
