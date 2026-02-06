@@ -7,8 +7,6 @@ from streamlit_folium import st_folium
 import os
 import base64
 from math import radians, sin, cos, asin, sqrt
-
-# Thư viện hình học để xử lý vùng gió
 from shapely.geometry import Polygon, mapping
 from shapely.ops import unary_union
 from cartopy import geodesic
@@ -19,43 +17,47 @@ DATA_FILE = "besttrack.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG") 
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
-st.set_page_config(page_title="Hệ thống Theo dõi Bão - FHD Landscape", layout="wide")
+# Thiết lập layout wide ngay từ đầu
+st.set_page_config(page_title="Hệ thống Theo dõi Bão", layout="wide", initial_sidebar_state="collapsed")
 
-# --- 2. CSS INJECTION: TỐI ƯU TOÀN MÀN HÌNH NẰM NGANG (1920x1080) ---
+# --- 2. CSS INJECTION: CHIẾN THUẬT "ZERO SCROLL" ---
 st.markdown("""
     <style>
-    /* Xóa lề và chặn cuộn toàn trang */
-    html, body, [data-testid="stAppViewContainer"] {
-        overflow: hidden;
-        height: 100vh;
-        width: 100vw;
-        margin: 0;
-        padding: 0;
+    /* Loại bỏ hoàn toàn thanh cuộn của trình duyệt */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stVerticalBlock"] {
+        overflow: hidden !important;
+        height: 100vh !important;
+        width: 100vw !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
+    
+    /* Ép container chính chiếm trọn vẹn 100% không gian */
     .main .block-container {
         padding: 0 !important;
         max-width: 100% !important;
         height: 100vh !important;
     }
-    /* Ẩn Header/Footer của Streamlit */
-    header, footer, [data-testid="stHeader"] {visibility: hidden;}
+
+    /* Ẩn các thành phần mặc định của Streamlit gây tốn diện tích */
+    header, footer, [data-testid="stHeader"] {visibility: hidden; height: 0;}
     
-    /* Tối ưu Sidebar */
+    /* Đảm bảo component Folium lấp đầy màn hình */
+    .element-container, .st_folium {
+        width: 100% !important;
+        height: 100vh !important;
+    }
+
+    /* Tùy chỉnh Sidebar để không làm hỏng layout */
     [data-testid="stSidebar"] {
         background-color: #f8f9fa;
-        width: 250px !important;
-    }
-    /* Đảm bảo iframe bản đồ tràn khung */
-    iframe {
-        display: block;
-        width: 100vw !important;
-        height: 100vh !important;
-        border: none;
+        min-width: 200px !important;
+        max-width: 300px !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. CÁC HÀM HỖ TRỢ ---
+# --- 3. CÁC HÀM HỖ TRỢ (GIỮ NGUYÊN LOGIC) ---
 def haversine_km(lat1, lon1, lat2, lon2):
     R = 6371.0
     p1, p2 = radians(lat1), radians(lat2)
@@ -123,18 +125,11 @@ def get_right_dashboard_html(df, img_base64):
         </tr>""" for _, r in display_df.iterrows()])
     
     return f"""
-    <div style="position: fixed; top: 20px; right: 20px; width: 360px; z-index: 9999; pointer-events: auto;">
-        <img src="data:image/png;base64,{img_base64}" style="width: 100%; border-radius: 5px; margin-bottom: 8px; box-shadow: 2px 2px 8px rgba(0,0,0,0.5);">
-        <div style="background: rgba(255,255,255,0.92); border: 2px solid #000; border-radius: 5px; padding: 10px; font-family: 'Segoe UI', Arial, sans-serif;">
-            <div style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 8px; color: #d32f2f;">TIN BÃO TRÊN BIỂN ĐÔNG</div>
-            <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: center; color: #000;">
-                <tr style="background: #f2f2f2;">
-                    <th style="border: 1px solid black;">Giờ</th>
-                    <th style="border: 1px solid black;">Kinh độ</th>
-                    <th style="border: 1px solid black;">Vĩ độ</th>
-                    <th style="border: 1px solid black;">Cấp</th>
-                    <th style="border: 1px solid black;">Pmin</th>
-                </tr>
+    <div style="position: fixed; top: 10px; right: 10px; width: 20vw; min-width: 280px; z-index: 9999; pointer-events: auto;">
+        <img src="data:image/png;base64,{img_base64}" style="width: 100%; border-radius: 4px; margin-bottom: 5px; box-shadow: 2px 2px 6px rgba(0,0,0,0.4);">
+        <div style="background: rgba(255,255,255,0.9); border: 1.5px solid #000; border-radius: 4px; padding: 5px; font-family: sans-serif;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 10px; text-align: center;">
+                <tr style="background: #ddd;"><th>Giờ</th><th>Kinh</th><th>Vĩ</th><th>Cấp</th><th>Pmin</th></tr>
                 {rows_html}
             </table>
         </div>
@@ -146,61 +141,45 @@ if os.path.exists(DATA_FILE):
     raw_df[['lat', 'lon']] = raw_df[['lat', 'lon']].apply(pd.to_numeric, errors='coerce')
     raw_df = raw_df.dropna(subset=['lat', 'lon'])
 
-    # Quản lý danh sách bão qua Sidebar
+    # Quản lý danh sách bão
     storm_col = 'Số hiệu' if 'Số hiệu' in raw_df.columns else None
     selected_storms = []
     
     if storm_col:
-        st.sidebar.title("🌪️ Tùy chọn hiển thị")
+        st.sidebar.title("🌪️ Quản lý bão")
         unique_storms = raw_df[storm_col].unique()
-        st.sidebar.write("Chọn cơn bão để xem:")
         for s in unique_storms:
-            if st.sidebar.checkbox(f"Cơn bão số {s}", value=True):
+            if st.sidebar.checkbox(f"Bão số {s}", value=True):
                 selected_storms.append(s)
         final_df = raw_df[raw_df[storm_col].isin(selected_storms)]
     else:
         final_df = raw_df
-        st.sidebar.info("Không tìm thấy cột phân loại bão.")
 
-    # Tạo bản đồ nền
-    m = folium.Map(location=[17.5, 114.0], zoom_start=6, tiles="OpenStreetMap", control_scale=True)
+    # Tạo bản đồ (Sử dụng tỷ lệ tương đối)
+    m = folium.Map(location=[17.5, 114.0], zoom_start=6, tiles="OpenStreetMap")
 
     if not final_df.empty:
-        # Nhóm theo bão để vẽ từng cơn
         groups = [None] if not storm_col else selected_storms
-        
-        for storm_id in groups:
-            storm_data = final_df[final_df[storm_col] == storm_id] if storm_col else final_df
+        for s_id in groups:
+            storm_data = final_df[final_df[storm_col] == s_id] if storm_col else final_df
             if storm_data.empty: continue
-            
-            # 1. Vẽ vùng gió (Swaths)
             dense_df = densify_track(storm_data)
             f6, f10, fc = create_storm_swaths(dense_df)
-            
-            for geom, color, op in [(f6, COL_R6, 0.45), (f10, COL_R10, 0.55), (fc, COL_RC, 0.65)]:
+            for geom, color, op in [(f6, COL_R6, 0.4), (f10, COL_R10, 0.5), (fc, COL_RC, 0.6)]:
                 if geom and not geom.is_empty:
-                    folium.GeoJson(
-                        mapping(geom), 
-                        style_function=lambda x, c=color, o=op: {'fillColor': c, 'color': c, 'weight': 1, 'fillOpacity': o}
-                    ).add_to(m)
-            
-            # 2. Vẽ đường quỹ đạo
-            folium.PolyLine(storm_data[['lat', 'lon']].values.tolist(), color="black", weight=2, opacity=0.8).add_to(m)
-            
-            # 3. Vẽ Markers (Icons)
+                    folium.GeoJson(mapping(geom), style_function=lambda x, c=color, o=op: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(m)
+            folium.PolyLine(storm_data[['lat', 'lon']].values.tolist(), color="black", weight=2).add_to(m)
             for _, row in storm_data.iterrows():
                 icon = get_storm_icon(row)
-                if icon:
-                    folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m)
+                if icon: folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m)
 
-        # 4. Thêm Dashboard bảng dữ liệu
         if os.path.exists(CHUTHICH_IMG):
             with open(CHUTHICH_IMG, "rb") as f:
                 encoded_img = base64.b64encode(f.read()).decode()
             m.get_root().html.add_child(folium.Element(get_right_dashboard_html(final_df, encoded_img)))
 
-    # Hiển thị Full màn hình Landscape (Tương thích 1920x1080)
-    st_folium(m, width=1920, height=1080, use_container_width=True)
+    # KHÓA BẢN ĐỒ VÀO KHUNG HÌNH (Sử dụng thông số linh hoạt)
+    st_folium(m, width=None, height=2000, use_container_width=True)
 
 else:
-    st.error("Lỗi: Không tìm thấy file dữ liệu 'besttrack.xlsx'")
+    st.error("Thiếu file besttrack.xlsx")
