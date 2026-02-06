@@ -25,7 +25,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CSS INJECTION: CHIẾN THUẬT TRÀN VIỀN TUYỆT ĐỐI ---
+# --- 2. CSS INJECTION: CHIẾT THUẬT TRÀN VIỀN TUYỆT ĐỐI ---
 st.markdown("""
     <style>
     /* 1. Xóa bỏ hoàn toàn thanh cuộn và lề của trình duyệt */
@@ -172,6 +172,14 @@ if os.path.exists(DATA_FILE):
 
     # Tạo bản đồ nền
     m = folium.Map(location=[17.5, 114.0], zoom_start=6, tiles="OpenStreetMap")
+
+    # --- BỔ SUNG LƯỚI KINH VĨ ĐỘ ---
+    # Vẽ các đường kinh tuyến (mỗi 5 độ)
+    for lon in range(100, 141, 5):
+        folium.PolyLine([[0, lon], [40, lon]], color='gray', weight=0.5, opacity=0.5).add_to(m)
+    # Vẽ các đường vĩ tuyến (mỗi 5 độ)
+    for lat in range(0, 41, 5):
+        folium.PolyLine([[lat, 100], [lat, 140]], color='gray', weight=0.5, opacity=0.5).add_to(m)
 
     if not final_df.empty:
         groups = [None] if not storm_col else selected_storms
