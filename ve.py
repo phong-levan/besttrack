@@ -38,46 +38,52 @@ COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
 
 st.set_page_config(
-    page_title="Storm Monitor Center",
+    page_title="Dữ liệu khí tượng",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- CSS FULL MÀN HÌNH (ĐÃ SỬA ĐỂ BỎ KHOẢNG TRẮNG) ---
+# --- CSS FULL MÀN HÌNH & FIX SIDEBAR ---
 st.markdown(f"""
     <style>
-    /* 1. Xóa toàn bộ lề của Container chính */
+    /* 1. Xóa lề container chính */
     .block-container {{
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 0rem !important;
-        padding-right: 0rem !important;
+        padding: 0 !important;
         margin: 0 !important;
         max-width: 100% !important;
     }}
     
-    /* 2. Ẩn Header, Footer và Toolbar của Streamlit để lấy full không gian */
+    /* 2. Ẩn Header/Footer mặc định */
+    header, footer {{ display: none !important; }}
     [data-testid="stHeader"] {{ display: none !important; }}
-    footer {{ display: none !important; }}
     [data-testid="stToolbar"] {{ display: none !important; }}
     
-    /* 3. Tinh chỉnh Sidebar */
-    [data-testid="stSidebar"] {{
+    /* 3. TINH CHỈNH SIDEBAR (FIX CỨNG) */
+    section[data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
-        z-index: 99999; /* Đảm bảo sidebar luôn nổi trên bản đồ */
-        padding-top: 2rem; /* Thêm chút lề trên cho đẹp */
+        top: 0rem !important;      /* Đẩy sát lên trên cùng */
+        height: 100vh !important;  /* Chiều cao full màn hình */
+        padding-top: 0rem !important; /* Xóa khoảng trắng trên đầu */
+        z-index: 999999;
     }}
     
-    /* 4. Ép Iframe và Folium Map chiếm 100% chiều cao màn hình */
+    /* Chỉnh lại lề nội dung bên trong Sidebar cho đẹp */
+    [data-testid="stSidebarUserContent"] {{
+        padding-top: 2rem; 
+        padding-left: 1rem; 
+        padding-right: 1rem;
+    }}
+
+    /* 4. Ép Iframe và Map chiếm trọn màn hình bên phải */
     iframe {{
-        height: 100vh !important; /* Viewport Height */
+        height: 100vh !important;
         width: 100% !important;
         border: none !important;
         display: block !important;
     }}
     
-    /* 5. Info Box (Bảng tin nổi) */
+    /* 5. Info Box */
     .info-box {{
         z-index: 9999;
         font-family: 'Segoe UI', sans-serif;
@@ -88,7 +94,7 @@ st.markdown(f"""
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }}
     
-    /* 6. Style Bảng dữ liệu */
+    /* 6. Table */
     table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
     th {{ background-color: {COLOR_ACCENT}; color: white; padding: 8px; text-transform: uppercase; }}
     td {{ padding: 6px; border-bottom: 1px solid {COLOR_BORDER}; text-align: center; color: {COLOR_TEXT}; }}
@@ -106,7 +112,7 @@ st.markdown(f"""
 # 2. CÁC HÀM XỬ LÝ
 # ==============================================================================
 
-@st.cache_data(ttl=300) 
+@st.cache_data(ttl=300)
 def get_rainviewer_ts():
     try:
         url = "https://api.rainviewer.com/public/weather-maps.json"
@@ -216,8 +222,8 @@ def main():
     # PHẦN 1: SIDEBAR
     # ---------------------------------------------------------
     with st.sidebar:
-        st.title("🌪️ TRUNG TÂM BÃO")
-        st.caption("Phiên bản giao diện sáng")
+        st.title("Tùy chọn")
+        st.caption("")
         
         topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc"])
         st.markdown("---")
@@ -277,16 +283,15 @@ def main():
     
     # === 1. VỆ TINH WINDY ===
     if topic == "Ảnh mây vệ tinh":
-        # Nhúng Windy full chiều cao viewport
-        components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1", height=1200) # Tăng height để chắc chắn full
+        components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1", height=1000)
     
     # === 2. DỮ LIỆU QUAN TRẮC (WEATHEROBS) ===
     elif topic == "Dữ liệu quan trắc":
-        # Nhúng Web WeatherObs Trực tiếp Full Màn hình
-        components.iframe(TARGET_OBS_URL, height=1200, scrolling=True)
+        components.iframe(TARGET_OBS_URL, height=1000, scrolling=True)
 
     # === 3. BẢN ĐỒ BÃO (FOLIUM) ===
     elif topic == "Bản đồ Bão":
+        # Height 100vh để bản đồ luôn full chiều cao
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
         folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
         folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
