@@ -38,7 +38,7 @@ COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
 
 st.set_page_config(
-    page_title="Storm Monitor Center",
+    page_title="Dữ liệu khí tượng",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -332,4 +332,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
