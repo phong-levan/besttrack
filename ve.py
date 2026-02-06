@@ -20,15 +20,15 @@ CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90" 
 
 st.set_page_config(
-    page_title="Hệ thống Theo dõi Bão - Full Screen", 
+    page_title="Hệ thống Theo dõi Bão", 
     layout="wide", 
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CSS INJECTION: CHIẾN THUẬT TRÀN VIỀN TUYỆT ĐỐI ---
+# --- 2. CSS INJECTION: FIX LỖI TRẮNG MÀN HÌNH & TRÀN VIỀN ---
 st.markdown("""
     <style>
-    /* 1. Xóa bỏ hoàn toàn thanh cuộn và lề của trình duyệt */
+    /* Xóa bỏ hoàn toàn thanh cuộn và lề trình duyệt */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stVerticalBlock"] {
         overflow: hidden !important;
         height: 100vh !important;
@@ -37,30 +37,26 @@ st.markdown("""
         padding: 0 !important;
     }
 
-    /* 2. Xóa khoảng cách (padding) của container chính Streamlit */
+    /* Xóa padding của container chính */
     .main .block-container {
         padding: 0 !important;
         max-width: 100% !important;
         height: 100vh !important;
     }
 
-    /* 3. Ẩn Header (thanh trắng trên cùng) và Footer */
+    /* Ẩn Header và Footer */
     [data-testid="stHeader"], footer {
         display: none !important;
     }
     
-    /* 4. Ép bản đồ Folium chiếm trọn 100% màn hình, nằm dưới cùng */
+    /* Cấu hình Iframe bản đồ lấp đầy màn hình */
     iframe {
-        position: fixed;
-        top: 0;
-        left: 0;
         width: 100vw !important;
         height: 100vh !important;
         border: none !important;
-        z-index: 1;
     }
     
-    /* 5. Đảm bảo Sidebar nằm trên bản đồ */
+    /* Đảm bảo Sidebar nằm trên */
     [data-testid="stSidebar"] {
         z-index: 100;
     }
@@ -156,10 +152,9 @@ if os.path.exists(DATA_FILE):
     raw_df[['lat', 'lon']] = raw_df[['lat', 'lon']].apply(pd.to_numeric, errors='coerce')
     raw_df = raw_df.dropna(subset=['lat', 'lon'])
 
-    # Quản lý danh sách bão qua Sidebar
+    # Sidebar chọn bão
     storm_col = 'Số hiệu' if 'Số hiệu' in raw_df.columns else None
     selected_storms = []
-    
     if storm_col:
         st.sidebar.markdown("### 🌪️ BẬT / TẮT BÃO")
         unique_storms = raw_df[storm_col].unique()
@@ -170,8 +165,14 @@ if os.path.exists(DATA_FILE):
     else:
         final_df = raw_df
 
-    # Tạo bản đồ nền
+    # Khởi tạo bản đồ với các đường lưới kinh vĩ độ
     m = folium.Map(location=[17.5, 114.0], zoom_start=6, tiles="OpenStreetMap")
+
+    # Vẽ lưới kinh vĩ độ (Graticule)
+    for lon in range(100, 141, 5):
+        folium.PolyLine([[0, lon], [40, lon]], color='gray', weight=0.5, opacity=0.4).add_to(m)
+    for lat in range(0, 41, 5):
+        folium.PolyLine([[lat, 100], [lat, 140]], color='gray', weight=0.5, opacity=0.4).add_to(m)
 
     if not final_df.empty:
         groups = [None] if not storm_col else selected_storms
@@ -181,7 +182,6 @@ if os.path.exists(DATA_FILE):
             
             dense_df = densify_track(storm_data)
             f6, f10, fc = create_storm_swaths(dense_df)
-            
             for geom, col, op in [(f6, COL_R6, 0.4), (f10, COL_R10, 0.5), (fc, COL_RC, 0.6)]:
                 if geom and not geom.is_empty:
                     folium.GeoJson(mapping(geom), style_function=lambda x,c=col,o=op: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(m)
@@ -196,8 +196,8 @@ if os.path.exists(DATA_FILE):
                 encoded_img = base64.b64encode(f.read()).decode()
             m.get_root().html.add_child(folium.Element(get_right_dashboard_html(final_df, encoded_img)))
 
-    # Hiển thị bản đồ (CSS sẽ tự ép tràn viền nhờ position: fixed)
-    st_folium(m, width=None, height=None, use_container_width=True)
+    # HIỂN THỊ: Đặt chiều cao cố định lớn để ép Iframe hiện ra, CSS sẽ lo phần tràn viền
+    st_folium(m, width=2500, height=1200, use_container_width=True)
 
 else:
     st.error("Không tìm thấy file besttrack.xlsx")
