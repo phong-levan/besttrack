@@ -28,7 +28,7 @@ FILE_OPT1 = "besttrack.xlsx"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# Thông tin đăng nhập Web vệ tinh riêng
+# Thông tin đăng nhập Web Dữ liệu quan trắc
 TARGET_URL = "http://222.255.11.82/Default.aspx"
 TARGET_USER = "admin"
 TARGET_PASS = "ttdl@2021"
@@ -244,7 +244,7 @@ def main():
         st.caption("Phiên bản giao diện sáng")
         
         topic = st.radio("CHỌN CHẾ ĐỘ:", 
-                         ["Bản đồ Bão (Storm Map)", "Vệ tinh (Windy)", "Vệ tinh (Private)"])
+                         ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc"])
         st.markdown("---")
         
         final_df = pd.DataFrame()
@@ -266,7 +266,7 @@ def main():
             except: return pd.DataFrame()
 
         # === 1. BẢN ĐỒ BÃO ===
-        if topic == "Bản đồ Bão (Storm Map)":
+        if topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
             active_mode = storm_opt
             
@@ -298,13 +298,13 @@ def main():
                     else: st.warning("Vui lòng tải file.")
 
         # === 2. VỆ TINH WINDY ===
-        elif topic == "Vệ tinh (Windy)":
+        elif topic == "Ảnh mây vệ tinh":
             st.success("✅ Kết nối Windy (Real-time)...")
             components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1", height=1000)
             return 
 
         # === 3. VỆ TINH NỘI BỘ (AUTO-LOGIN) ===
-        elif topic == "Vệ tinh (Private)":
+        elif topic == "Dữ liệu quan trắc":
             st.warning(f"🔐 Auto-login: {TARGET_URL}...")
             with st.spinner("Đang xác thực..."):
                 html = login_and_fetch_web(TARGET_URL, TARGET_USER, TARGET_PASS)
@@ -326,7 +326,7 @@ def main():
 
     # Vẽ Bão
     fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
-    if not final_df.empty and topic == "Bản đồ Bão (Storm Map)" and show_widgets:
+    if not final_df.empty and topic == "Bản đồ Bão" and show_widgets:
         if "Hiện trạng" in str(active_mode):
             groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
             for g in groups:
@@ -334,7 +334,7 @@ def main():
                 dense = densify_track(sub)
                 f6, f10, fc = create_storm_swaths(dense)
                 # Màu sắc vùng gió cho nền sáng: Rõ ràng hơn (Đỏ, Cam, Vàng)
-                for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#DC143C',0.6)]:
+                for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#90EE90',0.6)]:
                     if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
                 folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
                 for _, r in sub.iterrows():
@@ -364,3 +364,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
