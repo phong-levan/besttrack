@@ -5,15 +5,15 @@ from streamlit_folium import st_folium
 
 # --- 1. CẤU HÌNH GIAO DIỆN ---
 st.set_page_config(
-    page_title="Hệ thống Bản đồ Nền", 
+    page_title="Hệ thống Bản đồ Nền Full Viền", 
     layout="wide", 
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. CSS INJECTION: FIX LỖI TRẮNG MÀN HÌNH ---
+# --- 2. CSS INJECTION: TRIỆT TIÊU KHOẢNG TRẮNG TUYỆT ĐỐI ---
 st.markdown("""
     <style>
-    /* Xóa bỏ hoàn toàn thanh cuộn và lề trình duyệt */
+    /* Loại bỏ lề và thanh cuộn của trình duyệt */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stVerticalBlock"] {
         overflow: hidden !important;
         height: 100vh !important;
@@ -22,23 +22,27 @@ st.markdown("""
         padding: 0 !important;
     }
 
-    /* Xóa khoảng cách của container chính Streamlit */
+    /* Xóa khoảng cách mặc định của Streamlit container */
     .main .block-container {
         padding: 0 !important;
         max-width: 100% !important;
         height: 100vh !important;
     }
 
-    /* Ẩn Header và Footer */
-    [data-testid="stHeader"], footer {
+    /* Ẩn hoàn toàn Header, Footer và các thành phần thừa */
+    [data-testid="stHeader"], footer, [data-testid="stDecoration"] {
         display: none !important;
     }
     
-    /* Ép Iframe bản đồ lấp đầy màn hình */
+    /* Ép bản đồ (Iframe) dán chặt vào 4 góc màn hình */
     iframe {
+        position: fixed;
+        top: 0;
+        left: 0;
         width: 100vw !important;
         height: 100vh !important;
         border: none !important;
+        z-index: 1;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -67,7 +71,7 @@ def create_base_map():
 # --- 4. HIỂN THỊ ---
 base_map = create_base_map()
 
-# Quan trọng: Đặt width và height lớn để component render nội dung bên trong
+# Với CSS ở trên, thông số width/height ở đây sẽ bị CSS ghi đè để full màn hình
 st_folium(
     base_map, 
     width=2500, 
