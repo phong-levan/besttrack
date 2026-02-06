@@ -20,7 +20,7 @@ from cartopy import geodesic
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 1. CẤU HÌNH & GIAO DIỆN (SPLIT LAYOUT)
+# 1. CẤU HÌNH & GIAO DIỆN (LOCKED SIDEBAR)
 # ==============================================================================
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"
@@ -37,16 +37,16 @@ COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
 
-# Kích thước Sidebar cố định (Để tính toán cho chuẩn)
+# Kích thước Sidebar cố định
 SIDEBAR_WIDTH = "320px"
 
 st.set_page_config(
     page_title="Dữ liệu khí tượng",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded" # Bắt buộc mở ban đầu
 )
 
-# --- CSS TÍNH TOÁN VỊ TRÍ CHÍNH XÁC ---
+# --- CSS KHÓA SIDEBAR & FULL MÀN HÌNH ---
 st.markdown(f"""
     <style>
     /* 1. KHÓA CUỘN TRANG CHÍNH */
@@ -57,12 +57,17 @@ st.markdown(f"""
         padding: 0 !important;
     }}
 
-    /* 2. Ẩn Header/Footer */
+    /* 2. ẨN CÁC THÀNH PHẦN THỪA & NÚT ĐÓNG SIDEBAR */
     header, footer, [data-testid="stHeader"], [data-testid="stToolbar"] {{
         display: none !important;
     }}
     .block-container {{
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
+    }}
+    
+    /* >>> QUAN TRỌNG: ẨN NÚT THU GỌN SIDEBAR (KHÓA CỨNG) <<< */
+    [data-testid="stSidebarCollapseBtn"] {{
+        display: none !important;
     }}
 
     /* 3. CẤU HÌNH SIDEBAR (BÊN TRÁI) - CỐ ĐỊNH KÍCH THƯỚC */
@@ -70,8 +75,8 @@ st.markdown(f"""
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
         width: {SIDEBAR_WIDTH} !important;
-        min-width: {SIDEBAR_WIDTH} !important; /* Không cho co nhỏ */
-        max-width: {SIDEBAR_WIDTH} !important; /* Không cho kéo to */
+        min-width: {SIDEBAR_WIDTH} !important;
+        max-width: {SIDEBAR_WIDTH} !important;
         top: 0 !important;
         height: 100vh !important;
         padding-top: 0 !important;
@@ -86,7 +91,6 @@ st.markdown(f"""
     }}
 
     /* 4. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) - TỰ ĐỘNG TÍNH TOÁN */
-    /* Iframe và Map sẽ bắt đầu TỪ ĐIỂM KẾT THÚC CỦA SIDEBAR */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
@@ -98,11 +102,11 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 5. Info Box (Căn chỉnh lại vị trí cho đẹp) */
+    /* 5. Info Box */
     .info-box {{
         position: fixed;
         z-index: 9999; 
-        right: 20px; /* Cách mép phải 20px */
+        right: 20px;
         font-family: 'Segoe UI', sans-serif;
         background: rgba(255, 255, 255, 0.95);
         border: 1px solid {COLOR_BORDER};
@@ -234,6 +238,7 @@ def create_legend(img_b64):
 # 4. MAIN APP
 # ==============================================================================
 def main():
+    
     with st.sidebar:
         st.title("🌪️ TRUNG TÂM BÃO")
         st.caption("Phiên bản giao diện sáng")
