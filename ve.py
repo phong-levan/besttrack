@@ -20,14 +20,14 @@ from cartopy import geodesic
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 1. CẤU HÌNH & GIAO DIỆN
+# 1. CẤU HÌNH & GIAO DIỆN (SPLIT LAYOUT)
 # ==============================================================================
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# Link Web Quan trắc
+# Link Web
 TARGET_OBS_URL = "https://weatherobs.com/"
 
 # Màu sắc
@@ -37,16 +37,19 @@ COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
 
+# Kích thước Sidebar cố định (Để tính toán cho chuẩn)
+SIDEBAR_WIDTH = "320px"
+
 st.set_page_config(
-    page_title="Storm Monitor Center",
+    page_title="Dữ liệu khí tượng",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- CSS CAO CẤP: FIX CỨNG GIAO DIỆN ---
+# --- CSS TÍNH TOÁN VỊ TRÍ CHÍNH XÁC ---
 st.markdown(f"""
     <style>
-    /* 1. KHÓA CUỘN TRANG CHÍNH (Tuyệt đối không cho scroll body) */
+    /* 1. KHÓA CUỘN TRANG CHÍNH */
     html, body, .stApp {{
         overflow: hidden !important;
         height: 100vh !important;
@@ -54,41 +57,52 @@ st.markdown(f"""
         padding: 0 !important;
     }}
 
-    /* 2. Ẩn toàn bộ Header/Footer/Margin thừa của Streamlit */
+    /* 2. Ẩn Header/Footer */
     header, footer, [data-testid="stHeader"], [data-testid="stToolbar"] {{
         display: none !important;
     }}
     .block-container {{
-        padding: 0 !important;
-        margin: 0 !important;
-        max-width: 100vw !important;
+        padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
 
-    /* 3. CẤU HÌNH SIDEBAR (BÊN TRÁI) - Vẫn cho cuộn */
-    [data-testid="stSidebar"] {{
+    /* 3. CẤU HÌNH SIDEBAR (BÊN TRÁI) - CỐ ĐỊNH KÍCH THƯỚC */
+    section[data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
-        width: 300px !important; /* Cố định chiều rộng */
-        z-index: 999999 !important; /* Luôn nổi lên trên cùng */
+        width: {SIDEBAR_WIDTH} !important;
+        min-width: {SIDEBAR_WIDTH} !important; /* Không cho co nhỏ */
+        max-width: {SIDEBAR_WIDTH} !important; /* Không cho kéo to */
+        top: 0 !important;
+        height: 100vh !important;
+        padding-top: 0 !important;
+        z-index: 999999 !important;
     }}
     
-    /* 4. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) - GHIM CHẶT */
-    /* Áp dụng cho cả Iframe (Web) và Map (Folium) */
+    /* Nội dung Sidebar cuộn được */
+    [data-testid="stSidebarUserContent"] {{
+        padding: 2rem 1rem;
+        height: 100vh;
+        overflow-y: auto !important;
+    }}
+
+    /* 4. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) - TỰ ĐỘNG TÍNH TOÁN */
+    /* Iframe và Map sẽ bắt đầu TỪ ĐIỂM KẾT THÚC CỦA SIDEBAR */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
-        left: 0 !important; /* Đè lên toàn bộ, Sidebar sẽ nổi lên trên nó */
-        width: 100vw !important;
+        left: {SIDEBAR_WIDTH} !important; /* Đẩy sang phải bằng đúng độ rộng Sidebar */
+        width: calc(100vw - {SIDEBAR_WIDTH}) !important; /* Chiều rộng = Màn hình - Sidebar */
         height: 100vh !important;
         border: none !important;
-        z-index: 1 !important; /* Nằm dưới Sidebar */
+        z-index: 1 !important;
         display: block !important;
     }}
 
-    /* 5. Info Box (Bảng tin nổi) */
+    /* 5. Info Box (Căn chỉnh lại vị trí cho đẹp) */
     .info-box {{
-        position: fixed; /* Cố định vị trí trên màn hình */
+        position: fixed;
         z-index: 9999; 
+        right: 20px; /* Cách mép phải 20px */
         font-family: 'Segoe UI', sans-serif;
         background: rgba(255, 255, 255, 0.95);
         border: 1px solid {COLOR_BORDER};
@@ -203,7 +217,7 @@ def create_info_table(df, title):
     
     content = f"<table><thead><tr><th>Thời gian</th><th>Vị trí</th><th>Gió (kt)</th></tr></thead><tbody>{rows}</tbody></table>"
     return textwrap.dedent(f"""
-    <div class="info-box" style="position: fixed; top: 10px; right: 10px; width: 320px;">
+    <div class="info-box" style="position: fixed; top: 10px; right: 20px; width: 320px;">
         <div style="background-color: {COLOR_ACCENT}; color: white; padding: 10px; font-weight: bold; text-align: center; border-radius: 8px 8px 0 0;">{title}</div>
         <div style="padding: 0;">{content}</div>
     </div>""")
@@ -211,7 +225,7 @@ def create_info_table(df, title):
 def create_legend(img_b64):
     if not img_b64: return ""
     return textwrap.dedent(f"""
-    <div class="info-box" style="position: fixed; bottom: 20px; right: 10px; width: 280px; padding: 10px;">
+    <div class="info-box" style="position: fixed; bottom: 20px; right: 20px; width: 280px; padding: 10px;">
         <div style="text-align:center; font-weight:bold; font-size:12px; margin-bottom:8px; color: {COLOR_ACCENT};">CHÚ GIẢI KÝ HIỆU</div>
         <img src="data:image/png;base64,{img_b64}" style="width:100%; border-radius:4px; border: 1px solid #ddd;">
     </div>""")
@@ -220,10 +234,6 @@ def create_legend(img_b64):
 # 4. MAIN APP
 # ==============================================================================
 def main():
-    
-    # ---------------------------------------------------------
-    # PHẦN 1: SIDEBAR
-    # ---------------------------------------------------------
     with st.sidebar:
         st.title("🌪️ TRUNG TÂM BÃO")
         st.caption("Phiên bản giao diện sáng")
@@ -280,14 +290,7 @@ def main():
                         final_df = temp[temp['name'].isin(names)]
                     else: st.warning("Vui lòng tải file.")
 
-    # ---------------------------------------------------------
-    # PHẦN 2: VÙNG HIỂN THỊ CHÍNH (FIXED LAYOUT)
-    # ---------------------------------------------------------
-    
-    # CSS trong file này đã được cập nhật để:
-    # 1. Ẩn thanh cuộn của trang chính (html, body { overflow: hidden })
-    # 2. Ép các thành phần bên dưới (iframe, map) cao 100vh và rộng 100vw
-    # 3. Dùng 'position: fixed' để ghim chặt nội dung vào màn hình
+    # --- MAIN CONTENT ---
     
     # === 1. VỆ TINH WINDY ===
     if topic == "Ảnh mây vệ tinh":
