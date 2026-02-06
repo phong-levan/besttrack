@@ -37,16 +37,16 @@ COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
 
-# Kích thước Sidebar cố định
+# Kích thước Sidebar
 SIDEBAR_WIDTH = "320px"
 
 st.set_page_config(
     page_title="Dữ liệu khí tượng",
     layout="wide",
-    initial_sidebar_state="expanded" # Luôn mở khi khởi động
+    initial_sidebar_state="expanded" # Yêu cầu mở ngay khi chạy
 )
 
-# --- CSS KHÓA SIDEBAR (ĐÃ BỎ ẨN NÚT ĐỂ BẠN MỞ LẠI) ---
+# --- CSS FIX GIAO DIỆN ---
 st.markdown(f"""
     <style>
     /* 1. KHÓA CUỘN TRANG CHÍNH */
@@ -57,7 +57,7 @@ st.markdown(f"""
         padding: 0 !important;
     }}
 
-    /* 2. ẨN CÁC THÀNH PHẦN THỪA */
+    /* 2. ẨN HEADER (NHƯNG SẼ HIỆN NÚT MỞ SIDEBAR Ở DƯỚI) */
     header, footer, [data-testid="stHeader"], [data-testid="stToolbar"] {{
         display: none !important;
     }}
@@ -65,9 +65,26 @@ st.markdown(f"""
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     
-    /* >>> ĐÃ XÓA ĐOẠN CODE ẨN NÚT ĐÓNG/MỞ ĐỂ BẠN CÓ THỂ MỞ LẠI SIDEBAR <<< */
+    /* >>> 3. HIỆN NÚT MỞ SIDEBAR (KHẮC PHỤC LỖI MẤT NÚT) <<< */
+    [data-testid="stSidebarCollapsedControl"] {{
+        display: block !important;
+        z-index: 1000000 !important; /* Luôn nổi lên trên cùng */
+        position: fixed !important;
+        top: 10px !important;
+        left: 10px !important;
+        background-color: white !important;
+        padding: 5px !important;
+        border-radius: 5px !important;
+        border: 1px solid #ccc !important;
+        color: {COLOR_ACCENT} !important;
+    }}
 
-    /* 3. CẤU HÌNH KHUNG SIDEBAR (BÊN TRÁI) */
+    /* >>> 4. ẨN NÚT ĐÓNG SIDEBAR (ĐỂ KHÓA CỨNG SAU KHI MỞ) <<< */
+    [data-testid="stSidebarCollapseBtn"] {{
+        display: none !important;
+    }}
+
+    /* 5. CẤU HÌNH SIDEBAR */
     section[data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
@@ -79,19 +96,17 @@ st.markdown(f"""
         z-index: 9999999 !important;
         position: fixed !important;
         left: 0 !important;
+        padding-top: 0 !important;
     }}
     
-    /* 4. CẤU HÌNH NỘI DUNG BÊN TRONG SIDEBAR */
+    /* Nội dung Sidebar cuộn được */
     [data-testid="stSidebarUserContent"] {{
-        padding-top: 20px !important;
-        padding-left: 20px !important;
-        padding-right: 20px !important;
-        padding-bottom: 50px !important;
-        height: 100vh !important;
+        padding: 20px;
+        height: 100vh;
         overflow-y: auto !important;
     }}
 
-    /* 5. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) */
+    /* 6. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
@@ -103,7 +118,7 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 6. Info Box */
+    /* 7. Info Box */
     .info-box {{
         position: fixed;
         z-index: 9999; 
@@ -116,7 +131,7 @@ st.markdown(f"""
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }}
     
-    /* 7. Layer Control */
+    /* 8. Layer Control */
     .leaflet-control-layers {{
         background: white !important; color: {COLOR_TEXT} !important;
         border: 1px solid {COLOR_BORDER} !important; border-radius: 8px !important;
@@ -217,7 +232,7 @@ def create_info_table(df, title):
     
     content = f"<table><thead><tr><th>Thời gian</th><th>Vị trí</th><th>Gió (kt)</th></tr></thead><tbody>{rows}</tbody></table>"
     return textwrap.dedent(f"""
-    <div class="info-box" style="position: fixed; top: 10px; right: 20px; width: 320px;">
+    <div class="info-box" style="position: fixed; top: 10px; right: 10px; width: 320px;">
         <div style="background-color: {COLOR_ACCENT}; color: white; padding: 10px; font-weight: bold; text-align: center; border-radius: 8px 8px 0 0;">{title}</div>
         <div style="padding: 0;">{content}</div>
     </div>""")
@@ -292,16 +307,10 @@ def main():
                     else: st.warning("Vui lòng tải file.")
 
     # --- MAIN CONTENT ---
-    
-    # === 1. VỆ TINH WINDY ===
     if topic == "Ảnh mây vệ tinh":
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
-    
-    # === 2. DỮ LIỆU QUAN TRẮC ===
     elif topic == "Dữ liệu quan trắc":
         components.iframe(TARGET_OBS_URL, scrolling=True)
-
-    # === 3. BẢN ĐỒ BÃO ===
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
         folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
