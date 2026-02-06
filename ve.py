@@ -99,9 +99,9 @@ def create_base_map():
     
     # Vẽ lưới kinh vĩ độ giới hạn trong vùng Biển Đông để tránh nặng bản đồ
     for lon in range(0, 360, 5):
-        folium.PolyLine([[0, lon], [40, lon]], color='gray', weight=0.5, opacity=0.5).add_to(m)
+        folium.PolyLine([[-90, lon], [90, lon]], color='gray', weight=0.5, opacity=0.5).add_to(m)
     for lat in range(-90, 90, 5):
-        folium.PolyLine([[lat, 100], [lat, 140]], color='gray', weight=0.5, opacity=0.5).add_to(m)
+        folium.PolyLine([[lat, 0], [lat, 360]], color='gray', weight=0.5, opacity=0.5).add_to(m)
     
     if HAS_PLUGINS:
         MousePosition().add_to(m)
@@ -188,4 +188,5 @@ if os.path.exists(DATA_FOLDER):
 folium.LayerControl(position='topleft').add_to(m)
 # Giữ chiều cao và độ rộng lớn để CSS ép tràn màn hình
 st_folium(m, width=2500, height=1200, use_container_width=True)
+
 
