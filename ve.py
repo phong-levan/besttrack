@@ -20,7 +20,7 @@ from cartopy import geodesic
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 1. CẤU HÌNH & GIAO DIỆN (LOCKED SIDEBAR)
+# 1. CẤU HÌNH & GIAO DIỆN
 # ==============================================================================
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"
@@ -43,10 +43,10 @@ SIDEBAR_WIDTH = "320px"
 st.set_page_config(
     page_title="Dữ liệu khí tượng",
     layout="wide",
-    initial_sidebar_state="expanded" # Bắt buộc mở ban đầu
+    initial_sidebar_state="expanded"
 )
 
-# --- CSS KHÓA SIDEBAR & FULL MÀN HÌNH ---
+# --- CSS KHÓA SIDEBAR - HIỆN NỘI DUNG ---
 st.markdown(f"""
     <style>
     /* 1. KHÓA CUỘN TRANG CHÍNH */
@@ -57,7 +57,7 @@ st.markdown(f"""
         padding: 0 !important;
     }}
 
-    /* 2. ẨN CÁC THÀNH PHẦN THỪA & NÚT ĐÓNG SIDEBAR */
+    /* 2. ẨN CÁC THÀNH PHẦN THỪA */
     header, footer, [data-testid="stHeader"], [data-testid="stToolbar"] {{
         display: none !important;
     }}
@@ -65,12 +65,12 @@ st.markdown(f"""
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     
-    /* >>> QUAN TRỌNG: ẨN NÚT THU GỌN SIDEBAR (KHÓA CỨNG) <<< */
+    /* 3. KHÓA NÚT ĐÓNG/MỞ SIDEBAR (Để người dùng không đóng được) */
     [data-testid="stSidebarCollapseBtn"] {{
         display: none !important;
     }}
 
-    /* 3. CẤU HÌNH SIDEBAR (BÊN TRÁI) - CỐ ĐỊNH KÍCH THƯỚC */
+    /* 4. CẤU HÌNH KHUNG SIDEBAR (BÊN TRÁI) */
     section[data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
@@ -79,30 +79,34 @@ st.markdown(f"""
         max-width: {SIDEBAR_WIDTH} !important;
         top: 0 !important;
         height: 100vh !important;
-        padding-top: 0 !important;
-        z-index: 999999 !important;
+        z-index: 9999999 !important; /* Đảm bảo luôn nằm trên cùng */
+        position: fixed !important;
+        left: 0 !important;
     }}
     
-    /* Nội dung Sidebar cuộn được */
+    /* 5. CẤU HÌNH NỘI DUNG BÊN TRONG SIDEBAR */
     [data-testid="stSidebarUserContent"] {{
-        padding: 2rem 1rem;
-        height: 100vh;
-        overflow-y: auto !important;
+        padding-top: 20px !important; /* Đẩy nội dung xuống để không bị mất chữ */
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+        padding-bottom: 50px !important;
+        height: 100vh !important;
+        overflow-y: auto !important; /* Cho phép cuộn dọc trong sidebar */
     }}
 
-    /* 4. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) - TỰ ĐỘNG TÍNH TOÁN */
+    /* 6. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
-        left: {SIDEBAR_WIDTH} !important; /* Đẩy sang phải bằng đúng độ rộng Sidebar */
-        width: calc(100vw - {SIDEBAR_WIDTH}) !important; /* Chiều rộng = Màn hình - Sidebar */
+        left: {SIDEBAR_WIDTH} !important; /* Đẩy sang phải */
+        width: calc(100vw - {SIDEBAR_WIDTH}) !important; /* Chiều rộng còn lại */
         height: 100vh !important;
         border: none !important;
-        z-index: 1 !important;
+        z-index: 1 !important; /* Nằm dưới Sidebar */
         display: block !important;
     }}
 
-    /* 5. Info Box */
+    /* 7. Info Box (Nổi lên trên bản đồ) */
     .info-box {{
         position: fixed;
         z-index: 9999; 
@@ -115,12 +119,7 @@ st.markdown(f"""
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }}
     
-    /* 6. Style Bảng */
-    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
-    th {{ background-color: {COLOR_ACCENT}; color: white; padding: 8px; text-transform: uppercase; }}
-    td {{ padding: 6px; border-bottom: 1px solid {COLOR_BORDER}; text-align: center; color: {COLOR_TEXT}; }}
-    
-    /* 7. Layer Control */
+    /* 8. Layer Control */
     .leaflet-control-layers {{
         background: white !important; color: {COLOR_TEXT} !important;
         border: 1px solid {COLOR_BORDER} !important; border-radius: 8px !important;
@@ -295,17 +294,17 @@ def main():
                         final_df = temp[temp['name'].isin(names)]
                     else: st.warning("Vui lòng tải file.")
 
-    # --- MAIN CONTENT ---
+    # --- MAIN CONTENT (FIXED RIGHT SIDE) ---
     
     # === 1. VỆ TINH WINDY ===
     if topic == "Ảnh mây vệ tinh":
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
     
-    # === 2. DỮ LIỆU QUAN TRẮC (WEATHEROBS) ===
+    # === 2. DỮ LIỆU QUAN TRẮC ===
     elif topic == "Dữ liệu quan trắc":
         components.iframe(TARGET_OBS_URL, scrolling=True)
 
-    # === 3. BẢN ĐỒ BÃO (FOLIUM) ===
+    # === 3. BẢN ĐỒ BÃO ===
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
         folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
