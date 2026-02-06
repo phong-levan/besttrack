@@ -8,7 +8,7 @@ import os
 import base64
 from math import radians, sin, cos, asin, sqrt
 import warnings
-import textwrap # <--- Thêm thư viện này để sửa lỗi hiện mã HTML
+import textwrap
 
 # Thư viện cho Option 1
 from shapely.geometry import Polygon, mapping
@@ -26,45 +26,27 @@ COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90"
 
 st.set_page_config(page_title="Hệ thống Giám sát Bão", layout="wide", initial_sidebar_state="collapsed")
 
-# --- 2. CSS SỬA LỖI TRẮNG MÀN HÌNH (QUAN TRỌNG) ---
+# --- 2. CSS SỬA LỖI HIỂN THỊ ---
 st.markdown("""
     <style>
-    /* 1. Làm trong suốt nền chính của Streamlit (Sửa lỗi trắng màn hình) */
-    .stApp {
-        background: transparent !important;
-    }
-    [data-testid="stAppViewContainer"] {
-        background: transparent !important;
-    }
+    /* Làm trong suốt nền Streamlit để hiện bản đồ */
+    .stApp { background: transparent !important; }
+    [data-testid="stAppViewContainer"] { background: transparent !important; }
     
-    /* 2. Ẩn Header/Footer */
-    header, footer {
-        display: none !important;
-    }
+    /* Ẩn giao diện thừa */
+    header, footer { display: none !important; }
+    .block-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
     
-    /* 3. Reset lề */
-    .block-container {
-        padding: 0 !important;
-        margin: 0 !important;
-        max-width: 100% !important;
-    }
+    /* Bản đồ nằm dưới cùng */
+    iframe { position: fixed; top: 0; left: 0; width: 100vw !important; height: 100vh !important; z-index: 0; }
     
-    /* 4. Ép bản đồ xuống lớp dưới cùng */
-    iframe {
-        position: fixed;
-        top: 0; left: 0;
-        width: 100vw !important;
-        height: 100vh !important;
-        z-index: 0; 
-    }
-    
-    /* 5. Đẩy Dashboard lên trên */
+    /* Dashboard & Sidebar nằm trên */
     [data-testid="stSidebar"] { z-index: 1001; }
     .dashboard-box { z-index: 1000; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HÀM XỬ LÝ DỮ LIỆU (Sửa lỗi ValueError) ---
+# --- 3. HÀM XỬ LÝ SỐ LIỆU ---
 
 def haversine_km(lat1, lon1, lat2, lon2):
     R = 6371.0
@@ -99,12 +81,10 @@ def create_storm_swaths(dense_df):
         r6 = row.get('bán kính gió mạnh cấp 6 (km)', 0)
         r10 = row.get('bán kính gió mạnh cấp 10 (km)', 0)
         rc = row.get('bán kính tâm (km)', 0)
-        
         for r, key in [(r6, 'r6'), (r10, 'r10'), (rc, 'rc')]:
             if r > 0:
                 circle = geo.circle(lon=row['lon'], lat=row['lat'], radius=r*1000, n_samples=30)
                 polys[key].append(Polygon(circle))
-    
     u = {k: unary_union(v) if v else None for k, v in polys.items()}
     f_rc = u['rc']
     f_r10 = u['r10'].difference(u['rc']) if u['r10'] and u['rc'] else u['r10']
@@ -118,7 +98,6 @@ def get_storm_icon(row):
     elif bf < 8: fname = f"atnd{status if status=='daqua' else ''}.PNG"
     elif bf <= 11: fname = f"bnd{status if status=='daqua' else ''}.PNG"
     else: fname = f"sieubao{status if status=='daqua' else ''}.PNG"
-    
     path = os.path.join(ICON_DIR, fname)
     return folium.CustomIcon(path, icon_size=(35, 35) if bf>=8 else (22, 22)) if os.path.exists(path) else None
 
@@ -131,17 +110,16 @@ def get_color_by_wind(kt):
     if kt < 113: return '#FF0000'
     return '#FF00FF'
 
-# --- 4. HÀM TẠO DASHBOARD (SỬA LỖI HIỆN CODE HTML) ---
+# --- 4. DASHBOARD HTML ---
 
 def create_dashboard_opt1(df, img_b64):
-    """Dashboard Option 1: Hiện trạng & Dự báo"""
+    """Dashboard Option 1: Hiện trạng (Cố định)"""
     cur = df[df['Thời điểm'].str.contains("hiện tại", case=False, na=False)]
     fut = df[df['Thời điểm'].str.contains("dự báo", case=False, na=False)]
     display_df = pd.concat([cur, fut])
 
     rows = ""
     for _, r in display_df.iterrows():
-        # Sửa lỗi: Viết HTML sát lề trái, không thụt đầu dòng
         rows += f"""<tr style="background-color: white; border-bottom: 1px solid #ddd;">
 <td style="padding:4px; border:1px solid #ccc;">{r.get('Ngày - giờ', '')}</td>
 <td style="padding:4px; border:1px solid #ccc;">{r.get('lon', 0):.1f}</td>
@@ -152,26 +130,19 @@ def create_dashboard_opt1(df, img_b64):
     
     img_tag = f'<img src="data:image/png;base64,{img_b64}" style="width:100%; margin-bottom:10px; border-radius:5px;">' if img_b64 else ""
 
-    # Dùng textwrap.dedent để xóa khoảng trắng thừa đầu dòng
     return textwrap.dedent(f"""
     <div class="dashboard-box" style="position: fixed; top: 20px; right: 20px; width: 320px; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.2);">
         {img_tag}
         <div style="text-align:center; font-weight:bold; color:#d63384; margin-bottom:5px;">TIN BÃO KHẨN CẤP</div>
         <table style="width:100%; border-collapse: collapse; font-size:11px; text-align:center; color:black;">
-            <thead>
-                <tr style="background:#007bff; color:white;">
-                    <th>Giờ</th><th>Kinh</th><th>Vĩ</th><th>Cấp</th><th>Pmin</th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows}
-            </tbody>
+            <thead><tr style="background:#007bff; color:white;"><th>Giờ</th><th>Kinh</th><th>Vĩ</th><th>Cấp</th><th>Pmin</th></tr></thead>
+            <tbody>{rows}</tbody>
         </table>
     </div>
     """)
 
 def create_dashboard_opt2(df, selected_storms):
-    """Dashboard Option 2: Lịch sử"""
+    """Dashboard Option 2: Lịch sử (Thu gọn + JS Toggle)"""
     rows = ""
     for storm in selected_storms:
         sub = df[df['name'] == storm].sort_values('dt', ascending=False)
@@ -183,25 +154,43 @@ def create_dashboard_opt2(df, selected_storms):
 <td><span style="background:{get_color_by_wind(latest.get('wind_kt',0))}; padding:2px 5px; border-radius:3px;">{int(latest.get('wind_kt',0))}kt</span></td>
 </tr>"""
     
-    return textwrap.dedent(f"""
-    <div class="dashboard-box" style="position: fixed; top: 20px; right: 20px; width: 280px; resize:both; overflow:auto; background: rgba(255,255,255,0.95); border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.2);">
-        <div style="background:#007bff; color:white; padding:8px; font-weight:bold; cursor:pointer;">
-            🌪️ LỊCH SỬ BÃO
+    # HTML với Javascript để Toggle (Đóng/Mở)
+    html = f"""
+    <div id="dashboard-opt2" class="dashboard-box" style="position: fixed; top: 20px; right: 20px; width: 300px; background: rgba(255,255,255,0.95); border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: width 0.3s;">
+        <div style="background:#007bff; color:white; padding:10px; border-radius: 8px 8px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleOpt2()">
+            <span style="font-weight:bold;">🌪️ LỊCH SỬ BÃO ({len(selected_storms)})</span>
+            <span id="icon-opt2" style="font-size:16px;">➖</span>
         </div>
-        <div style="padding:10px;">
-            <table style="width:100%; font-size:12px; text-align:center; color:black;">
-                <tr style="background:#f0f0f0;"><th>Tên</th><th>Ngày</th><th>Gió</th></tr>
+        <div id="content-opt2" style="padding:10px; max-height:400px; overflow:auto; resize:vertical;">
+            <table style="width:100%; font-size:12px; text-align:center; border-collapse: collapse; color:black;">
+                <tr style="background:#f0f0f0; border-bottom:1px solid #ddd;">
+                    <th style="padding:5px;">Tên</th><th>Ngày</th><th>Gió</th>
+                </tr>
                 {rows}
             </table>
         </div>
     </div>
-    """)
+    <script>
+    function toggleOpt2() {{
+        var content = document.getElementById('content-opt2');
+        var icon = document.getElementById('icon-opt2');
+        if (content.style.display === 'none') {{
+            content.style.display = 'block';
+            icon.innerHTML = '➖';
+        }} else {{
+            content.style.display = 'none';
+            icon.innerHTML = '➕';
+        }}
+    }}
+    </script>
+    """
+    return textwrap.dedent(html)
 
 # --- 5. MAIN APP ---
 
 def main():
     with st.sidebar:
-        st.title("⚙️ CONTROL PANEL")
+        st.title("⚙️ CẤU HÌNH")
         mode = st.radio("Chế độ:", ["Option 1: Hiện trạng & Dự báo", "Option 2: Lịch sử & Thống kê"])
         
         final_df = pd.DataFrame()
@@ -209,6 +198,7 @@ def main():
         storm_col = None
         
         if "Option 1" in mode:
+            st.info("Đang ở chế độ: Option 1 (File besttrack.xlsx)")
             f = st.file_uploader("Upload besttrack.xlsx", type="xlsx")
             file_path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
             
@@ -217,14 +207,13 @@ def main():
                 df[['lat', 'lon']] = df[['lat', 'lon']].apply(pd.to_numeric, errors='coerce')
                 df = df.dropna(subset=['lat', 'lon'])
                 storm_col = 'Số hiệu' if 'Số hiệu' in df.columns else None
-                
                 if storm_col:
-                    all_storms = df[storm_col].unique()
-                    selected_storms = [s for s in all_storms if st.checkbox(f"Bão số {s}", value=True)]
+                    all_s = df[storm_col].unique()
+                    selected_storms = [s for s in all_s if st.checkbox(f"Bão số {s}", value=True)]
                     final_df = df[df[storm_col].isin(selected_storms)]
-                else:
-                    final_df = df
+                else: final_df = df
         else:
+            st.info("Đang ở chế độ: Option 2 (File besttrack_capgio.xlsx)")
             f = st.file_uploader("Upload besttrack_capgio.xlsx", type="xlsx")
             file_path = f if f else (FILE_OPT2 if os.path.exists(FILE_OPT2) else None)
             
@@ -233,20 +222,9 @@ def main():
                 renames = {"tên bão":"name","năm":"year","tháng":"mon","ngày":"day","giờ":"hour","vĩ độ":"lat","kinh độ":"lon","gió (kt)":"wind_kt"}
                 df = df.rename(columns={k:v for k,v in renames.items() if k in df.columns})
                 
-                # --- SỬA LỖI VALUE ERROR (DATE PARSING) ---
                 time_cols = ['year','mon','day','hour']
                 if all(c in df.columns for c in time_cols):
-                    # Ép kiểu số trước, những gì không phải số sẽ thành NaN
-                    for c in time_cols: 
-                        df[c] = pd.to_numeric(df[c], errors='coerce')
-                    
-                    # Xóa dòng bị lỗi ngày tháng (NaN)
-                    df = df.dropna(subset=time_cols)
-                    
-                    # Chuyển về số nguyên
-                    for c in time_cols:
-                        df[c] = df[c].astype(int)
-                        
+                    for c in time_cols: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
                     df['dt'] = pd.to_datetime(df[time_cols].rename(columns={'mon':'month'}))
                 
                 df[['lat','lon','wind_kt']] = df[['lat','lon','wind_kt']].apply(pd.to_numeric, errors='coerce')
@@ -257,13 +235,14 @@ def main():
                 selected_storms = st.multiselect("Bão:", temp['name'].unique(), default=temp['name'].unique())
                 final_df = temp[temp['name'].isin(selected_storms)]
 
-    # --- MAP DISPLAY ---
+    # --- HIỂN THỊ BẢN ĐỒ ---
     m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None)
     folium.TileLayer('CartoDB positron', name='Bản đồ Sáng').add_to(m)
     folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết').add_to(m)
 
     if not final_df.empty:
         if "Option 1" in mode:
+            # === VẼ OPTION 1 ===
             groups = selected_storms if selected_storms else [None]
             for sid in groups:
                 sub = final_df[final_df[storm_col] == sid] if storm_col else final_df
@@ -280,12 +259,14 @@ def main():
                     icon = get_storm_icon(r)
                     if icon: folium.Marker([r['lat'], r['lon']], icon=icon).add_to(m)
             
+            # Dashboard Opt 1
             img_b64 = None
             if os.path.exists(CHUTHICH_IMG):
                 with open(CHUTHICH_IMG, "rb") as f: img_b64 = base64.b64encode(f.read()).decode()
             st.markdown(create_dashboard_opt1(final_df, img_b64), unsafe_allow_html=True)
             
         else:
+            # === VẼ OPTION 2 ===
             for name in selected_storms:
                 sub = final_df[final_df['name'] == name].sort_values('dt')
                 if sub.empty: continue
@@ -293,6 +274,8 @@ def main():
                 for _, r in sub.iterrows():
                     c = get_color_by_wind(r.get('wind_kt',0))
                     folium.CircleMarker([r['lat'],r['lon']], radius=5, color=c, fill=True, fill_opacity=1, popup=f"{name} {int(r.get('wind_kt',0))}kt").add_to(m)
+            
+            # Dashboard Opt 2
             st.markdown(create_dashboard_opt2(final_df, selected_storms), unsafe_allow_html=True)
 
     folium.LayerControl(collapsed=True).add_to(m)
