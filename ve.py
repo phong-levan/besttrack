@@ -21,7 +21,7 @@ from cartopy import geodesic
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 1. CẤU HÌNH & HÀM HỖ TRỢ REAL-TIME
+# 1. CẤU HÌNH
 # ==============================================================================
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"
@@ -37,9 +37,12 @@ st.markdown("""
     .stApp, [data-testid="stAppViewContainer"] { background: transparent !important; }
     header, footer { display: none !important; }
     .block-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+    
+    /* Bản đồ full màn hình */
     iframe { position: fixed; top: 0; left: 0; width: 100vw !important; height: 100vh !important; z-index: 0; }
     [data-testid="stSidebar"] { z-index: 10000 !important; background-color: rgba(28, 35, 49, 0.95) !important; }
     
+    /* Layer Control */
     .leaflet-top.leaflet-left .leaflet-control-layers {
         background: rgba(255,255,255,0.95) !important;
         border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); padding: 10px; min-width: 200px;
@@ -47,6 +50,8 @@ st.markdown("""
     .leaflet-control-layers-expanded::before {
         content: "🛠️ HỘP CÔNG CỤ"; display: block; font-weight: bold; text-align: center; color: #d63384; margin-bottom: 5px; border-bottom: 1px solid #eee;
     }
+    
+    /* Info Box */
     .info-box { z-index: 9999 !important; font-family: Arial, sans-serif; }
     table { width: 100%; border-collapse: collapse; background: white; font-size: 11px; }
     td, th { padding: 4px; border: 1px solid #ddd; text-align: center; color: black; }
@@ -54,19 +59,17 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- HÀM LẤY TIMESTAMP VỆ TINH (RAINVIEWER) ---
+# --- HÀM LẤY TIMESTAMP VỆ TINH RAINVIEWER (CHO LỚP OVERLAY BẢN ĐỒ BÃO) ---
 @st.cache_data(ttl=300) 
 def get_rainviewer_ts():
-    """Lấy TS RainViewer (Update mỗi 5-10 phút)"""
     try:
+        # verify=False để bypass lỗi SSL mạng cơ quan/công cộng
         url = "https://api.rainviewer.com/public/weather-maps.json"
-        # Thêm verify=False để tránh lỗi SSL trong một số môi trường mạng
-        response = requests.get(url, timeout=3, verify=False)
+        response = requests.get(url, timeout=3, verify=False) 
         data = response.json()
         if 'satellite' in data and 'infrared' in data['satellite']:
             return data['satellite']['infrared'][-1]['time']
-    except Exception as e:
-        return None
+    except: return None
     return None
 
 # ==============================================================================
@@ -186,7 +189,7 @@ def main():
             components.html("""<script>setTimeout(function(){window.location.reload();}, 600000);</script>""", height=0, width=0)
 
         st.markdown("---")
-        topic = st.selectbox("1. CHỦ ĐỀ CHÍNH:", ["Bão (Typhoon)", "Thời tiết (Weather)"])
+        topic = st.selectbox("1. CHỦ ĐỀ CHÍNH:", ["Bão (Typhoon)", "Thời tiết (Weather)", "Vệ tinh (Satellite)"])
         st.markdown("---")
         
         final_df = pd.DataFrame()
@@ -213,7 +216,6 @@ def main():
             storm_opt = st.radio("2. CHỨC NĂNG:", ["Option 1: Hiện trạng", "Option 2: Lịch sử"])
             active_mode = storm_opt
             st.markdown("---")
-            
             if "Option 1" in storm_opt:
                 dashboard_title = "TIN BÃO HIỆN TẠI"
                 if st.checkbox("Hiển thị lớp Hiện trạng", value=True):
@@ -228,7 +230,6 @@ def main():
                             final_df = df[df['storm_no'].isin(sel)]
                         else: final_df = df
                     else: st.warning("Vui lòng tải file.")
-
             else: # Option 2
                 dashboard_title = "LỊCH SỬ BÃO"
                 if st.checkbox("Hiển thị lớp Lịch sử", value=True):
@@ -252,47 +253,35 @@ def main():
                 show_widgets = True
                 dashboard_title = f"BẢN ĐỒ {str(w_param).upper()}"
 
+        # === NHÁNH 3: VỆ TINH (SATELLITE) - DÙNG WINDY ===
+        elif topic == "Vệ tinh (Satellite)":
+            st.info("📡 Đang kết nối vệ tinh Windy (Real-time)...")
+            # URL Embed của Windy: Tọa độ Biển Đông, Zoom 5, Lớp Satellite
+            windy_url = "https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=800&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1"
+            components.iframe(windy_url, height=1000, scrolling=False)
+            return # Dừng render bản đồ Folium
+
     # --- KHỞI TẠO BẢN ĐỒ ---
     m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
     
-    # 1. LỚP NỀN CƠ BẢN
     folium.TileLayer('CartoDB positron', name='Bản đồ Sáng').add_to(m)
     folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết').add_to(m)
-    
-    # 2. LỚP VỆ TINH NỀN (ESRI) - Ổn định nhất
     folium.TileLayer(
         tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         attr='Esri', name='🛰️ Vệ tinh (Nền)', overlay=False
     ).add_to(m)
 
-    # 3. LỚP MÂY VỆ TINH REAL-TIME (OVERLAY)
-    # Lấy timestamp RainViewer
+    # LỚP MÂY RAINVIEWER (CHO BẢN ĐỒ BÃO/THỜI TIẾT)
     latest_ts = get_rainviewer_ts()
-    
-    # HIỂN THỊ TRẠNG THÁI KẾT NỐI VỆ TINH TRONG SIDEBAR
     if latest_ts:
-        st.sidebar.success(f"✅ Vệ tinh RainViewer: Online ({latest_ts})")
-        # RainViewer Infrared
         folium.TileLayer(
             tiles=f"https://tile.rainviewer.com/{latest_ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png",
-            attr="RainViewer",
-            name="☁️ Mây Vệ tinh (RainViewer)",
-            overlay=True, show=True, opacity=0.6 # Show mặc định
-        ).add_to(m)
-    else:
-        st.sidebar.error("⚠️ Vệ tinh RainViewer: Offline (Dùng nguồn dự phòng)")
-        # FALLBACK: RealEarth Global IR (Nguồn dự phòng rất mạnh)
-        folium.TileLayer(
-            tiles="https://realearth.ssec.wisc.edu/tiles/globalir/{z}/{x}/{y}.png",
-            attr="RealEarth",
-            name="☁️ Mây Vệ tinh (Global IR)",
-            overlay=True, show=True, opacity=0.6
+            attr="RainViewer", name="☁️ Mây Vệ tinh (Overlay)", overlay=True, show=False, opacity=0.6
         ).add_to(m)
 
     fg_storm = folium.FeatureGroup(name="🌀 Lớp Bão")
     fg_weather = folium.FeatureGroup(name="🌦️ Lớp Thời Tiết")
 
-    # 4. VẼ DỮ LIỆU BÃO
     if not final_df.empty and topic == "Bão (Typhoon)" and show_widgets:
         if "Option 1" in str(active_mode):
             groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
@@ -325,7 +314,6 @@ def main():
     if show_widgets:
         if not final_df.empty: st.markdown(create_info_table(final_df, dashboard_title), unsafe_allow_html=True)
         elif topic == "Thời tiết (Weather)": st.markdown(create_info_table(pd.DataFrame(), dashboard_title), unsafe_allow_html=True)
-        
         if "Option 1" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
             with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
             st.markdown(create_legend(b64), unsafe_allow_html=True)
