@@ -20,29 +20,33 @@ from cartopy import geodesic
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 1. CẤU HÌNH
+# 1. CẤU HÌNH & GIAO DIỆN
 # ==============================================================================
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
+# Link Web
 TARGET_OBS_URL = "https://weatherobs.com/"
 
+# Màu sắc
 COLOR_BG = "#ffffff"
 COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
+
+# Kích thước Sidebar cố định
 SIDEBAR_WIDTH = "320px"
 
 st.set_page_config(
     page_title="Dữ liệu khí tượng",
     layout="wide",
-    initial_sidebar_state="expanded" # Luôn cố gắng mở khi F5
+    initial_sidebar_state="expanded" # Bắt buộc mở Sidebar ngay khi vào
 )
 
-# --- CSS CỨU HỘ & FIX CỨNG ---
+# --- CSS KHÓA CỨNG SIDEBAR & FULL MÀN HÌNH ---
 st.markdown(f"""
     <style>
     /* 1. KHÓA CUỘN TRANG CHÍNH */
@@ -53,35 +57,25 @@ st.markdown(f"""
         padding: 0 !important;
     }}
 
-    /* 2. ẨN HEADER (TRỪ NÚT MỞ SIDEBAR) */
-    header, footer {{ display: none !important; }}
-    [data-testid="stHeader"] {{ background: transparent !important; }}
-    [data-testid="stToolbar"] {{ display: none !important; }}
-    
-    /* >>> CỨU HỘ: ÉP HIỂN THỊ NÚT MỞ SIDEBAR (MŨI TÊN >) <<< */
-    [data-testid="stSidebarCollapsedControl"] {{
-        display: block !important;
-        z-index: 999999999 !important; /* Luôn nổi lên trên cùng */
-        position: fixed !important;
-        top: 10px !important;
-        left: 10px !important;
-        background-color: white !important; /* Nền trắng dễ nhìn */
-        border: 1px solid #ccc !important;
-        border-radius: 4px !important;
-        color: {COLOR_ACCENT} !important;
-        width: 40px !important;
-        height: 40px !important;
-        text-align: center !important;
-        line-height: 40px !important;
-    }}
-
-    /* >>> KHÓA: ẨN NÚT ĐÓNG SIDEBAR (DẤU X) <<< */
-    /* Khi sidebar đã mở, bạn sẽ không thấy nút để đóng nó lại nữa */
-    [data-testid="stSidebarCollapseBtn"] {{
+    /* 2. ẨN HEADER VÀ TOOLBAR */
+    header, footer, [data-testid="stHeader"], [data-testid="stToolbar"] {{
         display: none !important;
     }}
+    .block-container {{
+        padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
+    }}
+    
+    /* >>> 3. TUYỆT CHIÊU: ẨN NÚT ĐÓNG SIDEBAR <<< */
+    /* Làm biến mất nút mũi tên thu gọn sidebar */
+    [data-testid="stSidebarCollapseBtn"] {{
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }}
 
-    /* 3. CẤU HÌNH THANH SIDEBAR (BÊN TRÁI) */
+    /* 4. CẤU HÌNH KHUNG SIDEBAR (BÊN TRÁI) - CỐ ĐỊNH */
     section[data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
@@ -90,7 +84,7 @@ st.markdown(f"""
         max-width: {SIDEBAR_WIDTH} !important;
         top: 0 !important;
         height: 100vh !important;
-        z-index: 999999 !important;
+        z-index: 9999999 !important; /* Luôn nổi trên cùng */
         position: fixed !important;
         left: 0 !important;
         padding-top: 0 !important;
@@ -100,37 +94,35 @@ st.markdown(f"""
     [data-testid="stSidebarUserContent"] {{
         padding: 20px;
         height: 100vh;
-        overflow-y: auto !important;
+        overflow-y: auto !important; /* Cho phép cuộn dọc */
     }}
 
-    /* 4. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) */
-    /* Tự động tính toán chiều rộng còn lại */
+    /* 5. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) - KHÓA CỨNG */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
-        left: {SIDEBAR_WIDTH} !important;
-        width: calc(100vw - {SIDEBAR_WIDTH}) !important;
+        left: {SIDEBAR_WIDTH} !important; /* Bắt đầu từ mép phải Sidebar */
+        width: calc(100vw - {SIDEBAR_WIDTH}) !important; /* Chiều rộng còn lại */
         height: 100vh !important;
         border: none !important;
-        z-index: 1 !important;
+        z-index: 1 !important; /* Nằm dưới Sidebar */
         display: block !important;
     }}
 
-    /* 5. CÁC THÀNH PHẦN KHÁC */
-    .block-container {{ padding: 0 !important; margin: 0 !important; max-width: 100vw !important; }}
-    
+    /* 6. Info Box */
     .info-box {{
-        position: fixed; z-index: 9999; right: 20px;
+        position: fixed;
+        z-index: 9999; 
+        right: 20px;
         font-family: 'Segoe UI', sans-serif;
         background: rgba(255, 255, 255, 0.95);
-        border: 1px solid {COLOR_BORDER}; border-radius: 8px;
-        color: {COLOR_TEXT}; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border: 1px solid {COLOR_BORDER};
+        border-radius: 8px;
+        color: {COLOR_TEXT};
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }}
     
-    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
-    th {{ background-color: {COLOR_ACCENT}; color: white; padding: 8px; text-transform: uppercase; }}
-    td {{ padding: 6px; border-bottom: 1px solid {COLOR_BORDER}; text-align: center; color: {COLOR_TEXT}; }}
-    
+    /* 7. Layer Control */
     .leaflet-control-layers {{
         background: white !important; color: {COLOR_TEXT} !important;
         border: 1px solid {COLOR_BORDER} !important; border-radius: 8px !important;
