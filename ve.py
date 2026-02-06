@@ -9,7 +9,7 @@ import io
 import base64
 from math import radians, sin, cos, asin, sqrt
 
-# Thư viện hình học để xử lý vùng gió
+# Thư viện hình học để xử lý "khoét lỗ" vùng gió
 from shapely.geometry import Polygon, mapping
 from shapely.ops import unary_union
 from cartopy import geodesic
@@ -22,17 +22,29 @@ COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90"
 
 st.set_page_config(page_title="Hệ thống Theo dõi Bão - Phong Le", layout="wide")
 
-# --- CSS INJECTION: FIX TRÀN VIỀN & SIDEBAR ---
+# --- CSS INJECTION: FIX CỨNG MÀN HÌNH, TRÀN VIỀN ---
 st.markdown("""
     <style>
-    html, body, [data-testid="stAppViewContainer"] { overflow: hidden; height: 100vh; width: 100vw; }
-    .main .block-container { padding: 0 !important; max-width: 100% !important; height: 100vh !important; }
+    html, body, [data-testid="stAppViewContainer"] {
+        overflow: hidden;
+        height: 100vh;
+        width: 100vw;
+    }
+    .main .block-container {
+        padding: 0 !important;
+        max-width: 100% !important;
+        height: 100vh !important;
+    }
     header, footer, #MainMenu {visibility: hidden;}
-    [data-testid="stSidebar"] { background-color: #f8f9fa; border-right: 1px solid #ddd; }
+    iframe {
+        height: 100vh !important;
+        width: 100vw !important;
+        border: none;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 1. CÁC HÀM HỖ TRỢ XỬ LÝ TOẠ ĐỘ & BIỂU TƯỢNG ---
+# --- 1. CÁC HÀM HỖ TRỢ ---
 def haversine_km(lat1, lon1, lat2, lon2):
     R = 6371.0
     p1, p2 = radians(lat1), radians(lat2)
@@ -66,7 +78,9 @@ def get_storm_icon(row):
     elif bf <= 11: fname = "bnddaqua.PNG" if status == "daqua" else "bnd.PNG"
     else: fname = "sieubaodaqua.PNG" if status == "daqua" else "sieubao.PNG"
     path = os.path.join(ICON_DIR, fname)
-    return folium.CustomIcon(path, icon_size=(35, 35) if bf >= 8 else (22, 22)) if os.path.exists(path) else None
+    if os.path.exists(path):
+        return folium.CustomIcon(path, icon_size=(35, 35) if bf >= 8 else (22, 22))
+    return None
 
 def create_storm_swaths(dense_df):
     polys_r6, polys_r10, polys_rc = [], [], []
@@ -84,60 +98,77 @@ def create_storm_swaths(dense_df):
     final_r6 = u6.difference(u10) if u6 and u10 else u6
     return final_r6, final_r10, final_rc
 
+# --- 2. HÀM TẠO GIAO DIỆN KHỐI PHẢI (CHÚ THÍCH + BẢNG) ---
 def get_right_dashboard_html(df, img_base64):
-    rows_html = "".join([f"<tr style='border: 1px solid black; background: #ffffff;'><td style='border: 1px solid black; padding: 4px;'>{r['Ngày - giờ']}</td><td style='border: 1px solid black; padding: 4px;'>{float(r['lon']):.1f}E</td><td style='border: 1px solid black; padding: 4px;'>{float(r['lat']):.1f}N</td><td style='border: 1px solid black; padding: 4px;'>Cấp {int(r['cường độ (cấp BF)'])}</td><td style='border: 1px solid black; padding: 4px;'>{int(r.get('Pmin (mb)', 0))}</td></tr>" for _, r in df.iterrows()])
-    return f'<div style="position: fixed; top: 20px; right: 20px; width: 32%; max-width: 400px; z-index: 9999;"><img src="data:image/png;base64,{img_base64}" style="width: 100%; margin-bottom: 10px;"><div style="background: rgba(255,255,255,0.95); border: 2px solid black; padding: 8px; font-size: 11px;"><div style="text-align: center; font-weight: bold; margin-bottom: 5px;">TIN BÃO TRÊN BIỂN ĐÔNG</div><table style="width: 100%; border-collapse: collapse; text-align: center; border: 1px solid black;"><thead><tr style="background: #e0e0e0; border: 1px solid black;"><th style="border: 1px solid black;">Giờ</th><th style="border: 1px solid black;">Kinh độ</th><th style="border: 1px solid black;">Vĩ độ</th><th style="border: 1px solid black;">Cấp</th><th style="border: 1px solid black;">Pmin</th></tr></thead><tbody>{rows_html}</tbody></table></div></div>'
+    # Lấy dữ liệu hiện tại và dự báo để đưa vào bảng
+    current_df = df[df['Thời điểm'].str.contains("hiện tại", case=False, na=False)]
+    forecast_df = df[df['Thời điểm'].str.contains("dự báo", case=False, na=False)]
+    display_df = pd.concat([current_df, forecast_df])
+    
+    rows_html = ""
+    for _, r in display_df.iterrows():
+        # Giữ nguyên màu hiển thị trắng đồng nhất cho mọi hàng
+        rows_html += f"""
+        <tr style="border: 1px solid black; background: #ffffff;">
+            <td style="border: 1px solid black; padding: 4px;">{r['Ngày - giờ']}</td>
+            <td style="border: 1px solid black; padding: 4px;">{float(r['lon']):.1f}E</td>
+            <td style="border: 1px solid black; padding: 4px;">{float(r['lat']):.1f}N</td>
+            <td style="border: 1px solid black; padding: 4px;">Cấp {int(r['cường độ (cấp BF)'])}</td>
+            <td style="border: 1px solid black; padding: 4px;">{int(r.get('Pmin (mb)', 0))}</td>
+        </tr>
+        """
+    
+    dashboard_html = f"""
+    <div style="position: fixed; top: 20px; right: 20px; width: 32%; max-width: 400px; z-index: 9999; pointer-events: auto;">
+        <img src="data:image/png;base64,{img_base64}" style="width: 100%; height: auto; margin-bottom: 10px;">
+        
+        <div style="background: rgba(255,255,255,0.95); border: 2px solid black; border-radius: 5px; padding: 8px; font-family: Arial, sans-serif; font-size: 11px;">
+            <div style="text-align: center; font-size: 14px; font-weight: bold; color: black; margin-bottom: 5px; text-transform: uppercase;">
+                Tin bão trên biển Đông
+            </div>
+            <table style="width: 100%; border-collapse: collapse; text-align: center; color: black; border: 1px solid black;">
+                <thead>
+                    <tr style="background: #e0e0e0; border: 1px solid black;">
+                        <th style="border: 1px solid black; padding: 4px;">Giờ</th>
+                        <th style="border: 1px solid black; padding: 4px;">Kinh độ</th>
+                        <th style="border: 1px solid black; padding: 4px;">Vĩ độ</th>
+                        <th style="border: 1px solid black; padding: 4px;">Cấp</th>
+                        <th style="border: 1px solid black; padding: 4px;">Pmin</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows_html}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    """
+    return dashboard_html
 
-# --- 2. XỬ LÝ DỮ LIỆU & GIAO DIỆN ---
+# --- 3. HIỂN THỊ BẢN ĐỒ ---
 if os.path.exists(DATA_FILE):
     raw_df = pd.read_excel(DATA_FILE)
     raw_df[['lat', 'lon']] = raw_df[['lat', 'lon']].apply(pd.to_numeric, errors='coerce')
     raw_df = raw_df.dropna(subset=['lat', 'lon'])
+    dense_df = densify_track(raw_df, step_km=10)
 
-    # SIDEBAR: CÔNG CỤ XUẤT FILE & THANH CUỘN
-    with st.sidebar:
-        st.header("🛠️ Bảng điều khiển")
-        
-        # Thanh cuộn mốc thời gian
-        step = st.slider("Mốc thời gian bão (di chuyển để xem đường đi):", 1, len(raw_df), len(raw_df))
-        current_view_df = raw_df.iloc[:step]
-        
-        st.divider()
-        st.subheader("📂 Xuất dữ liệu")
-        
-        # Tải Excel (xlsxwriter)
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            raw_df.to_excel(writer, index=False, sheet_name='StormData')
-        st.download_button("📊 Xuất file Excel bão", output.getvalue(), f"BestTrack_{pd.Timestamp.now().strftime('%d%m%Y')}.xlsx", "application/vnd.ms-excel")
-        
-        # Tải Ảnh PNG
-        if os.path.exists(CHUTHICH_IMG):
-            with open(CHUTHICH_IMG, "rb") as f:
-                st.download_button("🖼️ Tải ảnh chú thích (.png)", f, "ChuThichBao.png", "image/png")
+    m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap", control_scale=True)
 
-    # --- 3. HIỂN THỊ BẢN ĐỒ ---
-    dense_df = densify_track(current_view_df, step_km=10)
-    m = folium.Map(location=[17.0, 115.0], zoom_start=5, tiles="OpenStreetMap")
-
-    # Vẽ Vùng gió bão (Swaths)
     f6, f10, fc = create_storm_swaths(dense_df)
-    for geom, color, opacity in [(f6, COL_R6, 0.4), (f10, COL_R10, 0.5), (fc, COL_RC, 0.6)]:
+    for geom, color, opacity in [(f6, COL_R6, 0.5), (f10, COL_R10, 0.6), (fc, COL_RC, 0.7)]:
         if geom and not geom.is_empty:
             folium.GeoJson(mapping(geom), style_function=lambda x, c=color, o=opacity: {'fillColor': c, 'color': c, 'weight': 1, 'fillOpacity': o}).add_to(m)
 
-    # Vẽ Đường đi và Marker
-    folium.PolyLine(current_view_df[['lat', 'lon']].values.tolist(), color="black", weight=2).add_to(m)
-    for _, row in current_view_df.iterrows():
+    folium.PolyLine(raw_df[['lat', 'lon']].values.tolist(), color="black", weight=2).add_to(m)
+    for _, row in raw_df.iterrows():
         icon = get_storm_icon(row)
         if icon: folium.Marker([row['lat'], row['lon']], icon=icon).add_to(m)
 
-    # Thêm Dashboard bên phải
     if os.path.exists(CHUTHICH_IMG):
         with open(CHUTHICH_IMG, "rb") as f:
             encoded_img = base64.b64encode(f.read()).decode()
-        m.get_root().html.add_child(folium.Element(get_right_dashboard_html(current_view_df.tail(5), encoded_img)))
+        m.get_root().html.add_child(folium.Element(get_right_dashboard_html(raw_df, encoded_img)))
 
     st_folium(m, width=None, height=2000, use_container_width=True)
 else:
-    st.error("Không tìm thấy file besttrack.xlsx!")
+    st.error("Thiếu file besttrack.xlsx")
