@@ -20,16 +20,17 @@ from cartopy import geodesic
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 1. CẤU HÌNH & GIAO DIỆN
+# 1. CẤU HÌNH & GIAO DIỆN FULL SCREEN (NO MARGIN)
 # ==============================================================================
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# Link Web Quan trắc Mới (Không cần đăng nhập)
+# Link Web Quan trắc
 TARGET_OBS_URL = "https://weatherobs.com/"
 
+# Màu sắc giao diện sáng
 COLOR_BG = "#ffffff"
 COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
@@ -42,26 +43,41 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CSS FULL MÀN HÌNH ---
+# --- CSS FULL MÀN HÌNH (ĐÃ SỬA ĐỂ BỎ KHOẢNG TRẮNG) ---
 st.markdown(f"""
     <style>
-    /* Reset lề */
+    /* 1. Xóa toàn bộ lề của Container chính */
     .block-container {{
-        padding: 0 !important; margin: 0 !important; max-width: 100% !important;
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 0rem !important;
+        padding-right: 0rem !important;
+        margin: 0 !important;
+        max-width: 100% !important;
     }}
-    header, footer {{ display: none !important; }}
     
-    /* Sidebar */
+    /* 2. Ẩn Header, Footer và Toolbar của Streamlit để lấy full không gian */
+    [data-testid="stHeader"] {{ display: none !important; }}
+    footer {{ display: none !important; }}
+    [data-testid="stToolbar"] {{ display: none !important; }}
+    
+    /* 3. Tinh chỉnh Sidebar */
     [data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
-        z-index: 99999;
+        z-index: 99999; /* Đảm bảo sidebar luôn nổi trên bản đồ */
+        padding-top: 2rem; /* Thêm chút lề trên cho đẹp */
     }}
     
-    /* Iframe & Map Full Height */
-    iframe {{ height: 100vh !important; width: 100% !important; display: block; }}
+    /* 4. Ép Iframe và Folium Map chiếm 100% chiều cao màn hình */
+    iframe {{
+        height: 100vh !important; /* Viewport Height */
+        width: 100% !important;
+        border: none !important;
+        display: block !important;
+    }}
     
-    /* Info Box */
+    /* 5. Info Box (Bảng tin nổi) */
     .info-box {{
         z-index: 9999;
         font-family: 'Segoe UI', sans-serif;
@@ -72,12 +88,12 @@ st.markdown(f"""
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }}
     
-    /* Table */
+    /* 6. Style Bảng dữ liệu */
     table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
     th {{ background-color: {COLOR_ACCENT}; color: white; padding: 8px; text-transform: uppercase; }}
     td {{ padding: 6px; border-bottom: 1px solid {COLOR_BORDER}; text-align: center; color: {COLOR_TEXT}; }}
     
-    /* Layer Control */
+    /* 7. Layer Control */
     .leaflet-control-layers {{
         background: white !important; color: {COLOR_TEXT} !important;
         border: 1px solid {COLOR_BORDER} !important; border-radius: 8px !important;
@@ -87,7 +103,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. CÁC HÀM XỬ LÝ (ĐÃ BỎ HÀM LOGIN PHỨC TẠP)
+# 2. CÁC HÀM XỬ LÝ
 # ==============================================================================
 
 @st.cache_data(ttl=300) 
@@ -197,13 +213,12 @@ def create_legend(img_b64):
 def main():
     
     # ---------------------------------------------------------
-    # PHẦN 1: SIDEBAR (ĐIỀU KHIỂN)
+    # PHẦN 1: SIDEBAR
     # ---------------------------------------------------------
     with st.sidebar:
         st.title("🌪️ TRUNG TÂM BÃO")
         st.caption("Phiên bản giao diện sáng")
         
-        # Chọn chế độ
         topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc"])
         st.markdown("---")
         
@@ -225,7 +240,6 @@ def main():
                 return df.dropna(subset=['lat','lon'])
             except: return pd.DataFrame()
 
-        # Logic điều khiển cho Bão
         if topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
             active_mode = storm_opt
@@ -258,19 +272,18 @@ def main():
                     else: st.warning("Vui lòng tải file.")
 
     # ---------------------------------------------------------
-    # PHẦN 2: VÙNG HIỂN THỊ CHÍNH (FULL SCREEN)
+    # PHẦN 2: VÙNG HIỂN THỊ CHÍNH (FULL SCREEN - TRÀN VIỀN)
     # ---------------------------------------------------------
     
     # === 1. VỆ TINH WINDY ===
     if topic == "Ảnh mây vệ tinh":
-        st.success("✅ Kết nối Windy (Real-time)...")
-        components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1", height=1000)
+        # Nhúng Windy full chiều cao viewport
+        components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1", height=1200) # Tăng height để chắc chắn full
     
     # === 2. DỮ LIỆU QUAN TRẮC (WEATHEROBS) ===
     elif topic == "Dữ liệu quan trắc":
-        st.success(f"🌐 Đang kết nối: {TARGET_OBS_URL}")
         # Nhúng Web WeatherObs Trực tiếp Full Màn hình
-        components.iframe(TARGET_OBS_URL, height=1000, scrolling=True)
+        components.iframe(TARGET_OBS_URL, height=1200, scrolling=True)
 
     # === 3. BẢN ĐỒ BÃO (FOLIUM) ===
     elif topic == "Bản đồ Bão":
