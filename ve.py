@@ -4,7 +4,6 @@ import folium
 from streamlit_folium import st_folium
 import pandas as pd
 import os
-import base64
 import io
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
@@ -32,19 +31,19 @@ st.markdown("""
         max-width: 100% !important;
     }
     
-    /* 2. Tùy chỉnh Sidebar để trông chuyên nghiệp hơn */
+    /* 2. Tùy chỉnh Sidebar tối màu */
     [data-testid="stSidebar"] {
-        background-color: #1c2331; /* Màu tối giống iweather */
+        background-color: #1c2331;
         color: white;
     }
     [data-testid="stSidebar"] h1, h2, h3 {
-        color: #00d4ff !important; /* Màu xanh cyan */
+        color: #00d4ff !important;
     }
     .stMarkdown, .stText, label {
         color: #e0e0e0 !important;
     }
     
-    /* 3. Ẩn Header/Footer mặc định của Streamlit */
+    /* 3. Ẩn Header/Footer mặc định */
     header {visibility: hidden;}
     footer {visibility: hidden;}
     
@@ -62,14 +61,14 @@ st.markdown("""
 
 @st.cache_data
 def load_data(file_path):
-    """Đọc dữ liệu từ Excel và chuẩn hóa tên cột"""
+    """Đọc dữ liệu từ Excel và chuẩn hóa tên cột (Đã sửa lỗi ngày tháng)"""
     if not os.path.exists(file_path):
         return None
     
+    # Đọc file
     df = pd.read_excel(file_path)
     
-    # Mapping tên cột cho chuẩn logic code (xử lý file besttrack_capgio.xlsx)
-    # Giả sử file của bạn có các cột tiếng Việt, ta map về tiếng Anh để dễ code
+    # Mapping tên cột (Tiếng Việt -> Tiếng Anh)
     rename_map = {
         "tên bão": "name",
         "biển đông": "storm_no",
@@ -83,20 +82,42 @@ def load_data(file_path):
         "khí áp (mb)": "pressure",
         "cấp bão": "grade"
     }
-    # Chỉ rename những cột có trong file
+    # Chỉ đổi tên những cột thực sự tồn tại
     valid_rename = {k: v for k, v in rename_map.items() if k in df.columns}
     df = df.rename(columns=valid_rename)
     
-    # Tạo cột datetime
-    if all(c in df.columns for c in ['year', 'mon', 'day', 'hour']):
-        df['dt'] = pd.to_datetime(df[['year', 'mon', 'day', 'hour']].astype(str).agg('-'.join, axis=1) + ':00', format='%Y-%m-%d-%H:%00', errors='coerce')
+    # --- XỬ LÝ THỜI GIAN AN TOÀN ---
+    time_cols = ['year', 'mon', 'day', 'hour']
     
-    # Ép kiểu số
-    for col in ['lat', 'lon', 'wind_kt', 'pressure', 'year', 'mon']:
+    # Trường hợp 1: File có cột tách rời (year, mon, day...)
+    if all(c in df.columns for c in time_cols):
+        # Ép kiểu số, lỗi thành NaN để tránh crash
+        for col in time_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        # Loại bỏ dòng lỗi
+        df = df.dropna(subset=time_cols)
+        
+        # Chuyển float (2024.0) về int (2024)
+        df[time_cols] = df[time_cols].astype(int)
+        
+        # Đổi tên 'mon' -> 'month' cho hàm pd.to_datetime hiểu
+        temp_df = df[time_cols].rename(columns={'mon': 'month'})
+        
+        # Tạo cột dt
+        df['dt'] = pd.to_datetime(temp_df)
+    
+    # Trường hợp 2: File có cột gộp sẵn (ngay_gio)
+    elif 'ngay_gio' in df.columns:
+         df['dt'] = pd.to_datetime(df['ngay_gio'], errors='coerce')
+    
+    # Ép kiểu số cho dữ liệu bão
+    for col in ['lat', 'lon', 'wind_kt', 'pressure']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
             
-    return df.dropna(subset=['lat', 'lon'])
+    # Loại bỏ các dòng không có tọa độ
+    return df.dropna(subset=['lat', 'lon', 'dt'])
 
 def get_color_by_wind(wind_kt):
     """Màu sắc đường đi bão dựa trên sức gió (kt)"""
@@ -111,10 +132,7 @@ def get_color_by_wind(wind_kt):
 
 # --- 4. ENGINE TẠO ẢNH TĨNH (MATPLOTLIB + CARTOPY) ---
 def generate_static_image(df, selected_storms, show_labels=True):
-    """
-    Hàm này chạy ngầm để tạo ảnh PNG chất lượng cao khi người dùng bấm nút Download.
-    Sử dụng logic của Matplotlib/Cartopy từ .
-    """
+    """Tạo ảnh PNG chất lượng cao để tải về"""
     fig = plt.figure(figsize=(12, 10), dpi=200)
     ax = plt.axes(projection=ccrs.PlateCarree())
     
@@ -155,9 +173,8 @@ def generate_static_image(df, selected_storms, show_labels=True):
                     path_effects=[path_effects.Stroke(linewidth=2, foreground='white'), path_effects.Normal()])
 
     ax.legend(loc='upper right', title="Danh sách bão")
-    ax.set_title(f"SƠ ĐỒ QUỸ ĐẠO BÃO (Dữ liệu lọc)", fontsize=14, weight='bold')
+    ax.set_title(f"SƠ ĐỒ QUỸ ĐẠO BÃO", fontsize=14, weight='bold')
     
-    # Lưu vào buffer bộ nhớ đệm thay vì file cứng
     buf = io.BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight', dpi=200)
     buf.seek(0)
@@ -167,137 +184,127 @@ def generate_static_image(df, selected_storms, show_labels=True):
 # --- 5. GIAO DIỆN CHÍNH ---
 
 def main():
-    # --- SIDEBAR: CÔNG CỤ LỌC & ĐIỀU KHIỂN ---
+    # --- SIDEBAR ---
     with st.sidebar:
         st.title("🌪️ CONTROL PANEL")
         st.markdown("---")
         
         # 1. Upload/Chọn file
-        data_file = "besttrack_capgio.xlsx"  # Mặc định
-        uploaded_file = st.file_uploader("Tải lên file dữ liệu (xlsx)", type=["xlsx"])
-        if uploaded_file:
-            data_file = uploaded_file
-            
-        df = load_data(data_file)
+        # Lưu ý: Trên Streamlit Cloud, file mặc định phải nằm cùng thư mục git
+        default_file = "besttrack_capgio.xlsx"
         
-        if df is None:
-            st.error(f"Không tìm thấy file '{data_file}'!")
+        uploaded_file = st.file_uploader("Tải lên file dữ liệu (xlsx)", type=["xlsx"])
+        
+        if uploaded_file:
+            data_source = uploaded_file
+        elif os.path.exists(default_file):
+            data_source = default_file
+        else:
+            st.warning("⚠️ Chưa có dữ liệu! Vui lòng tải file excel lên.")
             st.stop()
             
-        # 2. Bộ lọc (Filters)
+        df = load_data(data_source)
+        
+        if df is None or df.empty:
+            st.error("File dữ liệu rỗng hoặc sai định dạng!")
+            st.stop()
+            
+        # 2. Bộ lọc
         st.subheader("🛠️ Bộ lọc dữ liệu")
         
         # Lọc Năm
-        all_years = sorted(df['year'].dropna().unique().astype(int))
+        all_years = sorted(df['year'].unique())
         selected_years = st.multiselect("Chọn Năm:", all_years, default=all_years[-1:] if all_years else None)
         
         # Lọc Tháng
-        all_months = sorted(df['mon'].dropna().unique().astype(int))
+        all_months = sorted(df['mon'].unique())
         selected_months = st.multiselect("Chọn Tháng:", all_months, default=all_months)
         
-        # Áp dụng lọc sơ bộ để lấy danh sách tên bão phù hợp
+        # Áp dụng lọc sơ bộ
         temp_df = df[df['year'].isin(selected_years) & df['mon'].isin(selected_months)]
         
         # Lọc Tên Bão
         all_storms = temp_df['name'].unique()
         selected_storms_names = st.multiselect("Chọn Bão:", all_storms, default=all_storms)
         
-        # Lọc Cấp Gió (Slider)
-        min_wind, max_wind = int(df['wind_kt'].min()), int(df['wind_kt'].max())
-        wind_range = st.slider("Phạm vi sức gió (kt):", min_wind, max_wind, (min_wind, max_wind))
-        
-        # --- APPLY FILTERS ---
-        final_df = temp_df[
-            (temp_df['name'].isin(selected_storms_names)) &
-            (temp_df['wind_kt'] >= wind_range[0]) &
-            (temp_df['wind_kt'] <= wind_range[1])
-        ]
-        
-        st.success(f"Đang hiển thị: {len(final_df)} điểm dữ liệu / {len(selected_storms_names)} cơn bão.")
+        # Lọc Cấp Gió
+        if not temp_df.empty:
+            min_wind, max_wind = int(temp_df['wind_kt'].min()), int(temp_df['wind_kt'].max())
+            wind_range = st.slider("Phạm vi sức gió (kt):", min_wind, max_wind, (min_wind, max_wind))
+            
+            final_df = temp_df[
+                (temp_df['name'].isin(selected_storms_names)) &
+                (temp_df['wind_kt'] >= wind_range[0]) &
+                (temp_df['wind_kt'] <= wind_range[1])
+            ]
+        else:
+            final_df = temp_df
+
+        st.success(f"Hiển thị: {len(final_df)} điểm / {len(selected_storms_names)} cơn bão.")
         
         st.markdown("---")
-        # 3. Khu vực Xuất dữ liệu (Download)
-        st.subheader("📥 Xuất dữ liệu & Bản đồ")
+        # 3. Download
+        st.subheader("📥 Xuất dữ liệu")
         
-        # Download Excel
         if not final_df.empty:
             # Excel
             towrite = io.BytesIO()
-            final_df.to_excel(towrite, index=False, engine='openpyxl')
+            final_df.to_excel(towrite, index=False, engine='xlsxwriter')
             towrite.seek(0)
-            st.download_button(label="📄 Tải dữ liệu lọc (Excel)", data=towrite, file_name="filtered_storm_data.xlsx")
+            st.download_button(label="📄 Tải dữ liệu (Excel)", data=towrite, file_name="storm_data.xlsx")
             
-            # Image (PNG) - Kích hoạt Matplotlib Backend
-            if st.button("🖼️ Tạo & Tải ảnh bản đồ (PNG)"):
+            # Image PNG
+            if st.button("🖼️ Tạo ảnh bản đồ (PNG)"):
                 with st.spinner("Đang vẽ bản đồ chất lượng cao..."):
                     img_buf = generate_static_image(final_df, selected_storms_names)
                     st.download_button(
-                        label="⬇️ Bấm để tải ảnh PNG",
+                        label="⬇️ Tải ảnh xuống",
                         data=img_buf,
                         file_name="storm_map_hd.png",
                         mime="image/png"
                     )
 
-    # --- MAIN DISPLAY: INTERACTIVE MAP ---
-    
-    # Tạo bản đồ nền (Full Screen logic)
-    # Dùng tiles CartoDB Dark_Matter cho giống iWeather, hoặc OpenStreetMap
+    # --- MAIN MAP ---
     m = folium.Map(location=[16.0, 112.0], zoom_start=6, tiles="CartoDB positron") 
     
-    # Layer Control để bật tắt các lớp
     feature_group = folium.FeatureGroup(name="Đường đi bão")
     
     if not final_df.empty:
-        # Nhóm theo từng cơn bão để vẽ đường nối
         for storm_name in selected_storms_names:
             storm_data = final_df[final_df['name'] == storm_name].sort_values('dt')
             if storm_data.empty: continue
             
-            # 1. Vẽ đường nối (Polyline)
+            # Vẽ đường
             coordinates = storm_data[['lat', 'lon']].values.tolist()
             folium.PolyLine(
-                locations=coordinates,
-                color="black",
-                weight=2,
-                opacity=0.6,
+                locations=coordinates, color="black", weight=2, opacity=0.6,
                 tooltip=f"Đường đi: {storm_name}"
             ).add_to(feature_group)
             
-            # 2. Vẽ các điểm (CircleMarker hoặc Icon)
+            # Vẽ điểm
             for _, row in storm_data.iterrows():
-                # Tạo popup thông tin chi tiết
                 popup_content = f"""
                 <div style='font-family:Arial; font-size:12px; width:200px'>
-                    <b>Bão: {row['name']}</b><br>
-                    Thời gian: {row['dt']}<br>
-                    Vị trí: {row['lat']}N - {row['lon']}E<br>
-                    Gió: {row['wind_kt']} kt | Áp suất: {row.get('pressure', 'N/A')} mb
+                    <b>{row['name']}</b> ({row['dt'].strftime('%d/%m %Hh')})<br>
+                    Gió: {row['wind_kt']} kt<br>
+                    Áp suất: {row.get('pressure', 'N/A')} mb
                 </div>
                 """
-                
-                # Màu marker theo cấp gió
                 color = get_color_by_wind(row.get('wind_kt', 0))
-                
                 folium.CircleMarker(
                     location=[row['lat'], row['lon']],
-                    radius=5,
-                    color=color,
-                    fill=True,
-                    fill_color=color,
-                    fill_opacity=1.0,
+                    radius=5, color=color, fill=True, fill_color=color, fill_opacity=1.0,
                     popup=folium.Popup(popup_content, max_width=250)
                 ).add_to(feature_group)
 
     feature_group.add_to(m)
     
-    # Thêm plugin vẽ lưới kinh vĩ tuyến (giống Source 2)
-    # Vẽ tay hoặc dùng plugin, ở đây dùng code vẽ tay nhẹ nhàng
+    # Lưới kinh vĩ tuyến
     for lon in range(100, 126, 5):
         folium.PolyLine([[0, lon], [30, lon]], color='gray', weight=0.5, opacity=0.3, dash_array='5').add_to(m)
     for lat in range(0, 31, 5):
         folium.PolyLine([[lat, 95], [lat, 130]], color='gray', weight=0.5, opacity=0.3, dash_array='5').add_to(m)
 
-    # Hiển thị bản đồ Full-width
     st_folium(m, width=None, height=1000, use_container_width=True)
 
 if __name__ == "__main__":
