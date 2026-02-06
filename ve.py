@@ -21,7 +21,7 @@ from cartopy import geodesic
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 1. CẤU HÌNH & GIAO DIỆN LIGHT MODE (TRẮNG)
+# 1. CẤU HÌNH & GIAO DIỆN LIGHT MODE (TRẮNG) - FULL MÀN HÌNH
 # ==============================================================================
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"
@@ -35,9 +35,9 @@ TARGET_PASS = "ttdl@2021"
 
 # --- BẢNG MÀU SÁNG (LIGHT THEME) ---
 COLOR_BG = "#ffffff"          # Nền chính: Trắng
-COLOR_SIDEBAR = "#f8f9fa"     # Sidebar: Xám rất nhạt (chuẩn Bootstrap)
+COLOR_SIDEBAR = "#f8f9fa"     # Sidebar: Xám rất nhạt
 COLOR_TEXT = "#333333"        # Chữ: Đen xám
-COLOR_ACCENT = "#007bff"      # Điểm nhấn: Xanh dương (Blue)
+COLOR_ACCENT = "#007bff"      # Điểm nhấn: Xanh dương
 COLOR_BORDER = "#dee2e6"      # Viền: Xám nhạt
 
 st.set_page_config(
@@ -46,54 +46,59 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CSS TÙY CHỈNH CHO GIAO DIỆN TRẮNG ---
+# --- CSS TÙY CHỈNH: FULL VIỀN & FIXED SIDEBAR ---
 st.markdown(f"""
     <style>
-    /* 1. Nền ứng dụng chính */
-    .stApp {{
-        background-color: {COLOR_BG};
-        color: {COLOR_TEXT};
+    /* 1. Xóa lề trắng mặc định của Streamlit để Full màn hình */
+    .block-container {{
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 0rem !important;
+        padding-right: 0rem !important;
+        margin: 0 !important;
+        max-width: 100% !important;
     }}
     
-    /* 2. Sidebar (Thanh bên trái) */
+    /* Ẩn Header và Footer mặc định để rộng chỗ */
+    header {{ display: none !important; }}
+    footer {{ display: none !important; }}
+    
+    /* 2. Cố định Sidebar & Màu sắc */
     [data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
+        z-index: 99999 !important; /* Luôn nổi lên trên */
     }}
+    
     /* Chữ trong Sidebar */
     [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {{
         color: {COLOR_TEXT} !important;
     }}
+
+    /* 3. Đảm bảo Iframe và Map full chiều cao */
+    iframe {{
+        height: 100vh !important; /* Full chiều cao màn hình */
+        width: 100% !important;
+    }}
     
-    /* 3. Info Box (Bảng tin nổi) - Nền trắng bóng đổ nhẹ */
+    /* 4. Info Box (Bảng tin nổi) */
     .info-box {{
         z-index: 9999;
         font-family: 'Segoe UI', sans-serif;
-        background: rgba(255, 255, 255, 0.95); /* Trắng đục */
+        background: rgba(255, 255, 255, 0.95);
         border: 1px solid {COLOR_BORDER};
         border-radius: 8px;
         color: {COLOR_TEXT};
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* Bóng đổ mềm */
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }}
     
-    /* 4. Table trong Dashboard */
+    /* 5. Table Style */
     table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
-    th {{ 
-        background-color: {COLOR_ACCENT}; 
-        color: white; 
-        padding: 8px; 
-        text-transform: uppercase; 
-        font-weight: 600;
-    }}
-    td {{ 
-        padding: 6px; 
-        border-bottom: 1px solid {COLOR_BORDER}; 
-        text-align: center; 
-        color: {COLOR_TEXT}; 
-    }}
-    tr:nth-child(even) {{ background-color: #f2f2f2; }} /* Dòng chẵn màu xám nhẹ */
+    th {{ background-color: {COLOR_ACCENT}; color: white; padding: 8px; text-transform: uppercase; font-weight: 600; }}
+    td {{ padding: 6px; border-bottom: 1px solid {COLOR_BORDER}; text-align: center; color: {COLOR_TEXT}; }}
+    tr:nth-child(even) {{ background-color: #f2f2f2; }}
     
-    /* 5. Layer Control (Hộp công cụ bản đồ) */
+    /* 6. Layer Control */
     .leaflet-control-layers {{
         background: white !important;
         color: {COLOR_TEXT} !important;
@@ -111,7 +116,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. CÁC HÀM XỬ LÝ (GIỮ NGUYÊN LOGIC, CHỈ SỬA GIAO DIỆN)
+# 2. CÁC HÀM XỬ LÝ
 # ==============================================================================
 
 @st.cache_data(ttl=600)
@@ -128,7 +133,8 @@ def login_and_fetch_web(url, username, password):
             payload[user_in['name']] = username
             payload[pass_in['name']] = password
             r2 = session.post(url, data=payload, timeout=15)
-            content = r2.text.replace('<head>', f'<head><base href="{url}">')
+            # Thêm CSS vào HTML trả về để nó full width/height
+            content = r2.text.replace('<head>', f'<head><base href="{url}"><style>body, html {{ margin:0; padding:0; height:100%; width:100%; overflow:hidden; }}</style>')
             return content
         return "<h3>Không tìm thấy khung đăng nhập.</h3>"
     except Exception as e:
@@ -201,7 +207,7 @@ def get_icon_name(row):
     return f"sieubao_{status}"
 
 # ==============================================================================
-# 3. UI COMPONENTS (STYLE TRẮNG)
+# 3. UI COMPONENTS
 # ==============================================================================
 
 def create_info_table(df, title):
@@ -241,7 +247,7 @@ def create_legend(img_b64):
 def main():
     with st.sidebar:
         st.title("🌪️ TRUNG TÂM BÃO")
-        st.caption("Phiên bản giao diện sáng")
+        st.caption("Phiên bản giao diện sáng - Full Screen")
         
         topic = st.radio("CHỌN CHẾ ĐỘ:", 
                          ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc"])
@@ -297,27 +303,29 @@ def main():
                         final_df = temp[temp['name'].isin(names)]
                     else: st.warning("Vui lòng tải file.")
 
-        # === 2. VỆ TINH WINDY ===
+        # === 2. VỆ TINH WINDY (FULL SCREEN) ===
         elif topic == "Ảnh mây vệ tinh":
             st.success("✅ Kết nối Windy (Real-time)...")
+            # Embed Windy Full Height
             components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1", height=1000)
             return 
 
-        # === 3. VỆ TINH NỘI BỘ (AUTO-LOGIN) ===
+        # === 3. VỆ TINH NỘI BỘ (AUTO-LOGIN FULL SCREEN) ===
         elif topic == "Dữ liệu quan trắc":
             st.warning(f"🔐 Auto-login: {TARGET_URL}...")
             with st.spinner("Đang xác thực..."):
                 html = login_and_fetch_web(TARGET_URL, TARGET_USER, TARGET_PASS)
+            # Embed HTML Full Height
             components.html(html, height=1000, scrolling=True)
             return
 
-    # --- RENDER BẢN ĐỒ FOLIUM (GIAO DIỆN SÁNG) ---
+    # --- RENDER BẢN ĐỒ FOLIUM (GIAO DIỆN SÁNG - FULL SCREEN) ---
+    # Chiều cao 1000px đảm bảo lấp đầy hầu hết màn hình laptop/desktop
     m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
     
-    # Lớp Nền Sáng (Positron) làm mặc định cho giao diện trắng
+    # Lớp Nền
     folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
     folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
-    # Vẫn giữ lớp vệ tinh để người dùng chuyển đổi nếu thích
     folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
 
     # Lớp Mây RainViewer (Overlay)
@@ -333,7 +341,6 @@ def main():
                 sub = final_df[final_df['storm_no']==g] if g else final_df
                 dense = densify_track(sub)
                 f6, f10, fc = create_storm_swaths(dense)
-                # Màu sắc vùng gió cho nền sáng: Rõ ràng hơn (Đỏ, Cam, Vàng)
                 for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#90EE90',0.6)]:
                     if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
                 folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
@@ -360,8 +367,8 @@ def main():
             with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
             st.markdown(create_legend(b64), unsafe_allow_html=True)
 
+    # Render bản đồ Full Screen
     st_folium(m, width=None, height=1000, use_container_width=True)
 
 if __name__ == "__main__":
     main()
-
