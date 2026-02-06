@@ -5,15 +5,15 @@ from streamlit_folium import st_folium
 
 # --- 1. CẤU HÌNH GIAO DIỆN ---
 st.set_page_config(
-    page_title="Bản đồ nền Kinh vĩ độ", 
+    page_title="Hệ thống Bản đồ Nền", 
     layout="wide", 
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. CSS INJECTION: CHIẾN THUẬT TRÀN VIỀN TUYỆT ĐỐI ---
+# --- 2. CSS INJECTION: FIX LỖI TRẮNG MÀN HÌNH ---
 st.markdown("""
     <style>
-    /* 1. Xóa bỏ hoàn toàn thanh cuộn và lề của trình duyệt */
+    /* Xóa bỏ hoàn toàn thanh cuộn và lề trình duyệt */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stVerticalBlock"] {
         overflow: hidden !important;
         height: 100vh !important;
@@ -22,32 +22,28 @@ st.markdown("""
         padding: 0 !important;
     }
 
-    /* 2. Xóa khoảng cách (padding) của container chính Streamlit */
+    /* Xóa khoảng cách của container chính Streamlit */
     .main .block-container {
         padding: 0 !important;
         max-width: 100% !important;
         height: 100vh !important;
     }
 
-    /* 3. Ẩn Header (thanh trắng trên cùng) và Footer */
+    /* Ẩn Header và Footer */
     [data-testid="stHeader"], footer {
         display: none !important;
     }
     
-    /* 4. Ép bản đồ Folium chiếm trọn 100% màn hình */
+    /* Ép Iframe bản đồ lấp đầy màn hình */
     iframe {
-        position: fixed;
-        top: 0;
-        left: 0;
         width: 100vw !important;
         height: 100vh !important;
         border: none !important;
-        z-index: 1;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. HÀM KHỞI TẠO BẢN ĐỒ NỀN (BASE MAP) ---
+# --- 3. HÀM KHỞI TẠO BẢN ĐỒ NỀN ---
 def create_base_map():
     # Khởi tạo bản đồ tại khu vực Biển Đông
     m = folium.Map(
@@ -58,28 +54,23 @@ def create_base_map():
     )
 
     # --- BỔ SUNG LƯỚI KINH VĨ ĐỘ ---
-    # Vẽ các đường kinh tuyến (mỗi 5 độ)
+    # Vẽ các đường kinh tuyến mỗi 5 độ
     for lon in range(100, 141, 5):
-        folium.PolyLine(
-            [[0, lon], [40, lon]], 
-            color='gray', 
-            weight=0.5, 
-            opacity=0.5
-        ).add_to(m)
+        folium.PolyLine([[0, lon], [45, lon]], color='gray', weight=0.6, opacity=0.4).add_to(m)
 
-    # Vẽ các đường vĩ tuyến (mỗi 5 độ)
+    # Vẽ các đường vĩ tuyến mỗi 5 độ
     for lat in range(0, 41, 5):
-        folium.PolyLine(
-            [[lat, 100], [lat, 140]], 
-            color='gray', 
-            weight=0.5, 
-            opacity=0.5
-        ).add_to(m)
+        folium.PolyLine([[lat, 100], [lat, 145]], color='gray', weight=0.6, opacity=0.4).add_to(m)
         
     return m
 
 # --- 4. HIỂN THỊ ---
-m = create_base_map()
+base_map = create_base_map()
 
-# Hiển thị bản đồ tràn màn hình
-st_folium(m, width=None, height=None, use_container_width=True)
+# Quan trọng: Đặt width và height lớn để component render nội dung bên trong
+st_folium(
+    base_map, 
+    width=2500, 
+    height=1200, 
+    use_container_width=True
+)
