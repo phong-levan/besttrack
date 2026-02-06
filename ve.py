@@ -21,22 +21,24 @@ from cartopy import geodesic
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 1. CẤU HÌNH & GIAO DIỆN CYBERPUNK (SỬA LỖI CSS)
+# 1. CẤU HÌNH & GIAO DIỆN LIGHT MODE (TRẮNG)
 # ==============================================================================
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# Thông tin đăng nhập Web số liệu khí tượng riêng
+# Thông tin đăng nhập Web vệ tinh riêng
 TARGET_URL = "http://222.255.11.82/Default.aspx"
 TARGET_USER = "admin"
 TARGET_PASS = "ttdl@2021"
 
-# Màu sắc giao diện
-COLOR_BG = "#0e1117"
-COLOR_SIDEBAR = "#161b24"
-COLOR_ACCENT = "#00f2ff"
+# --- BẢNG MÀU SÁNG (LIGHT THEME) ---
+COLOR_BG = "#ffffff"          # Nền chính: Trắng
+COLOR_SIDEBAR = "#f8f9fa"     # Sidebar: Xám rất nhạt (chuẩn Bootstrap)
+COLOR_TEXT = "#333333"        # Chữ: Đen xám
+COLOR_ACCENT = "#007bff"      # Điểm nhấn: Xanh dương (Blue)
+COLOR_BORDER = "#dee2e6"      # Viền: Xám nhạt
 
 st.set_page_config(
     page_title="Storm Monitor Center",
@@ -44,75 +46,93 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CSS ĐÃ SỬA (BỎ IFRAME FIXED ĐỂ TRÁNH LỖI MÀN HÌNH ĐEN) ---
+# --- CSS TÙY CHỈNH CHO GIAO DIỆN TRẮNG ---
 st.markdown(f"""
     <style>
-    /* Nền ứng dụng */
-    .stApp {{ background-color: {COLOR_BG}; }}
+    /* 1. Nền ứng dụng chính */
+    .stApp {{
+        background-color: {COLOR_BG};
+        color: {COLOR_TEXT};
+    }}
     
-    /* Tối ưu không gian lề */
-    .block-container {{ padding-top: 1rem; padding-bottom: 0rem; padding-left: 1rem; padding-right: 1rem; }}
+    /* 2. Sidebar (Thanh bên trái) */
+    [data-testid="stSidebar"] {{
+        background-color: {COLOR_SIDEBAR} !important;
+        border-right: 1px solid {COLOR_BORDER};
+    }}
+    /* Chữ trong Sidebar */
+    [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {{
+        color: {COLOR_TEXT} !important;
+    }}
     
-    /* Sidebar */
-    [data-testid="stSidebar"] {{ background-color: {COLOR_SIDEBAR}; border-right: 1px solid #333; }}
-    
-    /* Info Box (Bảng tin nổi) - Hiệu ứng kính mờ */
+    /* 3. Info Box (Bảng tin nổi) - Nền trắng bóng đổ nhẹ */
     .info-box {{
         z-index: 9999;
         font-family: 'Segoe UI', sans-serif;
-        background: rgba(20, 20, 30, 0.9);
-        backdrop-filter: blur(5px);
-        border: 1px solid #444;
+        background: rgba(255, 255, 255, 0.95); /* Trắng đục */
+        border: 1px solid {COLOR_BORDER};
         border-radius: 8px;
-        color: white;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        color: {COLOR_TEXT};
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* Bóng đổ mềm */
     }}
     
-    /* Table trong Dashboard */
+    /* 4. Table trong Dashboard */
     table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
-    th {{ background: linear-gradient(90deg, #004e92, #000428); color: {COLOR_ACCENT}; padding: 8px; text-transform: uppercase; }}
-    td {{ padding: 6px; border-bottom: 1px solid #333; text-align: center; color: #eee; }}
-    tr:hover {{ background-color: rgba(0, 242, 255, 0.1); }}
+    th {{ 
+        background-color: {COLOR_ACCENT}; 
+        color: white; 
+        padding: 8px; 
+        text-transform: uppercase; 
+        font-weight: 600;
+    }}
+    td {{ 
+        padding: 6px; 
+        border-bottom: 1px solid {COLOR_BORDER}; 
+        text-align: center; 
+        color: {COLOR_TEXT}; 
+    }}
+    tr:nth-child(even) {{ background-color: #f2f2f2; }} /* Dòng chẵn màu xám nhẹ */
     
-    /* Layer Control (Hộp công cụ bản đồ) */
+    /* 5. Layer Control (Hộp công cụ bản đồ) */
     .leaflet-control-layers {{
-        background: {COLOR_SIDEBAR} !important;
-        color: white !important;
-        border: 1px solid {COLOR_ACCENT} !important;
+        background: white !important;
+        color: {COLOR_TEXT} !important;
+        border: 1px solid {COLOR_BORDER} !important;
         border-radius: 8px !important;
         padding: 10px !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
+    }}
+    .leaflet-control-layers-expanded::before {{
+        content: "🛠️ HỘP CÔNG CỤ";
+        display: block; font-weight: bold; text-align: center; color: {COLOR_ACCENT}; 
+        margin-bottom: 5px; border-bottom: 1px solid #eee;
     }}
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. CÁC HÀM XỬ LÝ (LOGIN, API, DATA)
+# 2. CÁC HÀM XỬ LÝ (GIỮ NGUYÊN LOGIC, CHỈ SỬA GIAO DIỆN)
 # ==============================================================================
 
 @st.cache_data(ttl=600)
 def login_and_fetch_web(url, username, password):
-    """Auto-login vào trang web .NET"""
     session = requests.Session()
     try:
-        # GET lấy token
         r1 = session.get(url, timeout=10)
         soup = BeautifulSoup(r1.text, 'html.parser')
         payload = {tag['name']: tag.get('value', '') for tag in soup.find_all('input') if tag.get('name')}
         
-        # Điền User/Pass
         user_in = soup.find('input', {'type': 'text'})
         pass_in = soup.find('input', {'type': 'password'})
         if user_in and pass_in:
             payload[user_in['name']] = username
             payload[pass_in['name']] = password
-            
-            # POST đăng nhập
             r2 = session.post(url, data=payload, timeout=15)
-            content = r2.text.replace('<head>', f'<head><base href="{url}">') # Fix link CSS/JS
+            content = r2.text.replace('<head>', f'<head><base href="{url}">')
             return content
-        return "<h3 style='color:white'>Không tìm thấy khung đăng nhập.</h3>"
+        return "<h3>Không tìm thấy khung đăng nhập.</h3>"
     except Exception as e:
-        return f"<h3 style='color:white'>Lỗi kết nối: {e}</h3>"
+        return f"<h3>Lỗi kết nối: {e}</h3>"
 
 @st.cache_data(ttl=300) 
 def get_rainviewer_ts():
@@ -181,7 +201,7 @@ def get_icon_name(row):
     return f"sieubao_{status}"
 
 # ==============================================================================
-# 3. UI COMPONENTS
+# 3. UI COMPONENTS (STYLE TRẮNG)
 # ==============================================================================
 
 def create_info_table(df, title):
@@ -203,8 +223,8 @@ def create_info_table(df, title):
     content = f"<table><thead><tr><th>Thời gian</th><th>Vị trí</th><th>Gió (kt)</th></tr></thead><tbody>{rows}</tbody></table>"
     return textwrap.dedent(f"""
     <div class="info-box" style="position: fixed; top: 10px; right: 10px; width: 320px;">
-        <div style="background: linear-gradient(90deg, #ff0055, #ff00cc); padding: 10px; font-weight: bold; text-align: center;">{title}</div>
-        {content}
+        <div style="background-color: {COLOR_ACCENT}; color: white; padding: 10px; font-weight: bold; text-align: center; border-radius: 8px 8px 0 0;">{title}</div>
+        <div style="padding: 0;">{content}</div>
     </div>""")
 
 def create_legend(img_b64):
@@ -212,7 +232,7 @@ def create_legend(img_b64):
     return textwrap.dedent(f"""
     <div class="info-box" style="position: fixed; bottom: 20px; right: 10px; width: 280px; padding: 10px;">
         <div style="text-align:center; font-weight:bold; font-size:12px; margin-bottom:8px; color: {COLOR_ACCENT};">CHÚ GIẢI KÝ HIỆU</div>
-        <img src="data:image/png;base64,{img_b64}" style="width:100%; border-radius:4px; border: 1px solid #444;">
+        <img src="data:image/png;base64,{img_b64}" style="width:100%; border-radius:4px; border: 1px solid #ddd;">
     </div>""")
 
 # ==============================================================================
@@ -221,10 +241,10 @@ def create_legend(img_b64):
 def main():
     with st.sidebar:
         st.title("🌪️ TRUNG TÂM BÃO")
-        st.caption("Cyberpunk Edition")
+        st.caption("Phiên bản giao diện sáng")
         
         topic = st.radio("CHỌN CHẾ ĐỘ:", 
-                         ["Bản đồ Bão", "Vệ tinh", "Số liệu quan trắc"])
+                         ["Bản đồ Bão (Storm Map)", "Vệ tinh (Windy)", "Vệ tinh (Private)"])
         st.markdown("---")
         
         final_df = pd.DataFrame()
@@ -291,12 +311,14 @@ def main():
             components.html(html, height=1000, scrolling=True)
             return
 
-    # --- RENDER BẢN ĐỒ (CHỈ DÀNH CHO MODE 1) ---
+    # --- RENDER BẢN ĐỒ FOLIUM (GIAO DIỆN SÁNG) ---
     m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
     
-    # Lớp Nền
-    folium.TileLayer(tiles='https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attr='CartoDB', name='Bản đồ Tối (Dark)', overlay=False, control=True).add_to(m)
-    folium.TileLayer(tiles='https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', attr='Google', name='Vệ tinh (Google)', overlay=False, control=True).add_to(m)
+    # Lớp Nền Sáng (Positron) làm mặc định cho giao diện trắng
+    folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
+    folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
+    # Vẫn giữ lớp vệ tinh để người dùng chuyển đổi nếu thích
+    folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
 
     # Lớp Mây RainViewer (Overlay)
     ts = get_rainviewer_ts()
@@ -311,17 +333,18 @@ def main():
                 sub = final_df[final_df['storm_no']==g] if g else final_df
                 dense = densify_track(sub)
                 f6, f10, fc = create_storm_swaths(dense)
-                for geom, c, o in [(f6,'#ff00ff',0.3), (f10,'#ff0055',0.4), (fc,COLOR_ACCENT,0.5)]:
+                # Màu sắc vùng gió cho nền sáng: Rõ ràng hơn (Đỏ, Cam, Vàng)
+                for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#DC143C',0.6)]:
                     if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
-                folium.PolyLine(sub[['lat','lon']].values.tolist(), color='white', weight=2, dash_array='5').add_to(fg_storm)
+                folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
                 for _, r in sub.iterrows():
                     icon_path = os.path.join(ICON_DIR, f"{get_icon_name(r)}.png")
                     if os.path.exists(icon_path): folium.Marker([r['lat'],r['lon']], icon=folium.CustomIcon(icon_path, icon_size=(35,35))).add_to(fg_storm)
-                    else: folium.CircleMarker([r['lat'],r['lon']], radius=4, color=COLOR_ACCENT, fill=True).add_to(fg_storm)
+                    else: folium.CircleMarker([r['lat'],r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
         else: 
             for n in final_df['name'].unique():
                 sub = final_df[final_df['name']==n].sort_values('dt')
-                folium.PolyLine(sub[['lat','lon']].values.tolist(), color=COLOR_ACCENT, weight=1.5).add_to(fg_storm)
+                folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
                 for _, r in sub.iterrows():
                     c = '#00f2ff' if r.get('wind_kt',0)<64 else '#ff0055'
                     folium.CircleMarker([r['lat'],r['lon']], radius=3, color=c, fill=True, popup=f"{n}").add_to(fg_storm)
@@ -341,4 +364,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
