@@ -8,7 +8,6 @@ import os
 import base64
 import requests
 import streamlit.components.v1 as components
-from bs4 import BeautifulSoup
 from math import radians, sin, cos, asin, sqrt
 import warnings
 import textwrap
@@ -21,16 +20,15 @@ from cartopy import geodesic
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 1. CẤU HÌNH & GIAO DIỆN FULL SCREEN
+# 1. CẤU HÌNH & GIAO DIỆN
 # ==============================================================================
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-TARGET_URL = "http://222.255.11.82/Default.aspx"
-TARGET_USER = "admin"
-TARGET_PASS = "ttdl@2021"
+# Link Web Quan trắc Mới (Không cần đăng nhập)
+TARGET_OBS_URL = "https://weatherobs.com/"
 
 COLOR_BG = "#ffffff"
 COLOR_SIDEBAR = "#f8f9fa"
@@ -47,13 +45,9 @@ st.set_page_config(
 # --- CSS FULL MÀN HÌNH ---
 st.markdown(f"""
     <style>
-    /* Reset lề để Iframe full màn hình */
+    /* Reset lề */
     .block-container {{
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 0rem !important;
-        padding-right: 0rem !important;
-        max-width: 100% !important;
+        padding: 0 !important; margin: 0 !important; max-width: 100% !important;
     }}
     header, footer {{ display: none !important; }}
     
@@ -93,29 +87,8 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. CÁC HÀM XỬ LÝ
+# 2. CÁC HÀM XỬ LÝ (ĐÃ BỎ HÀM LOGIN PHỨC TẠP)
 # ==============================================================================
-
-@st.cache_data(ttl=600)
-def login_and_fetch_web(url, username, password):
-    session = requests.Session()
-    try:
-        r1 = session.get(url, timeout=10)
-        soup = BeautifulSoup(r1.text, 'html.parser')
-        payload = {tag['name']: tag.get('value', '') for tag in soup.find_all('input') if tag.get('name')}
-        
-        user_in = soup.find('input', {'type': 'text'})
-        pass_in = soup.find('input', {'type': 'password'})
-        if user_in and pass_in:
-            payload[user_in['name']] = username
-            payload[pass_in['name']] = password
-            r2 = session.post(url, data=payload, timeout=15)
-            # Thêm CSS để nội dung web đích cũng full màn hình
-            content = r2.text.replace('<head>', f'<head><base href="{url}"><style>body, html {{ margin:0; padding:0; width:100%; height:100%; overflow:hidden; }}</style>')
-            return content
-        return "<h3>Không tìm thấy khung đăng nhập.</h3>"
-    except Exception as e:
-        return f"<h3>Lỗi kết nối: {e}</h3>"
 
 @st.cache_data(ttl=300) 
 def get_rainviewer_ts():
@@ -219,12 +192,12 @@ def create_legend(img_b64):
     </div>""")
 
 # ==============================================================================
-# 4. MAIN APP (LOGIC TÁCH BIỆT)
+# 4. MAIN APP
 # ==============================================================================
 def main():
     
     # ---------------------------------------------------------
-    # PHẦN 1: SIDEBAR (CHỈ CHỨA CÁC NÚT ĐIỀU KHIỂN)
+    # PHẦN 1: SIDEBAR (ĐIỀU KHIỂN)
     # ---------------------------------------------------------
     with st.sidebar:
         st.title("🌪️ TRUNG TÂM BÃO")
@@ -234,7 +207,6 @@ def main():
         topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc"])
         st.markdown("---")
         
-        # Biến toàn cục để truyền dữ liệu ra ngoài
         final_df = pd.DataFrame()
         dashboard_title = ""
         show_widgets = False
@@ -253,7 +225,7 @@ def main():
                 return df.dropna(subset=['lat','lon'])
             except: return pd.DataFrame()
 
-        # Logic điều khiển cho Bão (Chỉ hiện nút khi chọn Bão)
+        # Logic điều khiển cho Bão
         if topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
             active_mode = storm_opt
@@ -286,29 +258,24 @@ def main():
                     else: st.warning("Vui lòng tải file.")
 
     # ---------------------------------------------------------
-    # PHẦN 2: VÙNG HIỂN THỊ CHÍNH (MAIN AREA)
+    # PHẦN 2: VÙNG HIỂN THỊ CHÍNH (FULL SCREEN)
     # ---------------------------------------------------------
     
-    # === TRƯỜNG HỢP 1: VỆ TINH WINDY ===
-    # Hiển thị Iframe ra ngoài Sidebar để nó Full màn hình bên phải
+    # === 1. VỆ TINH WINDY ===
     if topic == "Ảnh mây vệ tinh":
-        st.info("✅ Đang kết nối vệ tinh Windy (Real-time)...")
+        st.success("✅ Kết nối Windy (Real-time)...")
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1", height=1000)
     
-    # === TRƯỜNG HỢP 2: DỮ LIỆU QUAN TRẮC (AUTO-LOGIN) ===
-    # Hiển thị Iframe ra ngoài Sidebar
+    # === 2. DỮ LIỆU QUAN TRẮC (WEATHEROBS) ===
     elif topic == "Dữ liệu quan trắc":
-        st.info(f"🔐 Đang tự động đăng nhập vào: {TARGET_URL}...")
-        with st.spinner("Đang xác thực..."):
-            html_content = login_and_fetch_web(TARGET_URL, TARGET_USER, TARGET_PASS)
-        # Nhúng HTML Full
-        components.html(html_content, height=1000, scrolling=True)
+        st.success(f"🌐 Đang kết nối: {TARGET_OBS_URL}")
+        # Nhúng Web WeatherObs Trực tiếp Full Màn hình
+        components.iframe(TARGET_OBS_URL, height=1000, scrolling=True)
 
-    # === TRƯỜNG HỢP 3: BẢN ĐỒ BÃO (FOLIUM) ===
-    # Chỉ render bản đồ khi chọn mode này
+    # === 3. BẢN ĐỒ BÃO (FOLIUM) ===
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
-        folium.TileLayer('CartoDB positron', name='Bản đồ Sáng', overlay=False, control=True).add_to(m)
+        folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
         folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
         folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
 
