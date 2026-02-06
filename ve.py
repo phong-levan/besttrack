@@ -4,27 +4,22 @@ import pandas as pd
 import numpy as np
 import folium
 from streamlit_folium import st_folium
-import streamlit.components.v1 as components # <--- THƯ VIỆN MỚI ĐỂ NHÚNG WEB
 import os
 import base64
+import streamlit.components.v1 as components # Thư viện nhúng web
 from math import radians, sin, cos, asin, sqrt
 import warnings
 import textwrap
 
-# Thư viện xử lý hình học & bản đồ
+# Thư viện xử lý hình học
 from shapely.geometry import Polygon, mapping
 from shapely.ops import unary_union
 from cartopy import geodesic
-import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
-from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-import matplotlib.patheffects as path_effects
 
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 1. CẤU HÌNH HỆ THỐNG
+# 1. CẤU HÌNH
 # ==============================================================================
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"
@@ -32,29 +27,33 @@ FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90"
 
-st.set_page_config(page_title="Hệ thống Giám sát Bão & Vệ tinh", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Hệ thống Giám sát Bão", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: QUY HOẠCH GIAO DIỆN & FULL SCREEN
+# CSS QUY HOẠCH GIAO DIỆN
 st.markdown("""
     <style>
     .stApp, [data-testid="stAppViewContainer"] { background: transparent !important; }
     header, footer { display: none !important; }
     .block-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
     
-    /* Bản đồ & Iframe nằm dưới */
-    iframe { position: fixed; top: 0; left: 0; width: 100vw !important; height: 100vh !important; z-index: 0; }
-    
     /* Sidebar nổi lên trên */
     [data-testid="stSidebar"] { z-index: 10000 !important; background-color: rgba(28, 35, 49, 0.95) !important; }
     
-    /* Hộp công cụ & Dashboard */
+    /* Layer Control (Hộp công cụ) */
     .leaflet-top.leaflet-left .leaflet-control-layers {
         background: rgba(255,255,255,0.95) !important;
-        border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); padding: 10px; min-width: 180px;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
+        padding: 10px !important;
+        min-width: 200px;
     }
     .leaflet-control-layers-expanded::before {
-        content: "🛠️ CÔNG CỤ LỚP"; display: block; font-weight: bold; text-align: center; color: #d63384; border-bottom: 1px solid #eee; margin-bottom: 5px;
+        content: "🛠️ HỘP CÔNG CỤ";
+        display: block; font-weight: bold; text-align: center; color: #d63384; 
+        margin-bottom: 5px; border-bottom: 1px solid #eee;
     }
+    
+    /* Info Box */
     .info-box { z-index: 9999 !important; font-family: Arial, sans-serif; }
     table { width: 100%; border-collapse: collapse; background: white; font-size: 11px; }
     td, th { padding: 4px; border: 1px solid #ddd; text-align: center; color: black; }
@@ -63,18 +62,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. CÁC HÀM XỬ LÝ (BÃO)
+# 2. CÁC HÀM XỬ LÝ SỐ LIỆU (ĐÃ FIX LỖI KEYERROR)
 # ==============================================================================
+
 def normalize_columns(df):
+    """Chuẩn hóa tên cột để tránh lỗi KeyError"""
     df.columns = df.columns.str.strip().str.lower()
     rename_map = {
-        "tên bão": "name", "name": "name", "biển đông": "storm_no", "storm_no": "storm_no", "số hiệu": "storm_no",
-        "năm": "year", "year": "year", "tháng": "mon", "month": "mon", "ngày": "day", "day": "day", "giờ": "hour", "hour": "hour",
-        "thời điểm": "status_raw", "ngày - giờ": "datetime_str", "time": "datetime_str",
-        "vĩ độ": "lat", "lat": "lat", "latitude": "lat", "kinh độ": "lon", "lon": "lon", "longitude": "lon",
-        "gió (kt)": "wind_kt", "wind": "wind_kt", "intensity": "wind_kt", "khí áp (mb)": "pressure", "pressure": "pressure",
-        "cường độ (cấp bf)": "bf", "cấp bão": "bf",
-        "bán kính gió mạnh cấp 6 (km)": "r6", "r6": "r6", "bán kính gió mạnh cấp 10 (km)": "r10", "r10": "r10", "bán kính tâm (km)": "rc", "radius": "rc"
+        "tên bão": "name", "biển đông": "storm_no", "số hiệu": "storm_no",
+        "năm": "year", "tháng": "mon", "ngày": "day", "giờ": "hour",
+        "thời điểm": "status_raw", "ngày - giờ": "datetime_str",
+        "vĩ độ": "lat", "kinh độ": "lon",
+        "gió (kt)": "wind_kt", "khí áp (mb)": "pressure", "cường độ (cấp bf)": "bf",
+        "bán kính gió mạnh cấp 6 (km)": "r6", "bán kính gió mạnh cấp 10 (km)": "r10", "bán kính tâm (km)": "rc"
     }
     df = df.rename(columns={k:v for k,v in rename_map.items() if k in df.columns})
     return df
@@ -126,34 +126,35 @@ def get_icon_name(row):
         elif w < 64: bf = 8
         elif w < 100: bf = 10
         else: bf = 12
-    status = 'dubao' if 'forecast' in str(row.get('status_raw','')).lower() or 'dự báo' in str(row.get('status_raw','')).lower() else 'daqua'
+    status = 'dubao' if 'forecast' in str(row.get('status_raw','')).lower() else 'daqua'
     if bf < 6: return f"vungthap_{status}"
     if bf < 8: return f"atnd_{status}"
     if bf <= 11: return f"bnd_{status}"
     return f"sieubao_{status}"
 
 # ==============================================================================
-# 3. HTML DASHBOARD & LEGEND
+# 3. HTML DASHBOARD
 # ==============================================================================
-def create_info_table(df, title):
-    if df.empty:
-        content = "<div style='padding:10px; text-align:center;'>Chưa có dữ liệu</div>"
-    else:
-        if 'status_raw' in df.columns:
-             cur = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
-             fut = df[df['status_raw'].astype(str).str.contains("dự báo|forecast", case=False, na=False)]
-             display_df = pd.concat([cur, fut]).head(8)
-        else:
-             display_df = df.sort_values('dt', ascending=False).groupby('name').head(1)
 
-        rows = ""
-        for _, r in display_df.iterrows():
-            t = r.get('datetime_str', r.get('dt'))
-            if not isinstance(t, str): t = t.strftime('%d/%m %Hh')
-            w = r.get('wind_kt', 0)
-            if pd.isna(w): w = 0
-            rows += f"<tr><td>{t}</td><td>{r.get('lat',0):.1f}/{r.get('lon',0):.1f}</td><td>{int(w)}</td></tr>"
-        content = f"<table><thead><tr><th>Thời gian</th><th>Vị trí</th><th>Gió (kt)</th></tr></thead><tbody>{rows}</tbody></table>"
+def create_info_table(df, title):
+    if df.empty: return ""
+    
+    if 'status_raw' in df.columns:
+         cur = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
+         fut = df[df['status_raw'].astype(str).str.contains("dự báo|forecast", case=False, na=False)]
+         display_df = pd.concat([cur, fut]).head(8)
+    else:
+         display_df = df.sort_values('dt', ascending=False).groupby('name').head(1)
+
+    rows = ""
+    for _, r in display_df.iterrows():
+        t = r.get('datetime_str', r.get('dt'))
+        if not isinstance(t, str): t = t.strftime('%d/%m %Hh')
+        w = r.get('wind_kt', 0)
+        if pd.isna(w): w = 0
+        rows += f"<tr><td>{t}</td><td>{r.get('lat',0):.1f}/{r.get('lon',0):.1f}</td><td>{int(w)}</td></tr>"
+    
+    content = f"<table><thead><tr><th>Thời gian</th><th>Vị trí</th><th>Gió (kt)</th></tr></thead><tbody>{rows}</tbody></table>"
 
     return textwrap.dedent(f"""
     <div class="info-box" style="position: fixed; top: 20px; right: 20px; width: 300px; background: white; border-radius: 8px; border: 1px solid #999; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
@@ -172,19 +173,17 @@ def create_legend(img_b64):
     """)
 
 # ==============================================================================
-# 4. CHƯƠNG TRÌNH CHÍNH (MAIN APP)
+# 4. MAIN APP
 # ==============================================================================
 def main():
-    # --- CẤU TRÚC SIDEBAR PHÂN CẤP ---
     with st.sidebar:
         st.title("🎛️ ĐIỀU KHIỂN")
+        topic = st.selectbox("1. CHỦ ĐỀ CHÍNH:", ["Bão (Typhoon)", "Thời tiết (Weather)"])
         
-        # CẤP 1: CHỌN CHỦ ĐỀ CHÍNH (THÊM VỆ TINH VÀO ĐÂY)
-        topic = st.selectbox("1. CHỦ ĐỀ CHÍNH:", [
-            "Bão (Typhoon)", 
-            "Thời tiết (Weather)", 
-            "Vệ tinh (Satellite)" # <--- MỤC MỚI
-        ])
+        # --- TÍNH NĂNG MỚI: BẬT VỆ TINH IWEATHER ---
+        st.markdown("---")
+        show_iweather = st.checkbox("📡 Mở cửa sổ Vệ tinh (iWeather)", value=False)
+        st.caption("Nguồn: iweather.gov.vn (Himawari-8)")
         st.markdown("---")
         
         final_df = pd.DataFrame()
@@ -192,18 +191,17 @@ def main():
         show_widgets = False
         active_mode = ""
 
-        # ==================== NHÁNH 1: BÃO ====================
+        # === NHÁNH 1: BÃO ===
         if topic == "Bão (Typhoon)":
             storm_opt = st.radio("2. CHỨC NĂNG:", ["Option 1: Hiện trạng", "Option 2: Lịch sử"])
             active_mode = storm_opt
             st.markdown("---")
             
-            # Hàm xử lý file chung
             def process_excel(f_path):
                 if not f_path or not os.path.exists(f_path): return pd.DataFrame()
                 try:
                     df = pd.read_excel(f_path)
-                    df = normalize_columns(df)
+                    df = normalize_columns(df) # Fix lỗi tên cột
                     for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc']: 
                         if c not in df.columns: df[c] = 0
                     if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
@@ -217,9 +215,8 @@ def main():
                 show_layer = st.checkbox("Hiển thị lớp Hiện trạng", value=True)
                 if show_layer:
                     show_widgets = True
-                    st.info("Đang xem hiện trạng")
                     f = st.file_uploader("Upload besttrack.xlsx", type="xlsx", key="o1")
-                    path = f if f else FILE_OPT1
+                    path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
                     df = process_excel(path)
                     if not df.empty:
                         if 'storm_no' in df.columns:
@@ -234,9 +231,8 @@ def main():
                 show_layer = st.checkbox("Hiển thị lớp Lịch sử", value=True)
                 if show_layer:
                     show_widgets = True
-                    st.info("Đang xem lịch sử")
                     f = st.file_uploader("Upload besttrack_capgio.xlsx", type="xlsx", key="o2")
-                    path = f if f else FILE_OPT2
+                    path = f if f else (FILE_OPT2 if os.path.exists(FILE_OPT2) else None)
                     df = process_excel(path)
                     if not df.empty:
                         years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
@@ -245,7 +241,7 @@ def main():
                         final_df = temp[temp['name'].isin(names)]
                     else: st.warning("Vui lòng tải file.")
 
-        # ==================== NHÁNH 2: THỜI TIẾT ====================
+        # === NHÁNH 2: THỜI TIẾT ===
         elif topic == "Thời tiết (Weather)":
             weather_source = st.radio("2. NGUỒN DỮ LIỆU:", ["Option 3: Quan trắc", "Option 4: Mô hình"])
             st.markdown("---")
@@ -254,27 +250,35 @@ def main():
             if st.checkbox("Hiển thị lớp dữ liệu", value=True):
                 show_widgets = True
                 dashboard_title = f"BẢN ĐỒ {str(w_param).upper()}"
-                st.success(f"Đang hiển thị: {weather_source} > {w_param}")
 
-        # ==================== NHÁNH 3: VỆ TINH (SATELLITE) ====================
-        elif topic == "Vệ tinh (Satellite)":
-            st.info("🛰️ Đang kết nối vệ tinh Himawari-8 (VSB)...")
-            st.caption("Nguồn: iweather.gov.vn")
-            # Logic vệ tinh chỉ cần hiển thị iframe, không cần xử lý bản đồ Folium phức tạp
-            # Ta sẽ return ngay tại đây để vẽ Iframe tràn màn hình
-            components.iframe("https://iweather.gov.vn/dashboard/?satellite=H8&productSatellite=VSB", height=1000, scrolling=True)
-            return # <--- KẾT THÚC HÀM SỚM ĐỂ CHỈ HIỆN IFRAME
+    # --- MAIN CONTENT ---
+    
+    # 1. HIỂN THỊ IFRAME VỆ TINH (NẾU ĐƯỢC CHỌN)
+    if show_iweather:
+        st.info("🌐 Đang hiển thị trực tiếp từ iweather.gov.vn")
+        # Nhúng Web đè lên trên (hoặc đẩy bản đồ xuống dưới)
+        components.iframe("https://iweather.gov.vn/dashboard/?satellite=H8&productSatellite=VSB", height=600, scrolling=True)
 
-    # --- RENDER BẢN ĐỒ (CHỈ CHẠY NẾU KHÔNG PHẢI VỆ TINH) ---
+    # 2. KHỞI TẠO BẢN ĐỒ
     m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
+    
+    # --- CÁC LỚP NỀN (BASE LAYERS) - SẼ HIỆN TRONG HỘP CÔNG CỤ ---
     folium.TileLayer('CartoDB positron', name='Bản đồ Sáng').add_to(m)
     folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết').add_to(m)
+    
+    # >> THÊM LỚP VỆ TINH (Esri) VÀO HỘP CÔNG CỤ <<
+    folium.TileLayer(
+        tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attr='Esri',
+        name='Vệ tinh (Nền)',
+        overlay=False
+    ).add_to(m)
     
     fg_storm = folium.FeatureGroup(name="Lớp Bão")
     fg_weather = folium.FeatureGroup(name="Lớp Thời Tiết")
 
-    # Vẽ dữ liệu Bão
-    if not final_df.empty and topic == "Bão (Typhoon)":
+    # 3. VẼ DỮ LIỆU BÃO
+    if not final_df.empty and topic == "Bão (Typhoon)" and show_widgets:
         if "Option 1" in str(active_mode):
             groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
             for g in groups:
@@ -293,19 +297,20 @@ def main():
                 sub = final_df[final_df['name']==n].sort_values('dt')
                 folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
                 for _, r in sub.iterrows():
-                    w = r.get('wind_kt', 0)
-                    c = '#00CCFF' if w<34 else ('#00FF00' if w<64 else ('#FFFF00' if w<83 else '#FF0000'))
+                    c = '#00CCFF' if r.get('wind_kt',0)<34 else ('#FFFF00' if r.get('wind_kt',0)<64 else '#FF0000')
                     folium.CircleMarker([r['lat'],r['lon']], radius=4, color=c, fill=True, fill_opacity=1, popup=f"{n}").add_to(fg_storm)
 
-    # Vẽ dữ liệu Thời tiết (Demo)
+    # 4. VẼ DỮ LIỆU THỜI TIẾT (DEMO)
     if topic == "Thời tiết (Weather)" and show_widgets:
         folium.Circle([16, 112], radius=100000, color='orange', fill=True, fill_opacity=0.3, popup="Vùng giả lập").add_to(fg_weather)
 
     fg_storm.add_to(m)
     fg_weather.add_to(m)
+    
+    # 5. LAYER CONTROL (HỘP CÔNG CỤ - GÓC TRÊN TRÁI)
     folium.LayerControl(position='topleft', collapsed=False).add_to(m)
-
-    # Widgets
+    
+    # 6. DASHBOARD & LEGEND
     if show_widgets:
         if not final_df.empty: st.markdown(create_info_table(final_df, dashboard_title), unsafe_allow_html=True)
         elif topic == "Thời tiết (Weather)": st.markdown(create_info_table(pd.DataFrame(), dashboard_title), unsafe_allow_html=True)
@@ -314,7 +319,7 @@ def main():
             with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
             st.markdown(create_legend(b64), unsafe_allow_html=True)
 
-    st_folium(m, width=None, height=1000, use_container_width=True)
+    st_folium(m, width=None, height=800 if show_iweather else 1000, use_container_width=True)
 
 if __name__ == "__main__":
     main()
