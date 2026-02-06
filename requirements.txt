@@ -1,8 +1,8 @@
 streamlit
-pandas
-numpy
 folium
 streamlit-folium
-shapely
+pandas
+matplotlib
 cartopy
 openpyxl
+xlsxwriter
