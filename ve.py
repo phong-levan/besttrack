@@ -216,8 +216,8 @@ def main():
     # PHẦN 1: SIDEBAR
     # ---------------------------------------------------------
     with st.sidebar:
-        st.title("🌪️ TRUNG TÂM BÃO")
-        st.caption("Phiên bản giao diện sáng")
+        st.title("Tùy chọn")
+        st.caption("")
         
         topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc"])
         st.markdown("---")
@@ -332,3 +332,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
