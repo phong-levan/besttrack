@@ -68,10 +68,10 @@ def create_base_map():
     m = folium.Map(location=[17.5, 115.0], zoom_start=6, tiles="OpenStreetMap")
     
     # Vẽ lưới kinh vĩ độ
-    for lon in range(100, 141, 5):
-        folium.PolyLine([[0, lon], [40, lon]], color='gray', weight=0.5, opacity=0.3).add_to(m)
-    for lat in range(0, 41, 5):
-        folium.PolyLine([[lat, 100], [lat, 140]], color='gray', weight=0.5, opacity=0.3).add_to(m)
+    for lon in range(0, 360, 5):
+        folium.PolyLine([[0, lon], [40, lon]], color='gray', weight=0.5, opacity=0.5).add_to(m)
+    for lat in range(-90, 90, 5):
+        folium.PolyLine([[lat, 100], [lat, 140]], color='gray', weight=0.5, opacity=0.5).add_to(m)
     
     # Chỉ thêm plugin nếu import thành công
     if HAS_PLUGINS:
@@ -148,3 +148,4 @@ if os.path.exists(DATA_FOLDER):
 
 folium.LayerControl(position='topleft').add_to(m)
 st_folium(m, width=2500, height=1200, use_container_width=True)
+
