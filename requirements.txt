@@ -3,9 +3,10 @@ folium
 streamlit-folium
 pandas
 numpy
-matplotlib
-cartopy
-shapely
+requests
+beautifulsoup4
 openpyxl
 xlsxwriter
-scipy
+shapely
+cartopy
+matplotlib
