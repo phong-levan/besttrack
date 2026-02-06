@@ -28,7 +28,7 @@ FILE_OPT1 = "besttrack.xlsx"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# Thông tin đăng nhập Web vệ tinh riêng
+# Thông tin đăng nhập Web số liệu khí tượng riêng
 TARGET_URL = "http://222.255.11.82/Default.aspx"
 TARGET_USER = "admin"
 TARGET_PASS = "ttdl@2021"
@@ -224,7 +224,7 @@ def main():
         st.caption("Cyberpunk Edition")
         
         topic = st.radio("CHỌN CHẾ ĐỘ:", 
-                         ["Bản đồ Bão (Storm Map)", "Vệ tinh (Windy)", "Vệ tinh (Private)"])
+                         ["Bản đồ Bão", "Vệ tinh", "Số liệu quan trắc"])
         st.markdown("---")
         
         final_df = pd.DataFrame()
@@ -341,3 +341,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
