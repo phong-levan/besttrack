@@ -20,33 +20,29 @@ from cartopy import geodesic
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 1. CẤU HÌNH & GIAO DIỆN
+# 1. CẤU HÌNH
 # ==============================================================================
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# Link Web
 TARGET_OBS_URL = "https://weatherobs.com/"
 
-# Màu sắc
 COLOR_BG = "#ffffff"
 COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
-
-# Kích thước Sidebar
 SIDEBAR_WIDTH = "320px"
 
 st.set_page_config(
     page_title="Dữ liệu khí tượng",
     layout="wide",
-    initial_sidebar_state="expanded" # Yêu cầu mở ngay khi chạy
+    initial_sidebar_state="expanded" # Luôn cố gắng mở khi F5
 )
 
-# --- CSS FIX GIAO DIỆN ---
+# --- CSS CỨU HỘ & FIX CỨNG ---
 st.markdown(f"""
     <style>
     /* 1. KHÓA CUỘN TRANG CHÍNH */
@@ -57,34 +53,35 @@ st.markdown(f"""
         padding: 0 !important;
     }}
 
-    /* 2. ẨN HEADER (NHƯNG SẼ HIỆN NÚT MỞ SIDEBAR Ở DƯỚI) */
-    header, footer, [data-testid="stHeader"], [data-testid="stToolbar"] {{
-        display: none !important;
-    }}
-    .block-container {{
-        padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
-    }}
+    /* 2. ẨN HEADER (TRỪ NÚT MỞ SIDEBAR) */
+    header, footer {{ display: none !important; }}
+    [data-testid="stHeader"] {{ background: transparent !important; }}
+    [data-testid="stToolbar"] {{ display: none !important; }}
     
-    /* >>> 3. HIỆN NÚT MỞ SIDEBAR (KHẮC PHỤC LỖI MẤT NÚT) <<< */
+    /* >>> CỨU HỘ: ÉP HIỂN THỊ NÚT MỞ SIDEBAR (MŨI TÊN >) <<< */
     [data-testid="stSidebarCollapsedControl"] {{
         display: block !important;
-        z-index: 1000000 !important; /* Luôn nổi lên trên cùng */
+        z-index: 999999999 !important; /* Luôn nổi lên trên cùng */
         position: fixed !important;
         top: 10px !important;
         left: 10px !important;
-        background-color: white !important;
-        padding: 5px !important;
-        border-radius: 5px !important;
+        background-color: white !important; /* Nền trắng dễ nhìn */
         border: 1px solid #ccc !important;
+        border-radius: 4px !important;
         color: {COLOR_ACCENT} !important;
+        width: 40px !important;
+        height: 40px !important;
+        text-align: center !important;
+        line-height: 40px !important;
     }}
 
-    /* >>> 4. ẨN NÚT ĐÓNG SIDEBAR (ĐỂ KHÓA CỨNG SAU KHI MỞ) <<< */
+    /* >>> KHÓA: ẨN NÚT ĐÓNG SIDEBAR (DẤU X) <<< */
+    /* Khi sidebar đã mở, bạn sẽ không thấy nút để đóng nó lại nữa */
     [data-testid="stSidebarCollapseBtn"] {{
         display: none !important;
     }}
 
-    /* 5. CẤU HÌNH SIDEBAR */
+    /* 3. CẤU HÌNH THANH SIDEBAR (BÊN TRÁI) */
     section[data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
@@ -93,20 +90,21 @@ st.markdown(f"""
         max-width: {SIDEBAR_WIDTH} !important;
         top: 0 !important;
         height: 100vh !important;
-        z-index: 9999999 !important;
+        z-index: 999999 !important;
         position: fixed !important;
         left: 0 !important;
         padding-top: 0 !important;
     }}
     
-    /* Nội dung Sidebar cuộn được */
+    /* Nội dung Sidebar */
     [data-testid="stSidebarUserContent"] {{
         padding: 20px;
         height: 100vh;
         overflow-y: auto !important;
     }}
 
-    /* 6. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) */
+    /* 4. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) */
+    /* Tự động tính toán chiều rộng còn lại */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
@@ -118,20 +116,21 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 7. Info Box */
+    /* 5. CÁC THÀNH PHẦN KHÁC */
+    .block-container {{ padding: 0 !important; margin: 0 !important; max-width: 100vw !important; }}
+    
     .info-box {{
-        position: fixed;
-        z-index: 9999; 
-        right: 20px;
+        position: fixed; z-index: 9999; right: 20px;
         font-family: 'Segoe UI', sans-serif;
         background: rgba(255, 255, 255, 0.95);
-        border: 1px solid {COLOR_BORDER};
-        border-radius: 8px;
-        color: {COLOR_TEXT};
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border: 1px solid {COLOR_BORDER}; border-radius: 8px;
+        color: {COLOR_TEXT}; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }}
     
-    /* 8. Layer Control */
+    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+    th {{ background-color: {COLOR_ACCENT}; color: white; padding: 8px; text-transform: uppercase; }}
+    td {{ padding: 6px; border-bottom: 1px solid {COLOR_BORDER}; text-align: center; color: {COLOR_TEXT}; }}
+    
     .leaflet-control-layers {{
         background: white !important; color: {COLOR_TEXT} !important;
         border: 1px solid {COLOR_BORDER} !important; border-radius: 8px !important;
@@ -232,7 +231,7 @@ def create_info_table(df, title):
     
     content = f"<table><thead><tr><th>Thời gian</th><th>Vị trí</th><th>Gió (kt)</th></tr></thead><tbody>{rows}</tbody></table>"
     return textwrap.dedent(f"""
-    <div class="info-box" style="position: fixed; top: 10px; right: 10px; width: 320px;">
+    <div class="info-box" style="position: fixed; top: 10px; right: 20px; width: 320px;">
         <div style="background-color: {COLOR_ACCENT}; color: white; padding: 10px; font-weight: bold; text-align: center; border-radius: 8px 8px 0 0;">{title}</div>
         <div style="padding: 0;">{content}</div>
     </div>""")
