@@ -29,7 +29,7 @@ st.set_page_config(page_title="Hệ thống Giám sát Bão", layout="wide", ini
 # --- 2. CSS SỬA LỖI HIỂN THỊ (XUYÊN THẤU) ---
 st.markdown("""
     <style>
-    /* Xóa nền trắng mặc định để hiện bản đồ */
+    /* Xóa nền trắng mặc định */
     .stApp, [data-testid="stAppViewContainer"] { background: transparent !important; }
     header, footer { display: none !important; }
     
@@ -123,20 +123,22 @@ def get_icon_name(row):
     if wind_speed <= 11:    return f"bnd_{status}"
     return f"sieubao_{status}"
 
-# --- 4. HÀM TẠO DASHBOARD (TÁCH RIÊNG 2 KHỐI) ---
+# --- 4. HÀM TẠO DASHBOARD (TÁCH RIÊNG & CÁCH XA) ---
 
 def create_dashboard_opt1(df, img_b64):
-    """Dashboard Option 1: Tách rời Bảng tin và Chú thích"""
+    """Option 1: Bảng tin (Góc Trên) & Chú thích (Góc Dưới)"""
     
-    # 1. TẠO HTML BẢNG THÔNG TIN (Góc Trên Phải)
+    # --- PHẦN 1: BẢNG TIN BÃO (TOP RIGHT) ---
     table_html = ""
     if df.empty:
+        # Hộp cảnh báo nếu chưa có dữ liệu
         table_html = """
         <div class="dashboard-box" style="position: fixed; top: 10px; right: 10px; width: 300px; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px; border: 1px solid #ccc;">
             <div style="text-align:center; color:#d63384; font-weight:bold;">CHƯA CÓ DỮ LIỆU BÃO</div>
             <div style="text-align:center; font-size:12px;">Vui lòng tải file besttrack.xlsx</div>
         </div>"""
     else:
+        # Lọc dữ liệu hiển thị
         cur = df[df['Thời điểm'].str.contains("hiện tại", case=False, na=False)]
         fut = df[df['Thời điểm'].str.contains("dự báo", case=False, na=False)]
         display_df = pd.concat([cur, fut])
@@ -151,8 +153,9 @@ def create_dashboard_opt1(df, img_b64):
     <td>{int(r.get('Pmin (mb)', 0))}</td>
     </tr>"""
         
+        # HTML Bảng tin (Có max-height để không trôi xuống che Chú thích)
         table_html = f"""
-        <div class="dashboard-box" style="position: fixed; top: 10px; right: 10px; width: 320px; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.3);">
+        <div class="dashboard-box" style="position: fixed; top: 10px; right: 10px; width: 320px; max-height: 55vh; overflow-y: auto; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.3);">
             <div style="text-align:center; font-weight:bold; color:#d63384; margin-bottom:5px;">TIN BÃO KHẨN CẤP</div>
             <table>
                 <thead><tr style="background:#007bff; color:white;"><th>Giờ</th><th>Kinh</th><th>Vĩ</th><th>Cấp</th><th>Pmin</th></tr></thead>
@@ -161,21 +164,22 @@ def create_dashboard_opt1(df, img_b64):
         </div>
         """
 
-    # 2. TẠO HTML CHÚ THÍCH (Góc Dưới Phải - Cách xa bảng tin)
+    # --- PHẦN 2: CHÚ THÍCH (BOTTOM RIGHT) ---
     legend_html = ""
     if img_b64:
+        # Nằm góc dưới cùng bên phải, cách bảng tin một khoảng lớn
         legend_html = f"""
-        <div class="dashboard-box" style="position: fixed; bottom: 30px; right: 20px; width: 250px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.3);">
+        <div class="dashboard-box" style="position: fixed; bottom: 20px; right: 10px; width: 250px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.3);">
             <div style="text-align:center; font-weight:bold; font-size:12px; margin-bottom:5px; color:#333;">CHÚ GIẢI</div>
             <img src="data:image/png;base64,{img_b64}" style="width:100%; border-radius:4px;">
         </div>
         """
 
-    # Kết hợp cả 2 khối HTML
+    # Trả về cả 2 khối HTML độc lập
     return textwrap.dedent(table_html + legend_html)
 
 def create_dashboard_opt2(df, selected_storms):
-    """Dashboard Option 2: Lịch sử"""
+    """Option 2: Bảng lịch sử (Góc Trên Phải)"""
     if df.empty or not selected_storms:
         return """
         <div class="dashboard-box" style="position: fixed; top: 10px; right: 10px; width: 250px; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px;">
@@ -207,7 +211,7 @@ def create_dashboard_opt2(df, selected_storms):
             <span style="font-weight:bold;">🌪️ LỊCH SỬ BÃO ({len(selected_storms)})</span>
             <span id="icon-opt2" style="font-size:16px;">➖</span>
         </div>
-        <div id="content-opt2" style="padding:10px; max-height:400px; overflow:auto;">
+        <div id="content-opt2" style="padding:10px; max-height:60vh; overflow:auto;">
             <table>
                 <tr style="background:#f0f0f0;"><th>Tên</th><th>Ngày</th><th>Gió</th></tr>
                 {rows}
@@ -333,7 +337,7 @@ def main():
                     else:
                         folium.CircleMarker([row['lat'], row['lon']], radius=3, color='black', fill=True, popup=popup_html).add_to(fg_icons)
 
-            # --- GỌI DASHBOARD OPTION 1 ---
+            # --- DASHBOARD OPTION 1 (Góc trên & dưới phải) ---
             img_b64 = None
             if os.path.exists(CHUTHICH_IMG):
                 with open(CHUTHICH_IMG, "rb") as f: img_b64 = base64.b64encode(f.read()).decode()
@@ -359,7 +363,7 @@ def main():
                     else:
                          folium.CircleMarker([row['lat'], row['lon']], radius=4, color='red', fill=True, popup=popup_html).add_to(fg_icons)
             
-            # --- GỌI DASHBOARD OPTION 2 ---
+            # --- DASHBOARD OPTION 2 ---
             st.markdown(create_dashboard_opt2(final_df, selected_storms), unsafe_allow_html=True)
             
     else:
@@ -369,7 +373,10 @@ def main():
              st.markdown(create_dashboard_opt2(pd.DataFrame(), []), unsafe_allow_html=True)
 
     fg_icons.add_to(m)
-    folium.LayerControl(collapsed=True).add_to(m)
+    
+    # DI CHUYỂN LAYER CONTROL XUỐNG DƯỚI TRÁI ĐỂ TRÁNH CHE KHUẤT
+    folium.LayerControl(position='bottomleft', collapsed=True).add_to(m)
+    
     st_folium(m, width=None, height=1000, use_container_width=True)
 
 if __name__ == "__main__":
