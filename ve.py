@@ -6,7 +6,7 @@ import folium
 from streamlit_folium import st_folium
 import os
 import base64
-import requests # <--- THƯ VIỆN ĐỂ GỌI API THỜI GIAN THỰC
+import requests
 import streamlit.components.v1 as components
 from math import radians, sin, cos, asin, sqrt
 import warnings
@@ -54,20 +54,17 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- HÀM LẤY TIMESTAMP VỆ TINH MỚI NHẤT (REAL-TIME) ---
-@st.cache_data(ttl=600) # Cache trong 10 phút để tránh gọi API quá nhiều
-def get_realtime_satellite_ts():
-    """Lấy thời gian ảnh vệ tinh mới nhất từ RainViewer API"""
+# --- HÀM LẤY TIMESTAMP VỆ TINH (RAINVIEWER) ---
+@st.cache_data(ttl=300) 
+def get_rainviewer_ts():
+    """Lấy TS RainViewer (Update mỗi 5-10 phút)"""
     try:
-        # Gọi API lấy danh sách bản đồ
         url = "https://api.rainviewer.com/public/weather-maps.json"
-        response = requests.get(url, timeout=5)
+        # Thêm verify=False để tránh lỗi SSL trong một số môi trường mạng
+        response = requests.get(url, timeout=3, verify=False)
         data = response.json()
-        
-        # Lấy timestamp mới nhất của vệ tinh hồng ngoại (infrared)
         if 'satellite' in data and 'infrared' in data['satellite']:
-            latest_ts = data['satellite']['infrared'][-1]['time']
-            return latest_ts
+            return data['satellite']['infrared'][-1]['time']
     except Exception as e:
         return None
     return None
@@ -182,21 +179,11 @@ def main():
     with st.sidebar:
         st.title("🎛️ ĐIỀU KHIỂN")
         
-        # --- CẤU HÌNH TỰ ĐỘNG CẬP NHẬT ---
-        st.sidebar.markdown("### ⏱️ Cấu hình Real-time")
-        auto_refresh = st.sidebar.checkbox("🔄 Tự động cập nhật (10p/lần)", value=False)
-        
+        # --- CẤU HÌNH REAL-TIME ---
+        st.sidebar.markdown("### ⏱️ Cấu hình")
+        auto_refresh = st.sidebar.checkbox("🔄 Tự động cập nhật (10p)", value=False)
         if auto_refresh:
-            # Nhúng Javascript để tự động reload trang sau 10 phút (600000ms)
-            components.html(
-                """<script>
-                setTimeout(function(){
-                   window.location.reload();
-                }, 600000);
-                </script>""",
-                height=0, width=0
-            )
-            st.sidebar.caption("⏳ Hệ thống sẽ tự làm mới mỗi 10 phút.")
+            components.html("""<script>setTimeout(function(){window.location.reload();}, 600000);</script>""", height=0, width=0)
 
         st.markdown("---")
         topic = st.selectbox("1. CHỦ ĐỀ CHÍNH:", ["Bão (Typhoon)", "Thời tiết (Weather)"])
@@ -268,43 +255,44 @@ def main():
     # --- KHỞI TẠO BẢN ĐỒ ---
     m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
     
-    # 1. LỚP NỀN
+    # 1. LỚP NỀN CƠ BẢN
     folium.TileLayer('CartoDB positron', name='Bản đồ Sáng').add_to(m)
     folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết').add_to(m)
     
-    # 2. LỚP VỆ TINH (NỀN)
+    # 2. LỚP VỆ TINH NỀN (ESRI) - Ổn định nhất
     folium.TileLayer(
         tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        attr='Esri Satellite', name='🛰️ Vệ tinh (Nền)', overlay=False
+        attr='Esri', name='🛰️ Vệ tinh (Nền)', overlay=False
     ).add_to(m)
 
-    # 3. LỚP MÂY VỆ TINH REAL-TIME (Overlay)
-    # Lấy timestamp mới nhất từ API
-    latest_ts = get_realtime_satellite_ts()
+    # 3. LỚP MÂY VỆ TINH REAL-TIME (OVERLAY)
+    # Lấy timestamp RainViewer
+    latest_ts = get_rainviewer_ts()
+    
+    # HIỂN THỊ TRẠNG THÁI KẾT NỐI VỆ TINH TRONG SIDEBAR
     if latest_ts:
-        # URL của RainViewer Tile: {ts}/{size}/{z}/{x}/{y}/{color}/{smooth}.png
-        # color=2 (Infrared Satellite), smooth=1 (On)
-        tile_url = f"https://tile.rainviewer.com/{latest_ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png"
-        
+        st.sidebar.success(f"✅ Vệ tinh RainViewer: Online ({latest_ts})")
+        # RainViewer Infrared
         folium.TileLayer(
-            tiles=tile_url,
-            attr=f"RainViewer Satellite (Time: {latest_ts})",
-            name="☁️ Mây Vệ tinh (Real-time)",
-            overlay=True,
-            show=False, # Mặc định ẩn, người dùng bật trong Hộp công cụ
-            opacity=0.6
+            tiles=f"https://tile.rainviewer.com/{latest_ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png",
+            attr="RainViewer",
+            name="☁️ Mây Vệ tinh (RainViewer)",
+            overlay=True, show=True, opacity=0.6 # Show mặc định
         ).add_to(m)
     else:
-        # Fallback nếu lỗi mạng
+        st.sidebar.error("⚠️ Vệ tinh RainViewer: Offline (Dùng nguồn dự phòng)")
+        # FALLBACK: RealEarth Global IR (Nguồn dự phòng rất mạnh)
         folium.TileLayer(
-            tiles="https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}",
-            name='(Lỗi kết nối vệ tinh)', attr="Google", overlay=True, show=False
+            tiles="https://realearth.ssec.wisc.edu/tiles/globalir/{z}/{x}/{y}.png",
+            attr="RealEarth",
+            name="☁️ Mây Vệ tinh (Global IR)",
+            overlay=True, show=True, opacity=0.6
         ).add_to(m)
 
     fg_storm = folium.FeatureGroup(name="🌀 Lớp Bão")
     fg_weather = folium.FeatureGroup(name="🌦️ Lớp Thời Tiết")
 
-    # 4. VẼ DỮ LIỆU
+    # 4. VẼ DỮ LIỆU BÃO
     if not final_df.empty and topic == "Bão (Typhoon)" and show_widgets:
         if "Option 1" in str(active_mode):
             groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
