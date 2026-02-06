@@ -1,8 +1,8 @@
 streamlit
 pandas
+numpy
 folium
 streamlit-folium
-openpyxl
-matplotlib
+shapely
 cartopy
-scipy
+openpyxl
