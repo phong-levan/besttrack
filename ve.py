@@ -67,7 +67,7 @@ st.markdown("""
 # --- 2. MODULE CODE NỀN (BASE MAP) ---
 def create_base_map():
     # Khởi tạo bản đồ tập trung vào Biển Đông
-    m = folium.Map(location=[17.5, 115.0], zoom_start=6, tiles="OpenStreetMap")
+    m = folium.Map(location=[17.5, 115.0], zoom_start=2, tiles="OpenStreetMap")
     
     # Vẽ lưới kinh vĩ độ chuyên dụng (mỗi 5 độ)
     for lon in range(-180, 180, 5):
@@ -168,3 +168,4 @@ if os.path.exists(DATA_FOLDER):
 
 folium.LayerControl(position='topleft').add_to(m)
 st_folium(m, width=2500, height=1200, use_container_width=True)
+
