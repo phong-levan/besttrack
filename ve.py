@@ -8,6 +8,7 @@ import os
 import base64
 from math import radians, sin, cos, asin, sqrt
 import warnings
+import textwrap # <--- Thêm thư viện này để sửa lỗi hiện mã HTML
 
 # Thư viện cho Option 1
 from shapely.geometry import Polygon, mapping
@@ -28,8 +29,11 @@ st.set_page_config(page_title="Hệ thống Giám sát Bão", layout="wide", ini
 # --- 2. CSS SỬA LỖI TRẮNG MÀN HÌNH (QUAN TRỌNG) ---
 st.markdown("""
     <style>
-    /* 1. Làm trong suốt toàn bộ container chính của Streamlit */
+    /* 1. Làm trong suốt nền chính của Streamlit (Sửa lỗi trắng màn hình) */
     .stApp {
+        background: transparent !important;
+    }
+    [data-testid="stAppViewContainer"] {
         background: transparent !important;
     }
     
@@ -45,7 +49,7 @@ st.markdown("""
         max-width: 100% !important;
     }
     
-    /* 4. Ép bản đồ (iframe) xuống lớp dưới cùng */
+    /* 4. Ép bản đồ xuống lớp dưới cùng */
     iframe {
         position: fixed;
         top: 0; left: 0;
@@ -54,13 +58,13 @@ st.markdown("""
         z-index: 0; 
     }
     
-    /* 5. Đẩy các thành phần điều khiển lên trên */
+    /* 5. Đẩy Dashboard lên trên */
     [data-testid="stSidebar"] { z-index: 1001; }
     .dashboard-box { z-index: 1000; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HÀM XỬ LÝ DỮ LIỆU ---
+# --- 3. HÀM XỬ LÝ DỮ LIỆU (Sửa lỗi ValueError) ---
 
 def haversine_km(lat1, lon1, lat2, lon2):
     R = 6371.0
@@ -127,7 +131,7 @@ def get_color_by_wind(kt):
     if kt < 113: return '#FF0000'
     return '#FF00FF'
 
-# --- 4. HÀM TẠO DASHBOARD (SỬA LỖI HTML RAW) ---
+# --- 4. HÀM TẠO DASHBOARD (SỬA LỖI HIỆN CODE HTML) ---
 
 def create_dashboard_opt1(df, img_b64):
     """Dashboard Option 1: Hiện trạng & Dự báo"""
@@ -137,20 +141,19 @@ def create_dashboard_opt1(df, img_b64):
 
     rows = ""
     for _, r in display_df.iterrows():
-        # Sửa lỗi: Dùng chuỗi f-string chuẩn, không bị gãy dòng
-        rows += f"""
-        <tr style="background-color: white; border-bottom: 1px solid #ddd;">
-            <td style="padding:4px; border:1px solid #ccc;">{r.get('Ngày - giờ', '')}</td>
-            <td style="padding:4px; border:1px solid #ccc;">{r.get('lon', 0):.1f}</td>
-            <td style="padding:4px; border:1px solid #ccc;">{r.get('lat', 0):.1f}</td>
-            <td style="padding:4px; border:1px solid #ccc;">{int(r.get('cường độ (cấp BF)', 0))}</td>
-            <td style="padding:4px; border:1px solid #ccc;">{int(r.get('Pmin (mb)', 0))}</td>
-        </tr>
-        """
+        # Sửa lỗi: Viết HTML sát lề trái, không thụt đầu dòng
+        rows += f"""<tr style="background-color: white; border-bottom: 1px solid #ddd;">
+<td style="padding:4px; border:1px solid #ccc;">{r.get('Ngày - giờ', '')}</td>
+<td style="padding:4px; border:1px solid #ccc;">{r.get('lon', 0):.1f}</td>
+<td style="padding:4px; border:1px solid #ccc;">{r.get('lat', 0):.1f}</td>
+<td style="padding:4px; border:1px solid #ccc;">{int(r.get('cường độ (cấp BF)', 0))}</td>
+<td style="padding:4px; border:1px solid #ccc;">{int(r.get('Pmin (mb)', 0))}</td>
+</tr>"""
     
     img_tag = f'<img src="data:image/png;base64,{img_b64}" style="width:100%; margin-bottom:10px; border-radius:5px;">' if img_b64 else ""
 
-    return f"""
+    # Dùng textwrap.dedent để xóa khoảng trắng thừa đầu dòng
+    return textwrap.dedent(f"""
     <div class="dashboard-box" style="position: fixed; top: 20px; right: 20px; width: 320px; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.2);">
         {img_tag}
         <div style="text-align:center; font-weight:bold; color:#d63384; margin-bottom:5px;">TIN BÃO KHẨN CẤP</div>
@@ -165,7 +168,7 @@ def create_dashboard_opt1(df, img_b64):
             </tbody>
         </table>
     </div>
-    """
+    """)
 
 def create_dashboard_opt2(df, selected_storms):
     """Dashboard Option 2: Lịch sử"""
@@ -174,15 +177,13 @@ def create_dashboard_opt2(df, selected_storms):
         sub = df[df['name'] == storm].sort_values('dt', ascending=False)
         if sub.empty: continue
         latest = sub.iloc[0]
-        rows += f"""
-        <tr style="border-bottom:1px solid #eee;">
-            <td style="padding:5px; color:#007bff; font-weight:bold;">{storm}</td>
-            <td>{latest['dt'].strftime('%Y-%m-%d')}</td>
-            <td><span style="background:{get_color_by_wind(latest.get('wind_kt',0))}; padding:2px 5px; border-radius:3px;">{int(latest.get('wind_kt',0))}kt</span></td>
-        </tr>
-        """
+        rows += f"""<tr style="border-bottom:1px solid #eee;">
+<td style="padding:5px; color:#007bff; font-weight:bold;">{storm}</td>
+<td>{latest['dt'].strftime('%Y-%m-%d')}</td>
+<td><span style="background:{get_color_by_wind(latest.get('wind_kt',0))}; padding:2px 5px; border-radius:3px;">{int(latest.get('wind_kt',0))}kt</span></td>
+</tr>"""
     
-    return f"""
+    return textwrap.dedent(f"""
     <div class="dashboard-box" style="position: fixed; top: 20px; right: 20px; width: 280px; resize:both; overflow:auto; background: rgba(255,255,255,0.95); border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.2);">
         <div style="background:#007bff; color:white; padding:8px; font-weight:bold; cursor:pointer;">
             🌪️ LỊCH SỬ BÃO
@@ -194,13 +195,13 @@ def create_dashboard_opt2(df, selected_storms):
             </table>
         </div>
     </div>
-    """
+    """)
 
 # --- 5. MAIN APP ---
 
 def main():
     with st.sidebar:
-        st.title("⚙️ CẤU HÌNH")
+        st.title("⚙️ CONTROL PANEL")
         mode = st.radio("Chế độ:", ["Option 1: Hiện trạng & Dự báo", "Option 2: Lịch sử & Thống kê"])
         
         final_df = pd.DataFrame()
@@ -232,10 +233,20 @@ def main():
                 renames = {"tên bão":"name","năm":"year","tháng":"mon","ngày":"day","giờ":"hour","vĩ độ":"lat","kinh độ":"lon","gió (kt)":"wind_kt"}
                 df = df.rename(columns={k:v for k,v in renames.items() if k in df.columns})
                 
-                # Sửa lỗi thời gian
+                # --- SỬA LỖI VALUE ERROR (DATE PARSING) ---
                 time_cols = ['year','mon','day','hour']
                 if all(c in df.columns for c in time_cols):
-                    for c in time_cols: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
+                    # Ép kiểu số trước, những gì không phải số sẽ thành NaN
+                    for c in time_cols: 
+                        df[c] = pd.to_numeric(df[c], errors='coerce')
+                    
+                    # Xóa dòng bị lỗi ngày tháng (NaN)
+                    df = df.dropna(subset=time_cols)
+                    
+                    # Chuyển về số nguyên
+                    for c in time_cols:
+                        df[c] = df[c].astype(int)
+                        
                     df['dt'] = pd.to_datetime(df[time_cols].rename(columns={'mon':'month'}))
                 
                 df[['lat','lon','wind_kt']] = df[['lat','lon','wind_kt']].apply(pd.to_numeric, errors='coerce')
@@ -246,7 +257,7 @@ def main():
                 selected_storms = st.multiselect("Bão:", temp['name'].unique(), default=temp['name'].unique())
                 final_df = temp[temp['name'].isin(selected_storms)]
 
-    # --- MAP DISPLAY (FIXED WHITE SCREEN) ---
+    # --- MAP DISPLAY ---
     m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None)
     folium.TileLayer('CartoDB positron', name='Bản đồ Sáng').add_to(m)
     folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết').add_to(m)
