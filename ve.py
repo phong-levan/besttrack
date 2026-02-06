@@ -20,25 +20,22 @@ from cartopy import geodesic
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 1. CẤU HÌNH & GIAO DIỆN
+# 1. CẤU HÌNH & GIAO DIỆN FULL SCREEN (NO MARGIN)
 # ==============================================================================
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# Link Web
+# Link Web Quan trắc
 TARGET_OBS_URL = "https://weatherobs.com/"
 
-# Màu sắc
+# Màu sắc giao diện sáng
 COLOR_BG = "#ffffff"
 COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
-
-# Kích thước Sidebar cố định
-SIDEBAR_WIDTH = "320px"
 
 st.set_page_config(
     page_title="Dữ liệu khí tượng",
@@ -46,71 +43,49 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CSS KHÓA SIDEBAR - HIỆN NỘI DUNG ---
+# --- CSS FULL MÀN HÌNH & FIX SIDEBAR ---
 st.markdown(f"""
     <style>
-    /* 1. KHÓA CUỘN TRANG CHÍNH */
-    html, body, .stApp {{
-        overflow: hidden !important;
-        height: 100vh !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }}
-
-    /* 2. ẨN CÁC THÀNH PHẦN THỪA */
-    header, footer, [data-testid="stHeader"], [data-testid="stToolbar"] {{
-        display: none !important;
-    }}
+    /* 1. Xóa lề container chính */
     .block-container {{
-        padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
     }}
     
-    /* 3. KHÓA NÚT ĐÓNG/MỞ SIDEBAR (Để người dùng không đóng được) */
-    [data-testid="stSidebarCollapseBtn"] {{
-        display: none !important;
-    }}
-
-    /* 4. CẤU HÌNH KHUNG SIDEBAR (BÊN TRÁI) */
+    /* 2. Ẩn Header/Footer mặc định */
+    header, footer {{ display: none !important; }}
+    [data-testid="stHeader"] {{ display: none !important; }}
+    [data-testid="stToolbar"] {{ display: none !important; }}
+    
+    /* 3. TINH CHỈNH SIDEBAR (FIX CỨNG) */
     section[data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
-        width: {SIDEBAR_WIDTH} !important;
-        min-width: {SIDEBAR_WIDTH} !important;
-        max-width: {SIDEBAR_WIDTH} !important;
-        top: 0 !important;
-        height: 100vh !important;
-        z-index: 9999999 !important; /* Đảm bảo luôn nằm trên cùng */
-        position: fixed !important;
-        left: 0 !important;
+        top: 0rem !important;      /* Đẩy sát lên trên cùng */
+        height: 100vh !important;  /* Chiều cao full màn hình */
+        padding-top: 0rem !important; /* Xóa khoảng trắng trên đầu */
+        z-index: 999999;
     }}
     
-    /* 5. CẤU HÌNH NỘI DUNG BÊN TRONG SIDEBAR */
+    /* Chỉnh lại lề nội dung bên trong Sidebar cho đẹp */
     [data-testid="stSidebarUserContent"] {{
-        padding-top: 20px !important; /* Đẩy nội dung xuống để không bị mất chữ */
-        padding-left: 20px !important;
-        padding-right: 20px !important;
-        padding-bottom: 50px !important;
-        height: 100vh !important;
-        overflow-y: auto !important; /* Cho phép cuộn dọc trong sidebar */
+        padding-top: 2rem; 
+        padding-left: 1rem; 
+        padding-right: 1rem;
     }}
 
-    /* 6. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) */
-    iframe, [data-testid="stFoliumMap"] {{
-        position: fixed !important;
-        top: 0 !important;
-        left: {SIDEBAR_WIDTH} !important; /* Đẩy sang phải */
-        width: calc(100vw - {SIDEBAR_WIDTH}) !important; /* Chiều rộng còn lại */
+    /* 4. Ép Iframe và Map chiếm trọn màn hình bên phải */
+    iframe {{
         height: 100vh !important;
+        width: 100% !important;
         border: none !important;
-        z-index: 1 !important; /* Nằm dưới Sidebar */
         display: block !important;
     }}
-
-    /* 7. Info Box (Nổi lên trên bản đồ) */
+    
+    /* 5. Info Box */
     .info-box {{
-        position: fixed;
-        z-index: 9999; 
-        right: 20px;
+        z-index: 9999;
         font-family: 'Segoe UI', sans-serif;
         background: rgba(255, 255, 255, 0.95);
         border: 1px solid {COLOR_BORDER};
@@ -119,7 +94,12 @@ st.markdown(f"""
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }}
     
-    /* 8. Layer Control */
+    /* 6. Table */
+    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+    th {{ background-color: {COLOR_ACCENT}; color: white; padding: 8px; text-transform: uppercase; }}
+    td {{ padding: 6px; border-bottom: 1px solid {COLOR_BORDER}; text-align: center; color: {COLOR_TEXT}; }}
+    
+    /* 7. Layer Control */
     .leaflet-control-layers {{
         background: white !important; color: {COLOR_TEXT} !important;
         border: 1px solid {COLOR_BORDER} !important; border-radius: 8px !important;
@@ -132,7 +112,7 @@ st.markdown(f"""
 # 2. CÁC HÀM XỬ LÝ
 # ==============================================================================
 
-@st.cache_data(ttl=300) 
+@st.cache_data(ttl=300)
 def get_rainviewer_ts():
     try:
         url = "https://api.rainviewer.com/public/weather-maps.json"
@@ -220,7 +200,7 @@ def create_info_table(df, title):
     
     content = f"<table><thead><tr><th>Thời gian</th><th>Vị trí</th><th>Gió (kt)</th></tr></thead><tbody>{rows}</tbody></table>"
     return textwrap.dedent(f"""
-    <div class="info-box" style="position: fixed; top: 10px; right: 20px; width: 320px;">
+    <div class="info-box" style="position: fixed; top: 10px; right: 10px; width: 320px;">
         <div style="background-color: {COLOR_ACCENT}; color: white; padding: 10px; font-weight: bold; text-align: center; border-radius: 8px 8px 0 0;">{title}</div>
         <div style="padding: 0;">{content}</div>
     </div>""")
@@ -228,7 +208,7 @@ def create_info_table(df, title):
 def create_legend(img_b64):
     if not img_b64: return ""
     return textwrap.dedent(f"""
-    <div class="info-box" style="position: fixed; bottom: 20px; right: 20px; width: 280px; padding: 10px;">
+    <div class="info-box" style="position: fixed; bottom: 20px; right: 10px; width: 280px; padding: 10px;">
         <div style="text-align:center; font-weight:bold; font-size:12px; margin-bottom:8px; color: {COLOR_ACCENT};">CHÚ GIẢI KÝ HIỆU</div>
         <img src="data:image/png;base64,{img_b64}" style="width:100%; border-radius:4px; border: 1px solid #ddd;">
     </div>""")
@@ -238,9 +218,12 @@ def create_legend(img_b64):
 # ==============================================================================
 def main():
     
+    # ---------------------------------------------------------
+    # PHẦN 1: SIDEBAR
+    # ---------------------------------------------------------
     with st.sidebar:
-        st.title("🌪️ TRUNG TÂM BÃO")
-        st.caption("Phiên bản giao diện sáng")
+        st.title("Tùy chọn")
+        st.caption("")
         
         topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc"])
         st.markdown("---")
@@ -294,18 +277,21 @@ def main():
                         final_df = temp[temp['name'].isin(names)]
                     else: st.warning("Vui lòng tải file.")
 
-    # --- MAIN CONTENT (FIXED RIGHT SIDE) ---
+    # ---------------------------------------------------------
+    # PHẦN 2: VÙNG HIỂN THỊ CHÍNH (FULL SCREEN - TRÀN VIỀN)
+    # ---------------------------------------------------------
     
     # === 1. VỆ TINH WINDY ===
     if topic == "Ảnh mây vệ tinh":
-        components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
+        components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1", height=1000)
     
-    # === 2. DỮ LIỆU QUAN TRẮC ===
+    # === 2. DỮ LIỆU QUAN TRẮC (WEATHEROBS) ===
     elif topic == "Dữ liệu quan trắc":
-        components.iframe(TARGET_OBS_URL, scrolling=True)
+        components.iframe(TARGET_OBS_URL, height=1000, scrolling=True)
 
-    # === 3. BẢN ĐỒ BÃO ===
+    # === 3. BẢN ĐỒ BÃO (FOLIUM) ===
     elif topic == "Bản đồ Bão":
+        # Height 100vh để bản đồ luôn full chiều cao
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
         folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
         folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
