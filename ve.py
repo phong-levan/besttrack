@@ -10,43 +10,67 @@ from math import radians, sin, cos, asin, sqrt
 import warnings
 import textwrap
 
-# Thư viện cho Option 1
+# Thư viện xử lý hình học cho Option 1
 from shapely.geometry import Polygon, mapping
 from shapely.ops import unary_union
 from cartopy import geodesic
 
 warnings.filterwarnings("ignore")
 
-# --- 1. CẤU HÌNH ---
+# --- 1. CẤU HÌNH HỆ THỐNG ---
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.xlsx"        # File Hiện trạng/Dự báo
 FILE_OPT2 = "besttrack_capgio.xlsx" # File Lịch sử
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 COL_R6, COL_R10, COL_RC = "#FFC0CB", "#FF6347", "#90EE90"
 
-st.set_page_config(page_title="Hệ thống Giám sát Bão", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(
+    page_title="Hệ thống Giám sát Bão Biển Đông", 
+    layout="wide", 
+    initial_sidebar_state="expanded" # Mở sidebar để người dùng thấy 2 options
+)
 
-# --- 2. CSS SỬA LỖI HIỂN THỊ ---
+# --- 2. CSS "XUYÊN THẤU" (SỬA LỖI TRẮNG MÀN HÌNH) ---
 st.markdown("""
     <style>
-    /* Làm trong suốt nền Streamlit để hiện bản đồ */
+    /* Làm trong suốt toàn bộ nền ứng dụng Streamlit */
     .stApp { background: transparent !important; }
     [data-testid="stAppViewContainer"] { background: transparent !important; }
+    [data-testid="stHeader"], footer { display: none !important; }
     
-    /* Ẩn giao diện thừa */
-    header, footer { display: none !important; }
+    /* Reset lề */
     .block-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
     
-    /* Bản đồ nằm dưới cùng */
-    iframe { position: fixed; top: 0; left: 0; width: 100vw !important; height: 100vh !important; z-index: 0; }
+    /* Bản đồ (iframe) nằm dưới cùng */
+    iframe {
+        position: fixed; top: 0; left: 0;
+        width: 100vw !important; height: 100vh !important;
+        z-index: 0;
+    }
     
-    /* Dashboard & Sidebar nằm trên */
-    [data-testid="stSidebar"] { z-index: 1001; }
-    .dashboard-box { z-index: 1000; }
+    /* Đảm bảo Sidebar và Dashboard nằm đè lên bản đồ */
+    [data-testid="stSidebar"] { 
+        z-index: 1001 !important; 
+        background-color: rgba(28, 35, 49, 0.95) !important; /* Màu nền tối cho sidebar */
+    }
+    .dashboard-box { z-index: 1000 !important; }
+    
+    /* Style cho Radio Button (2 Ops chọn) */
+    div[role="radiogroup"] > label {
+        background: #262730;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 5px;
+        border: 1px solid #444;
+        width: 100%;
+    }
+    div[role="radiogroup"] > label:hover {
+        border-color: #00d4ff;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HÀM XỬ LÝ SỐ LIỆU ---
+# --- 3. CÁC HÀM XỬ LÝ SỐ LIỆU ---
 
 def haversine_km(lat1, lon1, lat2, lon2):
     R = 6371.0
@@ -110,10 +134,17 @@ def get_color_by_wind(kt):
     if kt < 113: return '#FF0000'
     return '#FF00FF'
 
-# --- 4. DASHBOARD HTML ---
+# --- 4. HÀM TẠO DASHBOARD (HTML) ---
 
 def create_dashboard_opt1(df, img_b64):
-    """Dashboard Option 1: Hiện trạng (Cố định)"""
+    """Dashboard cho Option 1: Hiện trạng & Dự báo"""
+    if df.empty:
+        return """
+        <div class="dashboard-box" style="position: fixed; top: 20px; right: 20px; width: 300px; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px; border: 1px solid #ccc;">
+            <div style="text-align:center; color:#d63384; font-weight:bold;">CHƯA CÓ DỮ LIỆU BÃO</div>
+            <div style="text-align:center; font-size:12px;">Vui lòng kiểm tra file besttrack.xlsx</div>
+        </div>"""
+
     cur = df[df['Thời điểm'].str.contains("hiện tại", case=False, na=False)]
     fut = df[df['Thời điểm'].str.contains("dự báo", case=False, na=False)]
     display_df = pd.concat([cur, fut])
@@ -131,7 +162,7 @@ def create_dashboard_opt1(df, img_b64):
     img_tag = f'<img src="data:image/png;base64,{img_b64}" style="width:100%; margin-bottom:10px; border-radius:5px;">' if img_b64 else ""
 
     return textwrap.dedent(f"""
-    <div class="dashboard-box" style="position: fixed; top: 20px; right: 20px; width: 320px; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.2);">
+    <div class="dashboard-box" style="position: fixed; top: 20px; right: 20px; width: 320px; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.3);">
         {img_tag}
         <div style="text-align:center; font-weight:bold; color:#d63384; margin-bottom:5px;">TIN BÃO KHẨN CẤP</div>
         <table style="width:100%; border-collapse: collapse; font-size:11px; text-align:center; color:black;">
@@ -142,7 +173,14 @@ def create_dashboard_opt1(df, img_b64):
     """)
 
 def create_dashboard_opt2(df, selected_storms):
-    """Dashboard Option 2: Lịch sử (Thu gọn + JS Toggle)"""
+    """Dashboard cho Option 2: Lịch sử"""
+    if df.empty or not selected_storms:
+        return """
+        <div class="dashboard-box" style="position: fixed; top: 20px; right: 20px; width: 250px; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px;">
+            <div style="background:#007bff; color:white; padding:8px; font-weight:bold;">🌪️ LỊCH SỬ BÃO</div>
+            <div style="padding:10px; text-align:center; color:#333;">Chưa chọn bão.</div>
+        </div>"""
+
     rows = ""
     for storm in selected_storms:
         sub = df[df['name'] == storm].sort_values('dt', ascending=False)
@@ -154,14 +192,13 @@ def create_dashboard_opt2(df, selected_storms):
 <td><span style="background:{get_color_by_wind(latest.get('wind_kt',0))}; padding:2px 5px; border-radius:3px;">{int(latest.get('wind_kt',0))}kt</span></td>
 </tr>"""
     
-    # HTML với Javascript để Toggle (Đóng/Mở)
     html = f"""
-    <div id="dashboard-opt2" class="dashboard-box" style="position: fixed; top: 20px; right: 20px; width: 300px; background: rgba(255,255,255,0.95); border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: width 0.3s;">
+    <div id="dashboard-opt2" class="dashboard-box" style="position: fixed; top: 20px; right: 20px; width: 300px; background: rgba(255,255,255,0.95); border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
         <div style="background:#007bff; color:white; padding:10px; border-radius: 8px 8px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleOpt2()">
             <span style="font-weight:bold;">🌪️ LỊCH SỬ BÃO ({len(selected_storms)})</span>
             <span id="icon-opt2" style="font-size:16px;">➖</span>
         </div>
-        <div id="content-opt2" style="padding:10px; max-height:400px; overflow:auto; resize:vertical;">
+        <div id="content-opt2" style="padding:10px; max-height:400px; overflow:auto;">
             <table style="width:100%; font-size:12px; text-align:center; border-collapse: collapse; color:black;">
                 <tr style="background:#f0f0f0; border-bottom:1px solid #ddd;">
                     <th style="padding:5px;">Tên</th><th>Ngày</th><th>Gió</th>
@@ -186,60 +223,90 @@ def create_dashboard_opt2(df, selected_storms):
     """
     return textwrap.dedent(html)
 
-# --- 5. MAIN APP ---
+# --- 5. CHƯƠNG TRÌNH CHÍNH (MAIN) ---
 
 def main():
     with st.sidebar:
-        st.title("⚙️ CẤU HÌNH")
-        mode = st.radio("Chế độ:", ["Option 1: Hiện trạng & Dự báo", "Option 2: Lịch sử & Thống kê"])
+        st.title("🌪️ TRUNG TÂM ĐIỀU KHIỂN")
+        st.markdown("---")
+        
+        # 1. BỘ CHỌN CHẾ ĐỘ (2 OPS CHỌN)
+        mode = st.radio(
+            "📍 CHỌN CHẾ ĐỘ HIỂN THỊ:",
+            ["Option 1: Hiện trạng & Dự báo", "Option 2: Lịch sử & Thống kê"]
+        )
+        st.markdown("---")
         
         final_df = pd.DataFrame()
         selected_storms = []
         storm_col = None
-        
+
+        # --- XỬ LÝ OPTION 1 ---
         if "Option 1" in mode:
-            st.info("Đang ở chế độ: Option 1 (File besttrack.xlsx)")
-            f = st.file_uploader("Upload besttrack.xlsx", type="xlsx")
+            st.markdown("### 📂 Dữ liệu Option 1")
+            f = st.file_uploader("Tải file besttrack.xlsx", type="xlsx", key="opt1")
             file_path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
             
             if file_path:
-                df = pd.read_excel(file_path)
-                df[['lat', 'lon']] = df[['lat', 'lon']].apply(pd.to_numeric, errors='coerce')
-                df = df.dropna(subset=['lat', 'lon'])
-                storm_col = 'Số hiệu' if 'Số hiệu' in df.columns else None
-                if storm_col:
-                    all_s = df[storm_col].unique()
-                    selected_storms = [s for s in all_s if st.checkbox(f"Bão số {s}", value=True)]
-                    final_df = df[df[storm_col].isin(selected_storms)]
-                else: final_df = df
+                try:
+                    df = pd.read_excel(file_path)
+                    df[['lat', 'lon']] = df[['lat', 'lon']].apply(pd.to_numeric, errors='coerce')
+                    df = df.dropna(subset=['lat', 'lon'])
+                    
+                    storm_col = 'Số hiệu' if 'Số hiệu' in df.columns else None
+                    if storm_col:
+                        st.markdown("### 🌪️ Chọn Bão")
+                        all_s = df[storm_col].unique()
+                        selected_storms = [s for s in all_s if st.checkbox(f"Bão số {s}", value=True)]
+                        final_df = df[df[storm_col].isin(selected_storms)]
+                    else: 
+                        final_df = df
+                        selected_storms = ["Unknown"]
+                except Exception as e:
+                    st.error(f"Lỗi file: {e}")
+            else:
+                st.warning("Vui lòng tải file dữ liệu.")
+
+        # --- XỬ LÝ OPTION 2 ---
         else:
-            st.info("Đang ở chế độ: Option 2 (File besttrack_capgio.xlsx)")
-            f = st.file_uploader("Upload besttrack_capgio.xlsx", type="xlsx")
+            st.markdown("### 📂 Dữ liệu Option 2")
+            f = st.file_uploader("Tải file besttrack_capgio.xlsx", type="xlsx", key="opt2")
             file_path = f if f else (FILE_OPT2 if os.path.exists(FILE_OPT2) else None)
             
             if file_path:
-                df = pd.read_excel(file_path)
-                renames = {"tên bão":"name","năm":"year","tháng":"mon","ngày":"day","giờ":"hour","vĩ độ":"lat","kinh độ":"lon","gió (kt)":"wind_kt"}
-                df = df.rename(columns={k:v for k,v in renames.items() if k in df.columns})
-                
-                time_cols = ['year','mon','day','hour']
-                if all(c in df.columns for c in time_cols):
-                    for c in time_cols: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
-                    df['dt'] = pd.to_datetime(df[time_cols].rename(columns={'mon':'month'}))
-                
-                df[['lat','lon','wind_kt']] = df[['lat','lon','wind_kt']].apply(pd.to_numeric, errors='coerce')
-                df = df.dropna(subset=['lat','lon'])
-                
-                years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
-                temp = df[df['year'].isin(years)]
-                selected_storms = st.multiselect("Bão:", temp['name'].unique(), default=temp['name'].unique())
-                final_df = temp[temp['name'].isin(selected_storms)]
+                try:
+                    df = pd.read_excel(file_path)
+                    renames = {"tên bão":"name","năm":"year","tháng":"mon","ngày":"day","giờ":"hour","vĩ độ":"lat","kinh độ":"lon","gió (kt)":"wind_kt"}
+                    df = df.rename(columns={k:v for k,v in renames.items() if k in df.columns})
+                    
+                    # Xử lý ngày tháng an toàn
+                    time_cols = ['year','mon','day','hour']
+                    if all(c in df.columns for c in time_cols):
+                        for c in time_cols: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
+                        df['dt'] = pd.to_datetime(df[time_cols].rename(columns={'mon':'month'}))
+                    
+                    df[['lat','lon','wind_kt']] = df[['lat','lon','wind_kt']].apply(pd.to_numeric, errors='coerce')
+                    df = df.dropna(subset=['lat','lon'])
+                    
+                    # Bộ lọc
+                    st.markdown("### 🛠️ Bộ lọc")
+                    years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
+                    temp = df[df['year'].isin(years)]
+                    
+                    all_storms = temp['name'].unique()
+                    selected_storms = st.multiselect("Bão:", all_storms, default=all_storms)
+                    final_df = temp[temp['name'].isin(selected_storms)]
+                except Exception as e:
+                    st.error(f"Lỗi file: {e}")
+            else:
+                st.warning("Vui lòng tải file dữ liệu.")
 
-    # --- HIỂN THỊ BẢN ĐỒ ---
+    # --- KHỞI TẠO BẢN ĐỒ ---
     m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None)
     folium.TileLayer('CartoDB positron', name='Bản đồ Sáng').add_to(m)
     folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết').add_to(m)
 
+    # --- VẼ LỚP DỮ LIỆU ---
     if not final_df.empty:
         if "Option 1" in mode:
             # === VẼ OPTION 1 ===
@@ -270,14 +337,25 @@ def main():
             for name in selected_storms:
                 sub = final_df[final_df['name'] == name].sort_values('dt')
                 if sub.empty: continue
-                folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2, opacity=0.5).add_to(m)
+                
+                coords = sub[['lat','lon']].values.tolist()
+                folium.PolyLine(coords, color='black', weight=2, opacity=0.5).add_to(m)
+                
                 for _, r in sub.iterrows():
                     c = get_color_by_wind(r.get('wind_kt',0))
-                    folium.CircleMarker([r['lat'],r['lon']], radius=5, color=c, fill=True, fill_opacity=1, popup=f"{name} {int(r.get('wind_kt',0))}kt").add_to(m)
+                    folium.CircleMarker([r['lat'],r['lon']], radius=5, color=c, fill=True, fill_opacity=1, 
+                                      popup=f"{name}: {int(r.get('wind_kt',0))}kt").add_to(m)
             
             # Dashboard Opt 2
             st.markdown(create_dashboard_opt2(final_df, selected_storms), unsafe_allow_html=True)
+    else:
+        # Nếu chưa có dữ liệu, hiển thị Dashboard trống tương ứng
+        if "Option 1" in mode:
+            st.markdown(create_dashboard_opt1(pd.DataFrame(), None), unsafe_allow_html=True)
+        else:
+            st.markdown(create_dashboard_opt2(pd.DataFrame(), []), unsafe_allow_html=True)
 
+    # Hiển thị LayerControl và Map
     folium.LayerControl(collapsed=True).add_to(m)
     st_folium(m, width=None, height=None, use_container_width=True)
 
