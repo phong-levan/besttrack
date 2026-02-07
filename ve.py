@@ -51,7 +51,7 @@ COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
 SIDEBAR_WIDTH = "320px"
 
-# CẤU HÌNH TRANG: Expanded để luôn mở sidebar
+# Cấu hình trang
 st.set_page_config(
     page_title="Storm Monitor",
     layout="wide",
@@ -59,46 +59,50 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG SIDEBAR, RESET NÚT MENU)
+# 2. CSS CHUNG (FIX CỨNG SIDEBAR - CHỐNG ĐÓNG)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. Reset lề */
+    /* 1. XÓA LỀ MẶC ĐỊNH */
     .block-container {{
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
-    
-    /* Ẩn Header mặc định */
-    header[data-testid="stHeader"] {{ display: none !important; }}
-    footer {{ display: none !important; }}
+    header, footer {{ display: none !important; }}
 
-    /* 2. KHÔI PHỤC NÚT MỞ MENU (QUAN TRỌNG NHẤT) */
-    /* Nút này hiện ở góc trái nếu menu bị đóng */
-    [data-testid="stSidebarCollapsedControl"] {{
-        display: block !important; 
-        color: #000 !important;
-        background-color: white !important;
-        border: 2px solid #ccc; 
-        border-radius: 5px;
-        top: 15px !important;
-        left: 15px !important;
-        z-index: 1000000 !important;
-        width: 40px;
-        height: 40px;
-    }}
-
-    /* 3. TÙY CHỈNH THANH SIDEBAR */
+    /* 2. ÉP BUỘC HIỂN THỊ SIDEBAR (MENU TRÁI) */
+    /* Dùng !important để ghi đè mọi trạng thái đóng/mở của Streamlit */
     section[data-testid="stSidebar"] {{
+        display: block !important; /* Luôn hiện */
+        visibility: visible !important;
+        width: {SIDEBAR_WIDTH} !important;
+        min-width: {SIDEBAR_WIDTH} !important;
+        max-width: {SIDEBAR_WIDTH} !important;
+        transform: none !important; /* Ngăn hiệu ứng trượt vào/ra */
+        
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid #ddd;
+        
+        /* Cố định vị trí */
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        z-index: 99999 !important;
     }}
     
-    /* Ẩn nút "Thu gọn" bên trong menu để tránh bấm nhầm */
-    [data-testid="stSidebarCollapseBtn"] {{
+    /* ẨN NÚT ĐÓNG/MỞ SIDEBAR (KHÔNG CHO NGƯỜI DÙNG BẤM NỮA) */
+    [data-testid="stSidebarCollapseBtn"], [data-testid="stSidebarCollapsedControl"] {{
         display: none !important;
     }}
 
-    /* 4. BẢN ĐỒ */
+    /* 3. ÉP BUỘC KHUNG CHÍNH (MAP) DỊCH SANG PHẢI */
+    /* Để tránh bị Sidebar che mất */
+    .main .block-container {{
+        margin-left: {SIDEBAR_WIDTH} !important; /* Đẩy sang phải bằng độ rộng Sidebar */
+        width: calc(100vw - {SIDEBAR_WIDTH}) !important; /* Tính lại chiều rộng */
+    }}
+    
+    /* Fix iframe bản đồ */
     iframe {{
         width: 100% !important;
         height: 100vh !important;
@@ -106,15 +110,15 @@ st.markdown(f"""
         display: block !important;
     }}
     
-    /* 5. CÁC WIDGET NỔI */
+    /* 4. CÁC WIDGET NỔI (CHÚ THÍCH & BẢNG TIN) */
     .legend-box {{
-        position: fixed; top: 20px; right: 20px; z-index: 999;
-        width: 300px; pointer-events: none; 
+        position: fixed; top: 20px; right: 20px; z-index: 10000;
+        width: 300px; pointer-events: none;
     }}
     .legend-box img {{ width: 100%; display: block; }}
 
     .info-box {{
-        position: fixed; top: 250px; right: 20px; z-index: 999;
+        position: fixed; top: 250px; right: 20px; z-index: 10000;
         width: fit-content !important; min-width: 150px; 
         background: rgba(255, 255, 255, 0.9);
         border: 1px solid #ccc;
@@ -123,18 +127,19 @@ st.markdown(f"""
     }}
     
     .info-title {{
-        text-align: center; font-weight: bold; font-size: 16px; margin: 0 0 5px 0; 
-        text-transform: uppercase; color: #000;
+        text-align: center; font-weight: bold; font-size: 16px; 
+        margin: 0 0 5px 0; text-transform: uppercase; color: #000;
     }}
     .info-subtitle {{
         text-align: center; font-size: 11px; margin-bottom: 5px; font-style: italic; color: #333;
     }}
     table {{ 
-        border-collapse: collapse; font-size: 13px; color: #000; white-space: nowrap; margin: 0;
+        border-collapse: collapse; font-size: 13px; color: #000; 
+        white-space: nowrap; margin: 0;
     }}
     th {{ 
-        background: transparent !important; color: #000 !important; padding: 4px 8px; 
-        font-weight: bold; border-bottom: 1px solid #000; text-align: center;
+        background: transparent !important; color: #000 !important; 
+        padding: 4px 8px; font-weight: bold; border-bottom: 1px solid #000; text-align: center;
     }}
     td {{ 
         padding: 4px 8px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
@@ -313,9 +318,10 @@ def main():
         dashboard_title = ""
         show_widgets = False
         active_mode = ""
+        
+        # Khởi tạo mặc định để tránh lỗi Syntax
         obs_mode = ""
 
-        # FIX LỖI SYNTAX Ở ĐÂY: Khởi tạo obs_mode trước
         if topic == "Dữ liệu quan trắc":
             obs_mode = st.radio("Chọn nguồn dữ liệu:", ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)"])
 
@@ -363,6 +369,7 @@ def main():
                             final_df = df
                     else: st.warning("Vui lòng tải file.")
             else: 
+                # (Phần lịch sử giữ nguyên)
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
