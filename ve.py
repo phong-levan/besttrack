@@ -181,7 +181,7 @@ def normalize_columns(df):
         "vĩ độ": "lat", "kinh độ": "lon", "gió (kt)": "wind_kt",
         "cường độ (cấp bf)": "bf", "bán kính gió mạnh cấp 6 (km)": "r6", 
         "bán kính gió mạnh cấp 10 (km)": "r10", "bán kính tâm (km)": "rc",
-        "khí áp": "pressure", "khí áp (mb)": "pressure", "Pmin": "pressure"
+        "khí áp": "pressure", "khí áp (mb)": "pressure", "pmin (mb)": "pressure"
     }
     df = df.rename(columns={k:v for k,v in rename.items() if k in df.columns})
     return df
@@ -436,4 +436,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
