@@ -238,8 +238,8 @@ def main():
     
     # --- SIDEBAR MENU ---
     with st.sidebar:
-        st.title("🌪️ TRUNG TÂM BÃO")
-        st.caption("Phiên bản giao diện sáng")
+        st.title("Dữ liệu khí tượng")
+       # st.caption("Phiên bản giao diện sáng")
         
         # Menu chính
         topic = st.radio("CHỌN CHẾ ĐỘ:", 
@@ -361,3 +361,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
