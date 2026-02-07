@@ -51,15 +51,15 @@ COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
 SIDEBAR_WIDTH = "320px"
 
-# Thiết lập luôn mở sidebar ban đầu
+# THIẾT LẬP QUAN TRỌNG: LUÔN MỞ SIDEBAR KHI KHỞI ĐỘNG
 st.set_page_config(
     page_title="Storm Monitor",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded"  # Bắt buộc mở rộng ngay từ đầu
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (FIX LỖI MẤT MENU & GIAO DIỆN KÍNH)
+# 2. CSS CHUNG (CỨU HỘ THANH MENU)
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -80,13 +80,13 @@ st.markdown(f"""
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     
-    /* 3. CỐ ĐỊNH THANH SIDEBAR (KÍNH MỜ & TRONG SUỐT) */
+    /* 3. CỐ ĐỊNH THANH SIDEBAR */
     section[data-testid="stSidebar"] {{
         width: {SIDEBAR_WIDTH} !important;
         min-width: {SIDEBAR_WIDTH} !important;
         max-width: {SIDEBAR_WIDTH} !important;
         
-        /* Hiệu ứng kính mờ (Frosted Glass) */
+        /* Hiệu ứng kính mờ (Frosted Glass) cho đẹp */
         background-color: rgba(255, 255, 255, 0.85) !important; 
         backdrop-filter: blur(12px);
         border-right: 1px solid rgba(200, 200, 200, 0.5);
@@ -98,37 +98,34 @@ st.markdown(f"""
         height: 100vh !important;
         z-index: 9999999 !important;
         padding-top: 0 !important;
-        box-shadow: 2px 0 15px rgba(0,0,0,0.1);
     }}
     
-    /* >>> KHU VỰC CỨU HỘ MENU: QUAN TRỌNG <<< */
+    /* >>> ĐÂY LÀ PHẦN XỬ LÝ VẤN ĐỀ CỦA BẠN <<< */
     
-    /* 1. Nút "Mở rộng" (Dấu >): LUÔN HIỆN, NỔI BẬT */
-    /* Để nếu menu bị đóng, bạn bấm vào đây để mở lại */
+    /* 1. Nút "Mở rộng" (Dấu >): BẮT BUỘC PHẢI HIỆN */
+    /* Nếu bạn vào app mà thấy mất menu, nút này sẽ hiện ra ở góc trái để bạn bấm vào */
     [data-testid="stSidebarCollapsedControl"] {{
-        display: block !important;
-        position: fixed !important;
-        top: 15px !important;
-        left: 15px !important;
-        z-index: 100000000 !important; /* Cao hơn tất cả mọi thứ */
+        display: block !important; 
+        z-index: 100000000 !important; /* Đè lên tất cả */
+        left: 10px !important;
+        top: 10px !important;
+        
+        /* Làm đẹp nút */
         background-color: white !important;
         color: black !important;
-        border: 1px solid #ccc !important;
+        border: 1px solid #999 !important;
         border-radius: 5px !important;
         width: 40px !important;
         height: 40px !important;
-        text-align: center !important;
-        line-height: 40px !important;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
     }}
 
-    /* 2. Nút "Thu gọn" (Dấu <): LUÔN ẨN */
-    /* Để khi mở rồi, bạn không bấm nhầm đóng lại được nữa */
+    /* 2. Nút "Thu gọn" (Dấu <): ẨN ĐI */
+    /* Để khi menu đã mở ra rồi, bạn không lỡ tay đóng lại được nữa */
     [data-testid="stSidebarCollapseBtn"] {{
         display: none !important;
     }}
     
-    /* Nội dung bên trong sidebar */
     [data-testid="stSidebarUserContent"] {{
         padding: 20px;
         height: 100vh;
@@ -139,11 +136,11 @@ st.markdown(f"""
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
-        left: 0 !important; /* Tràn viền */
+        left: 0 !important; 
         width: 100vw !important;
         height: 100vh !important;
         border: none !important;
-        z-index: 1 !important; /* Nằm dưới Sidebar */
+        z-index: 1 !important; 
         display: block !important;
     }}
 
@@ -168,7 +165,7 @@ st.markdown(f"""
         z-index: 9999;
         width: fit-content !important;
         min-width: 150px; 
-        background: rgba(255, 255, 255, 0.85); /* Trong suốt nhẹ */
+        background: rgba(255, 255, 255, 0.85); 
         backdrop-filter: blur(5px);
         border: none !important; 
         box-shadow: none !important;
