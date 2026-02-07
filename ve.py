@@ -58,10 +58,11 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG TOÀN BỘ)
+# 2. CSS CHUNG (FIX CỨNG & OVERLAY SIDEBAR)
 # ==============================================================================
 st.markdown(f"""
     <style>
+    /* 1. KHÓA CUỘN TRANG CHÍNH */
     html, body, .stApp {{
         overflow: hidden !important;
         height: 100vh !important;
@@ -69,6 +70,8 @@ st.markdown(f"""
         padding: 0 !important;
         font-family: Arial, sans-serif;
     }}
+
+    /* 2. ẨN HEADER & FOOTER */
     header, footer, [data-testid="stHeader"], [data-testid="stToolbar"] {{
         display: none !important;
     }}
@@ -76,44 +79,47 @@ st.markdown(f"""
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     
-    /* SIDEBAR */
+    /* 3. SIDEBAR (CỐ ĐỊNH & TRONG SUỐT ĐÈ LÊN MAP) */
     section[data-testid="stSidebar"] {{
-        background-color: {COLOR_SIDEBAR} !important;
-        border-right: 1px solid {COLOR_BORDER};
+        /* Màu nền trắng mờ để nhìn xuyên thấu map */
+        background-color: rgba(255, 255, 255, 0.9) !important;
+        border-right: 1px solid rgba(0,0,0,0.1);
         width: {SIDEBAR_WIDTH} !important;
         min-width: {SIDEBAR_WIDTH} !important;
         max-width: {SIDEBAR_WIDTH} !important;
         top: 0 !important;
         height: 100vh !important;
-        z-index: 9999999 !important;
+        z-index: 9999999 !important; /* Luôn nổi lên trên */
         position: fixed !important;
         left: 0 !important;
         padding-top: 0 !important;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1); /* Đổ bóng nhẹ tách biệt */
     }}
+    
+    /* Ẩn nút đóng sidebar */
+    [data-testid="stSidebarCollapseBtn"], [data-testid="stSidebarCollapsedControl"] {{
+        display: none !important;
+    }}
+    
     [data-testid="stSidebarUserContent"] {{
         padding: 20px;
         height: 100vh;
         overflow-y: auto !important;
     }}
-    [data-testid="stSidebarCollapseBtn"] {{ display: none !important; }}
-    [data-testid="stSidebarCollapsedControl"] {{
-        display: flex !important; z-index: 1000000;
-        top: 10px; left: 10px; background: white; border: 1px solid #ccc;
-    }}
 
-    /* MAP/IFRAME */
+    /* 4. FULL SCREEN MAP (TRÀN VIỀN DƯỚI SIDEBAR) */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
-        left: {SIDEBAR_WIDTH} !important;
-        width: calc(100vw - {SIDEBAR_WIDTH}) !important;
+        left: 0 !important; /* Map bắt đầu từ mép trái màn hình */
+        width: 100vw !important; /* Chiều rộng full màn hình */
         height: 100vh !important;
         border: none !important;
-        z-index: 1 !important;
+        z-index: 1 !important; /* Nằm dưới sidebar */
         display: block !important;
     }}
 
-    /* CHÚ THÍCH (LEGEND) */
+    /* 5. STYLE CHÚ THÍCH (LEGEND) */
     .legend-box {{
         position: fixed; 
         top: 20px; 
@@ -126,7 +132,7 @@ st.markdown(f"""
     }}
     .legend-box img {{ width: 100%; display: block; }}
 
-    /* BẢNG THÔNG TIN */
+    /* 6. STYLE BẢNG THÔNG TIN (KHÔNG KHUNG) */
     .info-box {{
         position: fixed; 
         top: 250px; 
@@ -140,14 +146,17 @@ st.markdown(f"""
         padding: 5px !important; 
         color: #000;
     }}
+    
     .info-title {{
         text-align: center; font-weight: bold; font-size: 16px; 
         margin: 0 0 5px 0; text-transform: uppercase; color: #000;
     }}
+    
     .info-subtitle {{
         text-align: center; font-size: 11px; margin-bottom: 5px; 
         font-style: italic; color: #333;
     }}
+
     table {{ 
         border-collapse: collapse; font-size: 13px; color: #000; 
         white-space: nowrap; margin: 0;
@@ -219,43 +228,30 @@ def densify_track(df, step_km=10):
     new_rows.append(df.iloc[-1])
     return pd.DataFrame(new_rows)
 
-# >>> HÀM TẠO HÌNH TRÒN KHÔNG DÙNG CARTOPY ĐỂ TRÁNH LỖI <<<
 def generate_circle_polygon(lat, lon, radius_km, n_points=36):
     coords = []
     if radius_km <= 0: return None
-    
-    # 1 độ vĩ độ ~ 111.32 km
-    # 1 độ kinh độ ~ 111.32 * cos(lat) km
     lat_rad = radians(lat)
-    
     for i in range(n_points):
         theta = (i / n_points) * (2 * pi)
-        # Tính delta độ
         dy = (radius_km * cos(theta)) / 111.32
         dx = (radius_km * sin(theta)) / (111.32 * cos(lat_rad))
-        
-        coords.append((lon + dx, lat + dy)) # Shapely dùng (lon, lat)
-    
+        coords.append((lon + dx, lat + dy))
     return Polygon(coords)
 
 def create_storm_swaths(dense_df):
     polys = {'r6': [], 'r10': [], 'rc': []}
-    
     for _, row in dense_df.iterrows():
         for r, key in [(row.get('r6',0), 'r6'), (row.get('r10',0), 'r10'), (row.get('rc',0), 'rc')]:
             if r > 0:
-                # Sử dụng hàm tự viết thay vì geodesic của cartopy
                 poly = generate_circle_polygon(row['lat'], row['lon'], r)
-                if poly:
-                    polys[key].append(poly)
-                    
+                if poly: polys[key].append(poly)
     u = {k: unary_union(v) if v else None for k, v in polys.items()}
     f_rc = u['rc']
     f_r10 = u['r10'].difference(u['rc']) if u['r10'] and u['rc'] else u['r10']
     f_r6 = u['r6'].difference(u['r10']) if u['r6'] and u['r10'] else u['r6']
     return f_r6, f_r10, f_rc
 
-# >>> CẬP NHẬT LOGIC LẤY TÊN ICON: "HIỆN TẠI" -> DÙNG DUBAO (MÀU ĐEN) <<<
 def get_icon_name(row):
     wind_speed = row.get('bf', 0) 
     w = row.get('wind_km/h', 0)
@@ -381,8 +377,6 @@ def main():
                                 else: df = pd.read_excel(f_path)
                                 
                             df = normalize_columns(df)
-                            
-                            # TỰ ĐỘNG THÊM CỘT TÊN BÃO NẾU THIẾU
                             if 'name' not in df.columns and 'storm_no' not in df.columns:
                                 df['name'] = 'Cơn bão'
                                 df['storm_no'] = 'Current Storm'
@@ -397,7 +391,6 @@ def main():
 
                     df = process_file(path)
                     if not df.empty:
-                        # Logic hiển thị Selectbox nếu có nhiều bão
                         if 'storm_no' in df.columns:
                             all_s = df['storm_no'].unique()
                             sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s)
@@ -406,7 +399,6 @@ def main():
                             final_df = df
                     else: st.warning("Vui lòng tải file.")
             else: 
-                # (Phần lịch sử giữ nguyên logic cũ)
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
@@ -447,58 +439,4 @@ def main():
         folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
         
         ts = get_rainviewer_ts()
-        if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
-
-        fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
-        if not final_df.empty and show_widgets:
-            if "Hiện trạng" in str(active_mode):
-                # Xử lý trường hợp không có cột storm_no
-                groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
-                
-                for g in groups:
-                    sub = final_df[final_df['storm_no']==g] if g else final_df
-                    dense = densify_track(sub)
-                    f6, f10, fc = create_storm_swaths(dense)
-                    for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#90EE90',0.6)]:
-                        if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
-                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
-                    
-                    # --- VẼ ICON BÃO ---
-                    for _, r in sub.iterrows():
-                        icon_key = get_icon_name(r)
-                        icon_path = ICON_PATHS.get(icon_key)
-                        icon_base64 = None
-                        if icon_path:
-                            icon_base64 = image_to_base64(icon_path)
-                        
-                        if icon_base64:
-                            # Set kích thước cố định 40x40 cho đồng đều
-                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(40, 40))
-                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
-                        else:
-                            folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
-            else: 
-                for n in final_df['name'].unique():
-                    sub = final_df[final_df['name']==n].sort_values('dt')
-                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
-                    for _, r in sub.iterrows():
-                        c = '#00f2ff' if r.get('wind_km/h',0)<64 else '#ff0055'
-                        folium.CircleMarker([r['lat'],r['lon']], radius=3, color=c, fill=True, popup=f"{n}").add_to(fg_storm)
-        
-        fg_storm.add_to(m)
-        folium.LayerControl(position='topleft', collapsed=False).add_to(m)
-        
-        if show_widgets:
-            if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
-                with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
-                st.markdown(create_legend(b64), unsafe_allow_html=True)
-            
-            if not final_df.empty: 
-                st.markdown(create_info_table(final_df, dashboard_title), unsafe_allow_html=True)
-            else: 
-                st.markdown(create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU..."), unsafe_allow_html=True)
-        
-        st_folium(m, width=None, height=1000, use_container_width=True)
-
-if __name__ == "__main__":
-    main()
+        if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=
