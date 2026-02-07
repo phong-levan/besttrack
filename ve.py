@@ -206,7 +206,7 @@ def normalize_columns(df):
     rename = {
         "tên bão": "name", "biển đông": "storm_no", "số hiệu": "storm_no",
         "thời điểm": "status_raw", "ngày - giờ": "datetime_str",
-        "vĩ độ": "lat", "kinh độ": "lon", "vmax (km/h)": "wind_kmh",
+        "vĩ độ": "lat", "kinh độ": "lon", "vmax (km/h)": "wind_km/h",
         "cường độ (cấp bf)": "bf", "bán kính gió mạnh cấp 6 (km)": "r6", 
         "bán kính gió mạnh cấp 10 (km)": "r10", "bán kính tâm (km)": "rc",
         "khí áp": "pressure", "khí áp (mb)": "pressure", "pmin": "pressure", "pmin (mb)": "pressure"
@@ -250,9 +250,9 @@ def create_storm_swaths(dense_df):
 def get_icon_name(row):
     # Lấy dữ liệu
     wind_speed = row.get('bf', 0) # Sử dụng cột 'bf' đã được normalize
-    w = row.get('wind_kmh', 0)
+    w = row.get('wind_km/h', 0)
     
-    # Nếu bf chưa có, tính từ wind_kmh
+    # Nếu bf chưa có, tính từ wind_km/h
     if pd.isna(wind_speed) or wind_speed == 0:
         if w > 0:
             if w < 34: wind_speed = 5
@@ -285,7 +285,7 @@ def create_info_table(df, title):
     for _, r in display_df.iterrows():
         t = r.get('datetime_str', r.get('dt'))
         if not isinstance(t, str): t = t.strftime('%d/%m %Hh')
-        w = r.get('wind_kmh', 0)
+        w = r.get('wind_km/h', 0)
         
         lon = f"{r.get('lon', 0):.1f}E"
         lat = f"{r.get('lat', 0):.1f}N"
@@ -371,11 +371,11 @@ def main():
                                 else: df = pd.read_excel(f_path)
                                 
                             df = normalize_columns(df)
-                            for c in ['wind_kmh', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
+                            for c in ['wind_km/h', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
                                 if c not in df.columns: df[c] = 0
                             if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
                             elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
-                            for c in ['lat','lon','wind_kmh', 'pressure', 'bf']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                            for c in ['lat','lon','wind_km/h', 'pressure', 'bf']: df[c] = pd.to_numeric(df[c], errors='coerce')
                             return df.dropna(subset=['lat','lon'])
                         except: return pd.DataFrame()
 
@@ -395,11 +395,11 @@ def main():
                         try:
                             df = pd.read_excel(path)
                             df = normalize_columns(df)
-                            for c in ['wind_kmh', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
+                            for c in ['wind_km/h', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
                                 if c not in df.columns: df[c] = 0
                             if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
                             elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
-                            for c in ['lat','lon','wind_kmh', 'pressure']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                            for c in ['lat','lon','wind_km/h', 'pressure']: df[c] = pd.to_numeric(df[c], errors='coerce')
                             df = df.dropna(subset=['lat','lon'])
 
                             years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
@@ -456,7 +456,7 @@ def main():
                         
                         if icon_base64:
                             icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(45, 45))
-                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_kmh', 0)} kmh").add_to(fg_storm)
+                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Vmax: {r.get('wind_km/h', 0)} kmh").add_to(fg_storm)
                         else:
                             # Dự phòng
                             folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
@@ -465,7 +465,7 @@ def main():
                     sub = final_df[final_df['name']==n].sort_values('dt')
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
                     for _, r in sub.iterrows():
-                        c = '#00f2ff' if r.get('wind_kmh',0)<64 else '#ff0055'
+                        c = '#00f2ff' if r.get('wind_km/h',0)<64 else '#ff0055'
                         folium.CircleMarker([r['lat'],r['lon']], radius=3, color=c, fill=True, popup=f"{n}").add_to(fg_storm)
         
         fg_storm.add_to(m)
@@ -485,5 +485,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
