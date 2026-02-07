@@ -47,11 +47,11 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG TOÀN BỘ)
+# 2. CSS CHUNG (FIX CỨNG & LAYOUT)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. KHÓA CUỘN TRANG CHÍNH (FULL SCREEN APP) */
+    /* 1. KHÓA CUỘN TRANG CHÍNH */
     html, body, .stApp {{
         overflow: hidden !important;
         height: 100vh !important;
@@ -82,57 +82,64 @@ st.markdown(f"""
         padding-top: 0 !important;
     }}
     
-    /* Nội dung Sidebar có thể cuộn */
     [data-testid="stSidebarUserContent"] {{
         padding: 20px;
         height: 100vh;
         overflow-y: auto !important;
     }}
     
-    /* Ẩn nút đóng (Khóa cứng) */
     [data-testid="stSidebarCollapseBtn"] {{ display: none !important; }}
-    /* Nút mở cứu hộ */
+    
     [data-testid="stSidebarCollapsedControl"] {{
         display: flex !important; z-index: 1000000;
         top: 10px; left: 10px; background: white; border: 1px solid #ccc;
     }}
 
-    /* 4. CẤU HÌNH NỘI DUNG CHÍNH (CỐ ĐỊNH PHẢI - TRÀN VIỀN) */
-    /* Áp dụng cho MỌI iframe và bản đồ */
+    /* 4. CẤU HÌNH NỘI DUNG CHÍNH (FULL SCREEN) */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
-        left: {SIDEBAR_WIDTH} !important; /* Đẩy sang phải */
-        width: calc(100vw - {SIDEBAR_WIDTH}) !important; /* Lấp đầy phần còn lại */
+        left: {SIDEBAR_WIDTH} !important;
+        width: calc(100vw - {SIDEBAR_WIDTH}) !important;
         height: 100vh !important;
         border: none !important;
         z-index: 1 !important;
         display: block !important;
     }}
 
-    /* 5. Info Box (Tin bão khẩn cấp) - Góc phải trên */
+    /* 5. CẤU HÌNH VỊ TRÍ CÁC BẢNG (GÓC PHẢI TRÊN) */
+    
+    /* Bảng Chú thích (Legend) - Nằm trên cùng */
+    .legend-box {{
+        position: fixed; 
+        top: 20px; 
+        right: 20px; 
+        z-index: 10000;
+        width: 320px; 
+        padding: 5px;
+        font-family: 'Segoe UI', sans-serif;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid {COLOR_BORDER}; border-radius: 4px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }}
+
+    /* Bảng Thông tin (Info Table) - Nằm dưới bảng chú thích */
     .info-box {{
-        position: fixed; top: 10px; right: 20px; z-index: 9999;
-        width: 320px;
+        position: fixed; 
+        top: 280px; /* Cách top đủ xa để không che chú thích */
+        right: 20px; 
+        z-index: 9999;
+        width: 380px; /* Rộng hơn chút để chứa đủ cột */
         font-family: 'Segoe UI', sans-serif;
         background: rgba(255, 255, 255, 0.95);
         border: 1px solid {COLOR_BORDER}; border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15); color: {COLOR_TEXT};
     }}
-
-    /* 6. Legend Box (Chú giải) - Góc phải dưới */
-    .legend-box {{
-        position: fixed; bottom: 20px; right: 20px; z-index: 9999;
-        width: 280px; padding: 10px;
-        font-family: 'Segoe UI', sans-serif;
-        background: rgba(255, 255, 255, 0.95);
-        border: 1px solid {COLOR_BORDER}; border-radius: 4px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15); color: {COLOR_TEXT};
-    }}
     
-    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
-    th {{ background-color: {COLOR_ACCENT}; color: white; padding: 8px; text-transform: uppercase; }}
-    td {{ padding: 6px; border-bottom: 1px solid {COLOR_BORDER}; text-align: center; color: {COLOR_TEXT}; }}
+    /* Style cho Table */
+    table {{ width: 100%; border-collapse: collapse; font-size: 12px; }}
+    th {{ background-color: {COLOR_ACCENT}; color: white; padding: 6px; text-transform: uppercase; text-align: center; }}
+    td {{ padding: 5px; border-bottom: 1px solid {COLOR_BORDER}; text-align: center; color: {COLOR_TEXT}; }}
     
     .leaflet-control-layers {{
         background: white !important; color: {COLOR_TEXT} !important;
@@ -160,7 +167,8 @@ def normalize_columns(df):
         "thời điểm": "status_raw", "ngày - giờ": "datetime_str",
         "vĩ độ": "lat", "kinh độ": "lon", "gió (kt)": "wind_kt",
         "cường độ (cấp bf)": "bf", "bán kính gió mạnh cấp 6 (km)": "r6", 
-        "bán kính gió mạnh cấp 10 (km)": "r10", "bán kính tâm (km)": "rc"
+        "bán kính gió mạnh cấp 10 (km)": "r10", "bán kính tâm (km)": "rc",
+        "khí áp": "pressure", "khí áp (mb)": "pressure", "pmin": "pressure"
     }
     df = df.rename(columns={k:v for k,v in rename.items() if k in df.columns})
     return df
@@ -211,6 +219,7 @@ def get_icon_name(row):
     if bf <= 11: return f"bnd_{status}"
     return f"sieubao_{status}"
 
+# Hàm tạo bảng thông tin (Đã sửa các cột theo yêu cầu)
 def create_info_table(df, title):
     if df.empty: return ""
     if 'status_raw' in df.columns:
@@ -224,21 +233,41 @@ def create_info_table(df, title):
     for _, r in display_df.iterrows():
         t = r.get('datetime_str', r.get('dt'))
         if not isinstance(t, str): t = t.strftime('%d/%m %Hh')
+        
+        # Lấy dữ liệu các cột
+        lon = f"{r.get('lon', 0):.1f}E"
+        lat = f"{r.get('lat', 0):.1f}N"
+        
+        # Xử lý Cấp gió (Ưu tiên cột bf, nếu không có thì tính từ wind_kt)
+        bf = r.get('bf', 0)
         w = r.get('wind_kt', 0)
-        rows += f"<tr><td>{t}</td><td>{r.get('lat',0):.1f}/{r.get('lon',0):.1f}</td><td>{int(w) if pd.notna(w) else 0}</td></tr>"
+        if (pd.isna(bf) or bf == 0) and w > 0:
+             # Quy đổi sơ bộ kt sang bf nếu thiếu
+             if w < 34: bf = 6
+             elif w < 64: bf = 8
+             elif w < 100: bf = 10
+             else: bf = 12
+        cap_gio = f"Cấp {int(bf)}" if bf > 0 else "-"
+        
+        # Áp suất
+        p = r.get('pressure', 0)
+        pmin = f"{int(p)}" if (pd.notna(p) and p > 0) else "-"
+
+        rows += f"<tr><td>{t}</td><td>{lon}</td><td>{lat}</td><td>{cap_gio}</td><td>{pmin}</td></tr>"
     
-    content = f"<table><thead><tr><th>Thời gian</th><th>Vị trí</th><th>Gió (kt)</th></tr></thead><tbody>{rows}</tbody></table>"
+    content = f"<table><thead><tr><th>Ngày - Giờ</th><th>Kinh độ</th><th>Vĩ độ</th><th>Cấp gió</th><th>Pmin(mb)</th></tr></thead><tbody>{rows}</tbody></table>"
     return textwrap.dedent(f"""
     <div class="info-box">
-        <div style="background-color: {COLOR_ACCENT}; color: white; padding: 10px; font-weight: bold; text-align: center; border-radius: 8px 8px 0 0;">{title}</div>
+        <div style="background-color: {COLOR_ACCENT}; color: white; padding: 8px; font-weight: bold; text-align: center; border-radius: 8px 8px 0 0; font-size: 14px;">{title}</div>
         <div style="padding: 0;">{content}</div>
     </div>""")
 
+# Hàm tạo chú giải (Giữ nguyên ảnh, đổi vị trí lên trên)
 def create_legend(img_b64):
     if not img_b64: return ""
     return textwrap.dedent(f"""
     <div class="legend-box">
-        <div style="text-align:center; font-weight:bold; font-size:12px; margin-bottom:8px; color: {COLOR_ACCENT};">CHÚ GIẢI KÝ HIỆU</div>
+        <div style="text-align:center; font-weight:bold; font-size:12px; margin-bottom:5px; color: {COLOR_ACCENT};">CHÚ GIẢI KÝ HIỆU</div>
         <img src="data:image/png;base64,{img_b64}" style="width:100%; border-radius:4px; border: 1px solid #ddd;">
     </div>""")
 
@@ -251,23 +280,19 @@ def main():
     with st.sidebar:
         st.title("🌪️ TRUNG TÂM BÃO")
         
-        # Menu chính
         topic = st.radio("CHỌN CHẾ ĐỘ:", 
                          ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
         st.markdown("---")
         
-        # Biến điều khiển
         final_df = pd.DataFrame()
         dashboard_title = ""
         show_widgets = False
         active_mode = ""
         obs_mode = ""
 
-        # === MENU CON CHO "DỮ LIỆU QUAN TRẮC" (HIỆN LUÔN DẠNG RADIO) ===
         if topic == "Dữ liệu quan trắc":
             obs_mode = st.radio("Chọn nguồn dữ liệu:", ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)"])
 
-        # === MENU CON CHO "BẢN ĐỒ BÃO" ===
         if topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
             active_mode = storm_opt
@@ -284,11 +309,11 @@ def main():
                         try:
                             df = pd.read_excel(f_path)
                             df = normalize_columns(df)
-                            for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc']: 
+                            for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
                                 if c not in df.columns: df[c] = 0
                             if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
                             elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
-                            for c in ['lat','lon','wind_kt']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                            for c in ['lat','lon','wind_kt', 'pressure', 'bf']: df[c] = pd.to_numeric(df[c], errors='coerce')
                             return df.dropna(subset=['lat','lon'])
                         except: return pd.DataFrame()
 
@@ -308,11 +333,11 @@ def main():
                         try:
                             df = pd.read_excel(path)
                             df = normalize_columns(df)
-                            for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc']: 
+                            for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
                                 if c not in df.columns: df[c] = 0
                             if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
                             elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
-                            for c in ['lat','lon','wind_kt']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                            for c in ['lat','lon','wind_kt', 'pressure']: df[c] = pd.to_numeric(df[c], errors='coerce')
                             df = df.dropna(subset=['lat','lon'])
 
                             years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
@@ -322,24 +347,16 @@ def main():
                         except: pass
                     else: st.warning("Vui lòng tải file.")
 
-    # --- XỬ LÝ GIAO DIỆN CHÍNH ---
-
-    # 1. ẢNH MÂY VỆ TINH
+    # --- MAIN CONTENT ---
     if topic == "Ảnh mây vệ tinh":
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
-    
-    # 2. DỮ LIỆU QUAN TRẮC
     elif topic == "Dữ liệu quan trắc":
         if "WeatherObs" in obs_mode:
             components.iframe(LINK_WEATHEROBS, scrolling=True)
         elif "Gió tự động" in obs_mode:
             components.iframe(LINK_WIND_AUTO, scrolling=True)
-
-    # 3. DỰ BÁO ĐIỂM (KMA)
     elif topic == "Dự báo điểm (KMA)":
         components.iframe(LINK_KMA_FORECAST, scrolling=True)
-            
-    # 4. BẢN ĐỒ BÃO (FOLIUM)
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
         folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
@@ -350,7 +367,6 @@ def main():
         if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
 
         fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
-        
         if not final_df.empty and show_widgets:
             if "Hiện trạng" in str(active_mode):
                 groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
@@ -362,35 +378,25 @@ def main():
                         if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
                     
-                    # --- PHẦN SỬA ĐỔI: DÙNG ICON THAY CHẤM TRÒN ---
+                    # --- VẼ ICON BÃO ---
                     for _, r in sub.iterrows():
-                        icon_name = get_icon_name(r) # Lấy tên icon (vd: sieubao_dubao)
+                        icon_name = get_icon_name(r)
                         icon_path = os.path.join(ICON_DIR, f"{icon_name}.png")
                         
-                        # Kiểm tra xem file icon có tồn tại không
+                        # Chỉ dùng icon nếu file tồn tại
                         if os.path.exists(icon_path):
-                            # Dùng CustomIcon
-                            icon = folium.CustomIcon(
-                                icon_image=icon_path,
-                                icon_size=(35, 35), # Kích thước icon
-                                icon_anchor=(17, 17) # Điểm neo (giữa icon)
-                            )
+                            icon = folium.CustomIcon(icon_image=icon_path, icon_size=(40, 40))
                             folium.Marker(
                                 location=[r['lat'], r['lon']],
                                 icon=icon,
                                 tooltip=f"Gió: {r.get('wind_kt', 0)} kt"
                             ).add_to(fg_storm)
                         else:
-                            # Dự phòng: Nếu không có icon thì dùng chấm tròn như cũ
+                            # Fallback nếu không có icon
                             folium.CircleMarker(
-                                [r['lat'], r['lon']], 
-                                radius=4, 
-                                color='red', 
-                                fill=True,
-                                tooltip=f"Gió: {r.get('wind_kt', 0)} kt"
+                                [r['lat'], r['lon']], radius=4, color='red', fill=True
                             ).add_to(fg_storm)
             else: 
-                # Chế độ lịch sử (Vẫn dùng chấm tròn nhỏ cho gọn)
                 for n in final_df['name'].unique():
                     sub = final_df[final_df['name']==n].sort_values('dt')
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
@@ -402,12 +408,16 @@ def main():
         folium.LayerControl(position='topleft', collapsed=False).add_to(m)
         
         if show_widgets:
-            if not final_df.empty: st.markdown(create_info_table(final_df, dashboard_title), unsafe_allow_html=True)
-            else: st.markdown(create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU..."), unsafe_allow_html=True)
-            
+            # 1. Hiển thị Chú giải (Legend) TRƯỚC (Nằm trên)
             if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
                 with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
                 st.markdown(create_legend(b64), unsafe_allow_html=True)
+            
+            # 2. Hiển thị Bảng thông tin SAU (Nằm dưới)
+            if not final_df.empty: 
+                st.markdown(create_info_table(final_df, dashboard_title), unsafe_allow_html=True)
+            else: 
+                st.markdown(create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU..."), unsafe_allow_html=True)
         
         st_folium(m, width=None, height=1000, use_container_width=True)
 
