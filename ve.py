@@ -313,7 +313,7 @@ def create_info_table(df, title):
                     <th>Kinh độ</th>
                     <th>Vĩ độ</th>
                     <th>Cấp gió</th>
-                    <th>Pmin</th>
+                    <th>Pmin (hPa)</th>
                 </tr>
             </thead>
             <tbody>{rows}</tbody>
