@@ -43,9 +43,15 @@ LINK_WEATHEROBS = "https://weatherobs.com/"
 LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
 LINK_KMA_FORECAST = "https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm=2026.02.06.12&delta=000&ftm=2026.02.06.12"
 
-# Kích thước Sidebar
+# Màu sắc
+COLOR_BG = "#ffffff"
+COLOR_SIDEBAR = "#f8f9fa"
+COLOR_TEXT = "#333333"
+COLOR_ACCENT = "#007bff"
+COLOR_BORDER = "#dee2e6"
 SIDEBAR_WIDTH = "320px"
 
+# Thiết lập luôn mở sidebar ban đầu
 st.set_page_config(
     page_title="Storm Monitor",
     layout="wide",
@@ -53,7 +59,7 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (KÍNH MỜ & TRONG SUỐT)
+# 2. CSS CHUNG (FIX CỨNG SIDEBAR - HIỆN NÚT CỨU HỘ)
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -74,16 +80,14 @@ st.markdown(f"""
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     
-    /* 3. CỐ ĐỊNH THANH SIDEBAR (HIỆU ỨNG KÍNH MỜ) */
+    /* 3. CỐ ĐỊNH THANH SIDEBAR (BÊN TRÁI) */
     section[data-testid="stSidebar"] {{
         width: {SIDEBAR_WIDTH} !important;
         min-width: {SIDEBAR_WIDTH} !important;
         max-width: {SIDEBAR_WIDTH} !important;
         
-        /* >>> ĐÂY LÀ PHẦN LÀM TRONG SUỐT <<< */
-        background-color: rgba(255, 255, 255, 0.75) !important; /* Màu trắng độ trong suốt 75% */
-        backdrop-filter: blur(10px); /* Hiệu ứng làm mờ nền phía sau */
-        border-right: 1px solid rgba(200, 200, 200, 0.5); /* Viền mờ */
+        background-color: {COLOR_SIDEBAR} !important; 
+        border-right: 1px solid {COLOR_BORDER};
         
         /* Fix cứng vị trí */
         position: fixed !important;
@@ -92,22 +96,26 @@ st.markdown(f"""
         height: 100vh !important;
         z-index: 9999999 !important;
         padding-top: 0 !important;
-        box-shadow: 2px 0 15px rgba(0,0,0,0.1); /* Đổ bóng nhẹ cho nổi bật */
     }}
     
-    /* Ẩn nút "Thu gọn" (dấu <) nằm trong Sidebar */
+    /* >>> KHU VỰC QUAN TRỌNG: ĐIỀU KHIỂN NÚT ĐÓNG MỞ <<< */
+    
+    /* 1. ẨN nút "Thu gọn" (dấu < hoặc X) nằm BÊN TRONG Sidebar */
+    /* Để người dùng không bấm nhầm đóng lại */
     [data-testid="stSidebarCollapseBtn"] {{
         display: none !important;
     }}
     
-    /* HIỆN nút "Mở rộng" (dấu >) ở góc trái màn hình phòng khi lỡ đóng */
+    /* 2. HIỆN nút "Mở rộng" (dấu >) ở góc trái màn hình */
+    /* Để nếu sidebar bị đóng (do lỗi hoặc do màn hình nhỏ), nút này sẽ hiện ra để bấm mở lại */
     [data-testid="stSidebarCollapsedControl"] {{
-        display: block !important;
-        z-index: 10000000;
+        display: block !important; 
+        z-index: 10000000; /* Luôn nổi lên trên cùng */
         left: 10px !important;
         top: 10px !important;
-        background-color: rgba(255,255,255,0.9) !important;
+        background-color: white !important;
         border: 1px solid #ccc !important;
+        border-radius: 4px !important;
         color: black !important;
     }}
     
@@ -117,12 +125,17 @@ st.markdown(f"""
         overflow-y: auto !important;
     }}
 
-    /* 4. BẢN ĐỒ NẰM DƯỚI (FULL MÀN HÌNH) */
+    /* 4. BẢN ĐỒ NẰM GỌN BÊN PHẢI */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
-        left: 0 !important; /* Tràn từ mép trái, nằm dưới Sidebar */
-        width: 100vw !important;
+        
+        /* Map bắt đầu từ mép phải của Sidebar */
+        left: {SIDEBAR_WIDTH} !important; 
+        
+        /* Width = Màn hình trừ đi Sidebar */
+        width: calc(100vw - {SIDEBAR_WIDTH}) !important;
+        
         height: 100vh !important;
         border: none !important;
         z-index: 1 !important;
@@ -150,13 +163,11 @@ st.markdown(f"""
         z-index: 9999;
         width: fit-content !important;
         min-width: 150px; 
-        background: rgba(255, 255, 255, 0.85); /* Nền trắng mờ */
-        backdrop-filter: blur(5px);
+        background: rgba(255, 255, 255, 0.9);
         border: none !important; 
         box-shadow: none !important;
         padding: 5px !important; 
         color: #000;
-        border-radius: 5px; /* Bo góc nhẹ cho đẹp */
     }}
     
     .info-title {{
@@ -180,8 +191,8 @@ st.markdown(f"""
     }}
     
     .leaflet-control-layers {{
-        background: white !important; color: #333 !important;
-        border: 1px solid #ccc !important; padding: 10px !important;
+        background: white !important; color: {COLOR_TEXT} !important;
+        border: 1px solid {COLOR_BORDER} !important; padding: 10px !important;
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -275,10 +286,7 @@ def get_icon_name(row):
     
     status_raw = str(row.get('status_raw','')).lower()
     
-    # Mặc định là DỰ BÁO (dubao) - Bao gồm cả "Hiện tại"
-    status = 'dubao'
-    
-    # Chỉ khi nào là "Quá khứ" thì mới dùng style Đã qua (daqua - màu đỏ)
+    status = 'dubao' 
     if 'quá khứ' in status_raw or 'past' in status_raw:
         status = 'daqua'
     
