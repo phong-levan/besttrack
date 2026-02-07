@@ -22,6 +22,7 @@ warnings.filterwarnings("ignore")
 # ==============================================================================
 # 1. CẤU HÌNH & DỮ LIỆU
 # ==============================================================================
+# QUAN TRỌNG: Đảm bảo file app.py nằm cùng cấp với thư mục "icon"
 ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.csv"
 FILE_OPT2 = "besttrack_capgio.xlsx"
@@ -50,7 +51,7 @@ COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
-SIDEBAR_WIDTH = "300px"
+SIDEBAR_WIDTH = "320px"
 
 st.set_page_config(
     page_title="Storm Monitor",
@@ -120,44 +121,41 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 5. STYLE CHÚ THÍCH (LEGEND) */
+    /* 5. STYLE CHÚ THÍCH (LEGEND) - ĐÃ THU NHỎ */
     .legend-box {{
         position: fixed; 
         top: 20px; 
         right: 20px; 
         z-index: 10000;
-        width: 300px; 
+        width: 300px; /* Thu nhỏ lại còn 300px */
         background: transparent !important;
         border: none !important;
         padding: 0 !important;
     }}
     .legend-box img {{ width: 100%; display: block; }}
 
-    /* 6. STYLE BẢNG THÔNG TIN (KHÔNG KHUNG, GỌN GÀNG) */
+    /* 6. STYLE BẢNG THÔNG TIN (SÁT VIỀN, KHÔNG KHUNG) */
     .info-box {{
         position: fixed; 
-        top: 280px; 
+        top: 250px; /* Nằm dưới chú thích */
         right: 20px; 
         z-index: 9999;
         
-        /* Tự động co giãn theo nội dung */
+        /* Width tự động co giãn */
         width: fit-content !important;
         min-width: 150px; 
         
-        /* Bỏ khung viền và bóng đổ */
-        background: rgba(255, 255, 255, 0.9); /* Nền trắng hơi trong suốt */
+        /* Nền trắng nhẹ, không viền */
+        background: rgba(255, 255, 255, 0.9);
         border: none !important; 
         box-shadow: none !important;
-        
-        /* Cắt bớt khoảng trống thừa */
         padding: 5px !important; 
         color: #000;
     }}
     
     .info-title {{
         text-align: center; font-weight: bold; font-size: 16px; 
-        margin: 0 0 5px 0; /* Giảm margin */
-        text-transform: uppercase; color: #000;
+        margin: 0 0 5px 0; text-transform: uppercase; color: #000;
     }}
     
     .info-subtitle {{
@@ -174,12 +172,10 @@ st.markdown(f"""
     }}
     th {{ 
         background: transparent !important; color: #000 !important; 
-        padding: 2px 8px; /* Giảm padding dòng tiêu đề */
-        font-weight: bold; border-bottom: 1px solid #000; text-align: center;
+        padding: 2px 8px; font-weight: bold; border-bottom: 1px solid #000; text-align: center;
     }}
     td {{ 
-        padding: 2px 8px; /* Giảm padding các ô dữ liệu */
-        border-bottom: 1px solid #ccc; text-align: center; color: #000; 
+        padding: 2px 8px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
     }}
     
     .leaflet-control-layers {{
@@ -241,11 +237,12 @@ def densify_track(df, step_km=10):
     new_rows.append(df.iloc[-1])
     return pd.DataFrame(new_rows)
 
-# >>> CẬP NHẬT LOGIC LẤY TÊN ICON: "HIỆN TẠI" -> MÀU ĐỎ (DAQUA) NHƯNG ĐÚNG CẤP ĐỘ <<<
+# >>> CẬP NHẬT LOGIC: "HIỆN TẠI" -> DÙNG ICON DỰ BÁO (DUBAO) <<<
 def get_icon_name(row):
     wind_speed = row.get('bf', 0) 
     w = row.get('wind_km/h', 0)
     
+    # Tính cấp gió nếu thiếu
     if pd.isna(wind_speed) or wind_speed == 0:
         if w > 0:
             if w < 34: wind_speed = 5
@@ -255,16 +252,14 @@ def get_icon_name(row):
     
     status_raw = str(row.get('status_raw','')).lower()
     
-    # 1. Nếu là "Hiện tại" hoặc "Current" -> Bắt buộc dùng icon Đỏ (daqua)
-    if 'hiện tại' in status_raw or 'current' in status_raw:
-        status = 'daqua'
-    # 2. Nếu là "Dự báo" -> Dùng icon Đen/Nhạt (dubao)
-    elif 'forecast' in status_raw or 'dự báo' in status_raw:
-        status = 'dubao'
-    # 3. Các trường hợp khác (Quá khứ) -> Dùng icon Đỏ (daqua)
-    else:
+    # Mặc định là DỰ BÁO (dubao) - Bao gồm cả "Hiện tại"
+    status = 'dubao'
+    
+    # Chỉ khi nào là "Quá khứ" thì mới dùng style Đã qua (daqua - màu đỏ)
+    if 'quá khứ' in status_raw or 'past' in status_raw:
         status = 'daqua'
     
+    # Phân loại icon theo cấp gió
     if pd.isna(wind_speed): return f"vungthap_{status}"
     if wind_speed < 6:      return f"vungthap_{status}"
     if wind_speed < 8:      return f"atnd_{status}"
@@ -441,9 +436,7 @@ def main():
                     
                     # --- VẼ ICON BÃO ---
                     for _, r in sub.iterrows():
-                        # Lấy key của icon (logic đã sửa: hiện tại = daqua = icon đỏ)
                         icon_key = get_icon_name(r)
-                        
                         icon_path = ICON_PATHS.get(icon_key)
                         icon_base64 = None
                         if icon_path:
