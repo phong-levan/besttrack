@@ -264,7 +264,7 @@ def get_icon_name(row):
     # Logic:
     # - Nếu là "forecast" hoặc "dự báo" -> đuôi _dubao (icon nhạt/khác)
     # - Nếu là "hiện tại" hoặc "dự báo" -> đuôi _dubao (icon đỏ/đậm)
-    status = 'dubao' if ('forecast' in status_raw or 'dự báo' in status_raw) else 'daqua'
+    status = 'dubao' if ('forecast' in status_raw or 'dự báo' in status_raw) else 'dubao'
     
     if pd.isna(wind_speed): return f"vungthap_{status}"
     if wind_speed < 6:      return f"vungthap_{status}"
@@ -452,7 +452,7 @@ def main():
                         
                         if icon_base64:
                             icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(45, 45))
-                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
+                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Vmax: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
                         else:
                             folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
             else: 
@@ -480,3 +480,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
