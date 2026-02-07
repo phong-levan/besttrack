@@ -241,38 +241,25 @@ def main():
         st.title("🌪️ TRUNG TÂM BÃO")
         st.caption("Phiên bản giao diện sáng")
         
-        # Cập nhật danh sách menu mới (Tách riêng các mục)
+        # Menu chính: Gom nhóm lại
         topic = st.radio("CHỌN CHẾ ĐỘ:", 
-                         [
-                             "Bản đồ Bão", 
-                             "Ảnh mây vệ tinh", 
-                             "Quan trắc: Thời tiết",   # WeatherObs
-                             "Quan trắc: Gió tự động", # KTTV Tudong
-                             "Dự báo điểm (KMA)"
-                         ])
+                         ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
         st.markdown("---")
         
+        # Biến điều khiển
         final_df = pd.DataFrame()
         dashboard_title = ""
         show_widgets = False
         active_mode = ""
+        obs_mode = "" # Biến cho menu con quan trắc
 
-        def process_excel(f_path):
-            if not f_path or not os.path.exists(f_path): return pd.DataFrame()
-            try:
-                df = pd.read_excel(f_path)
-                df = normalize_columns(df)
-                for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc']: 
-                    if c not in df.columns: df[c] = 0
-                if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
-                elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
-                for c in ['lat','lon','wind_kt']: df[c] = pd.to_numeric(df[c], errors='coerce')
-                return df.dropna(subset=['lat','lon'])
-            except: return pd.DataFrame()
+        # === LOGIC MENU CON CHO "DỮ LIỆU QUAN TRẮC" ===
+        if topic == "Dữ liệu quan trắc":
+            obs_mode = st.selectbox("Chọn nguồn dữ liệu:", ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)"])
 
-        # Chỉ hiện control khi chọn Bản đồ Bão
+        # === LOGIC MENU CON CHO "BẢN ĐỒ BÃO" ===
         if topic == "Bản đồ Bão":
-            storm_opt = st.selectbox("Dữ liệu:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
+            storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
             active_mode = storm_opt
             
             if "Hiện trạng" in storm_opt:
@@ -281,24 +268,48 @@ def main():
                     show_widgets = True
                     f = st.file_uploader("Upload besttrack.xlsx", type="xlsx", key="o1")
                     path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
-                    df = process_excel(path)
-                    if not df.empty:
-                        all_s = df['storm_no'].unique() if 'storm_no' in df.columns else []
-                        sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s)
-                        final_df = df[df['storm_no'].isin(sel)] if 'storm_no' in df.columns else df
+                    
+                    # (Logic đọc file giữ nguyên)
+                    if path and os.path.exists(path) if isinstance(path, str) else path:
+                        try:
+                            df = pd.read_excel(path)
+                            df = normalize_columns(df)
+                            # ... (Xử lý cột như cũ) ...
+                            for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc']: 
+                                if c not in df.columns: df[c] = 0
+                            if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
+                            elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
+                            for c in ['lat','lon','wind_kt']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                            df = df.dropna(subset=['lat','lon'])
+                            
+                            all_s = df['storm_no'].unique() if 'storm_no' in df.columns else []
+                            sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s)
+                            final_df = df[df['storm_no'].isin(sel)] if 'storm_no' in df.columns else df
+                        except: pass
                     else: st.warning("Vui lòng tải file.")
             else: 
+                # Logic Lịch sử (Giữ nguyên)
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
                     f = st.file_uploader("Upload besttrack_capgio.xlsx", type="xlsx", key="o2")
                     path = f if f else (FILE_OPT2 if os.path.exists(FILE_OPT2) else None)
-                    df = process_excel(path)
-                    if not df.empty:
-                        years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
-                        temp = df[df['year'].isin(years)]
-                        names = st.multiselect("Tên bão:", temp['name'].unique(), default=temp['name'].unique())
-                        final_df = temp[temp['name'].isin(names)]
+                    if path:
+                        try:
+                            df = pd.read_excel(path)
+                            df = normalize_columns(df)
+                            for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc']: 
+                                if c not in df.columns: df[c] = 0
+                            if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
+                            elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
+                            for c in ['lat','lon','wind_kt']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                            df = df.dropna(subset=['lat','lon'])
+
+                            years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
+                            temp = df[df['year'].isin(years)]
+                            names = st.multiselect("Tên bão:", temp['name'].unique(), default=temp['name'].unique())
+                            final_df = temp[temp['name'].isin(names)]
+                        except: pass
                     else: st.warning("Vui lòng tải file.")
 
     # --- XỬ LÝ GIAO DIỆN CHÍNH (TẤT CẢ ĐỀU LÀ FULL SCREEN FIX CỨNG) ---
@@ -307,19 +318,18 @@ def main():
     if topic == "Ảnh mây vệ tinh":
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
     
-    # 2. QUAN TRẮC: THỜI TIẾT (WeatherObs) - Mới tách
-    elif topic == "Quan trắc: Thời tiết":
-        components.iframe(LINK_WEATHEROBS, scrolling=True)
+    # 2. DỮ LIỆU QUAN TRẮC (XỬ LÝ SUB-MENU)
+    elif topic == "Dữ liệu quan trắc":
+        if "WeatherObs" in obs_mode:
+            components.iframe(LINK_WEATHEROBS, scrolling=True)
+        elif "Gió tự động" in obs_mode:
+            components.iframe(LINK_WIND_AUTO, scrolling=True)
 
-    # 3. QUAN TRẮC: GIÓ TỰ ĐỘNG (KTTV Tudong) - Mới tách
-    elif topic == "Quan trắc: Gió tự động":
-        components.iframe(LINK_WIND_AUTO, scrolling=True)
-
-    # 4. DỰ BÁO ĐIỂM (KMA)
+    # 3. DỰ BÁO ĐIỂM (KMA)
     elif topic == "Dự báo điểm (KMA)":
         components.iframe(LINK_KMA_FORECAST, scrolling=True)
             
-    # 5. BẢN ĐỒ BÃO (FOLIUM)
+    # 4. BẢN ĐỒ BÃO (FOLIUM)
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
         folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
@@ -330,6 +340,7 @@ def main():
         if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
 
         fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
+        # ... (Phần vẽ bão giữ nguyên logic cũ) ...
         if not final_df.empty and show_widgets:
             if "Hiện trạng" in str(active_mode):
                 groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
