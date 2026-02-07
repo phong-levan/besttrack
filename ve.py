@@ -27,8 +27,10 @@ FILE_OPT1 = "besttrack.xlsx"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# Link Web
+# --- DANH SÁCH LINK WEB ---
 TARGET_OBS_URL = "https://weatherobs.com/"
+# Link dự báo KMA (Hàn Quốc)
+TARGET_KMA_URL = "https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm=2026.02.06.12&delta=000&ftm=2026.02.06.12"
 
 # Màu sắc
 COLOR_BG = "#ffffff"
@@ -43,7 +45,7 @@ SIDEBAR_WIDTH = "320px"
 st.set_page_config(
     page_title="Dữ liệu khí tượng",
     layout="wide",
-    initial_sidebar_state="expanded" # Bắt buộc mở Sidebar ngay khi vào
+    initial_sidebar_state="expanded" 
 )
 
 # --- CSS KHÓA CỨNG SIDEBAR & FULL MÀN HÌNH ---
@@ -65,14 +67,16 @@ st.markdown(f"""
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     
-    /* >>> 3. TUYỆT CHIÊU: ẨN NÚT ĐÓNG SIDEBAR <<< */
-    /* Làm biến mất nút mũi tên thu gọn sidebar */
+    /* >>> 3. ẨN NÚT ĐÓNG SIDEBAR <<< */
     [data-testid="stSidebarCollapseBtn"] {{
         display: none !important;
-        width: 0 !important;
-        height: 0 !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
+    }}
+    /* Nút cứu hộ mở sidebar (đề phòng) */
+    [data-testid="stSidebarCollapsedControl"] {{
+        display: flex !important;
+        z-index: 1000000;
+        top: 10px; left: 10px;
+        background: white; border: 1px solid #ccc;
     }}
 
     /* 4. CẤU HÌNH KHUNG SIDEBAR (BÊN TRÁI) - CỐ ĐỊNH */
@@ -84,7 +88,7 @@ st.markdown(f"""
         max-width: {SIDEBAR_WIDTH} !important;
         top: 0 !important;
         height: 100vh !important;
-        z-index: 9999999 !important; /* Luôn nổi trên cùng */
+        z-index: 9999999 !important;
         position: fixed !important;
         left: 0 !important;
         padding-top: 0 !important;
@@ -94,18 +98,18 @@ st.markdown(f"""
     [data-testid="stSidebarUserContent"] {{
         padding: 20px;
         height: 100vh;
-        overflow-y: auto !important; /* Cho phép cuộn dọc */
+        overflow-y: auto !important;
     }}
 
     /* 5. CẤU HÌNH NỘI DUNG CHÍNH (BÊN PHẢI) - KHÓA CỨNG */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
-        left: {SIDEBAR_WIDTH} !important; /* Bắt đầu từ mép phải Sidebar */
-        width: calc(100vw - {SIDEBAR_WIDTH}) !important; /* Chiều rộng còn lại */
+        left: {SIDEBAR_WIDTH} !important;
+        width: calc(100vw - {SIDEBAR_WIDTH}) !important;
         height: 100vh !important;
         border: none !important;
-        z-index: 1 !important; /* Nằm dưới Sidebar */
+        z-index: 1 !important;
         display: block !important;
     }}
 
@@ -245,7 +249,9 @@ def main():
         st.title("🌪️ TRUNG TÂM BÃO")
         st.caption("Phiên bản giao diện sáng")
         
-        topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc"])
+        # Thêm mục mới vào danh sách
+        topic = st.radio("CHỌN CHẾ ĐỘ:", 
+                         ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
         st.markdown("---")
         
         final_df = pd.DataFrame()
@@ -298,10 +304,21 @@ def main():
                     else: st.warning("Vui lòng tải file.")
 
     # --- MAIN CONTENT ---
+    
+    # === 1. VỆ TINH WINDY ===
     if topic == "Ảnh mây vệ tinh":
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
+    
+    # === 2. DỮ LIỆU QUAN TRẮC (WEATHEROBS) ===
     elif topic == "Dữ liệu quan trắc":
         components.iframe(TARGET_OBS_URL, scrolling=True)
+
+    # === 3. DỰ BÁO ĐIỂM (KMA) - MỚI ===
+    elif topic == "Dự báo điểm (KMA)":
+        # Nhúng Web KMA (Hàn Quốc)
+        components.iframe(TARGET_KMA_URL, scrolling=True)
+
+    # === 4. BẢN ĐỒ BÃO (FOLIUM) ===
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
         folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
