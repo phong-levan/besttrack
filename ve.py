@@ -26,7 +26,6 @@ FILE_OPT1 = "besttrack.csv"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# --- ĐỊNH NGHĨA ICON PATHS ---
 ICON_PATHS = {
     "vungthap_daqua": os.path.join(ICON_DIR, 'vungthapdaqua.png'),
     "atnd_daqua": os.path.join(ICON_DIR, 'atnddaqua.PNG'),
@@ -38,12 +37,10 @@ ICON_PATHS = {
     "sieubao_dubao": os.path.join(ICON_DIR, 'sieubao.PNG')
 }
 
-# --- DANH SÁCH LINK WEB ---
 LINK_WEATHEROBS = "https://weatherobs.com/"
 LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
 LINK_KMA_FORECAST = "https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm=2026.02.06.12&delta=000&ftm=2026.02.06.12"
 
-# Màu sắc
 COLOR_BG = "#ffffff"
 COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
@@ -58,11 +55,37 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (CHỈ ẨN NÚT ĐÓNG, GIỮ NÚT MỞ)
+# 2. JAVASCRIPT: BẮT PHÍM TAB ĐỂ TOGGLE MENU
+# ==============================================================================
+# Đoạn script này sẽ lắng nghe phím Tab và giả lập click vào nút đóng/mở sidebar
+js_code = """
+<script>
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Tab') {
+            e.preventDefault(); // Ngăn phím Tab chuyển focus lung tung
+            
+            // Tìm nút đóng (khi menu đang mở)
+            var collapseBtn = window.parent.document.querySelector('[data-testid="stSidebarCollapseBtn"]');
+            // Tìm nút mở (khi menu đang đóng)
+            var expandBtn = window.parent.document.querySelector('[data-testid="stSidebarCollapsedControl"]');
+            
+            if (collapseBtn && collapseBtn.offsetParent !== null) {
+                collapseBtn.click();
+            } else if (expandBtn && expandBtn.offsetParent !== null) {
+                expandBtn.click();
+            }
+        }
+    });
+</script>
+"""
+components.html(js_code, height=0)
+
+# ==============================================================================
+# 3. CSS CHUNG
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. KHÓA CUỘN TRANG CHÍNH */
+    /* KHÓA CUỘN TRANG */
     html, body, .stApp {{
         overflow: hidden !important;
         height: 100vh !important;
@@ -71,7 +94,7 @@ st.markdown(f"""
         font-family: Arial, sans-serif;
     }}
 
-    /* 2. ẨN HEADER & FOOTER */
+    /* ẨN HEADER */
     header, footer, [data-testid="stHeader"], [data-testid="stToolbar"] {{
         display: none !important;
     }}
@@ -79,40 +102,29 @@ st.markdown(f"""
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     
-    /* 3. CỐ ĐỊNH THANH SIDEBAR (BÊN TRÁI) */
+    /* --- SIDEBAR (MENU) --- */
     section[data-testid="stSidebar"] {{
         width: {SIDEBAR_WIDTH} !important;
         min-width: {SIDEBAR_WIDTH} !important;
         max-width: {SIDEBAR_WIDTH} !important;
         
-        background-color: {COLOR_SIDEBAR} !important; 
+        /* Màu nền hơi mờ để đẹp hơn khi đè lên map */
+        background-color: rgba(248, 249, 250, 0.95) !important;
         border-right: 1px solid {COLOR_BORDER};
         
-        /* Fix cứng vị trí */
+        /* Quan trọng: Để sidebar đè lên map */
+        z-index: 9999999 !important;
         position: fixed !important;
         top: 0 !important;
         left: 0 !important;
         height: 100vh !important;
-        z-index: 9999999 !important;
         padding-top: 0 !important;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
     }}
     
-    /* >>> ĐÂY LÀ PHẦN SỬA ĐỔI <<< */
-    
-    /* CHỈ ẨN nút thu gọn (dấu mũi tên <) nằm BÊN TRONG Sidebar */
-    [data-testid="stSidebarCollapseBtn"] {{
+    /* ẨN NÚT ĐÓNG MỞ (Vì chúng ta dùng phím Tab rồi) */
+    [data-testid="stSidebarCollapseBtn"], [data-testid="stSidebarCollapsedControl"] {{
         display: none !important;
-    }}
-    
-    /* VẪN HIỆN nút mở rộng (dấu mũi tên >) ở góc trái màn hình (nếu Sidebar bị đóng) */
-    [data-testid="stSidebarCollapsedControl"] {{
-        display: flex !important; /* Đảm bảo nút này hiện nếu cần */
-        z-index: 10000000;
-        left: 10px;
-        top: 10px;
-        background: white;
-        border-radius: 5px;
-        border: 1px solid #ccc;
     }}
     
     [data-testid="stSidebarUserContent"] {{
@@ -121,24 +133,19 @@ st.markdown(f"""
         overflow-y: auto !important;
     }}
 
-    /* 4. BẢN ĐỒ NẰM GỌN BÊN PHẢI */
+    /* --- MAP FULL SCREEN (NỀN DƯỚI) --- */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
-        
-        /* Map bắt đầu từ mép phải của Sidebar */
-        left: {SIDEBAR_WIDTH} !important; 
-        
-        /* Width = Màn hình trừ đi Sidebar */
-        width: calc(100vw - {SIDEBAR_WIDTH}) !important;
-        
+        left: 0 !important; /* Luôn bắt đầu từ góc trái */
+        width: 100vw !important; /* Luôn full màn hình */
         height: 100vh !important;
         border: none !important;
-        z-index: 1 !important;
+        z-index: 1 !important; /* Nằm dưới Sidebar */
         display: block !important;
     }}
 
-    /* 5. STYLE CHÚ THÍCH (LEGEND) */
+    /* CHÚ THÍCH */
     .legend-box {{
         position: fixed; 
         top: 20px; 
@@ -151,7 +158,7 @@ st.markdown(f"""
     }}
     .legend-box img {{ width: 100%; display: block; }}
 
-    /* 6. STYLE BẢNG THÔNG TIN (KHÔNG KHUNG) */
+    /* BẢNG THÔNG TIN */
     .info-box {{
         position: fixed; 
         top: 250px; 
@@ -194,7 +201,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. HÀM XỬ LÝ LOGIC
+# 4. HÀM XỬ LÝ LOGIC
 # ==============================================================================
 
 @st.cache_data(ttl=300) 
@@ -349,7 +356,7 @@ def create_legend(img_b64):
     </div>""")
 
 # ==============================================================================
-# 4. MAIN APP
+# 5. MAIN APP
 # ==============================================================================
 def main():
     
