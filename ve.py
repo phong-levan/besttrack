@@ -23,7 +23,7 @@ warnings.filterwarnings("ignore")
 # 1. CẤU HÌNH & DỮ LIỆU
 # ==============================================================================
 ICON_DIR = "icon"
-FILE_OPT1 = "besttrack.csv" # Đã sửa thành csv theo yêu cầu của bạn
+FILE_OPT1 = "besttrack.csv"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
@@ -57,7 +57,7 @@ st.markdown(f"""
         height: 100vh !important;
         margin: 0 !important;
         padding: 0 !important;
-        font-family: Arial, sans-serif;
+        font-family: Arial, sans-serif !important;
     }}
 
     /* 2. ẨN HEADER & FOOTER */
@@ -108,50 +108,58 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 5. STYLE CHÚ THÍCH (LEGEND) - CHỈ ẢNH, KHÔNG VIỀN */
+    /* 5. STYLE CHÚ THÍCH (LEGEND) */
     .legend-box {{
         position: fixed; 
-        top: 20px; /* Nằm trên */
+        top: 20px; 
         right: 20px; 
         z-index: 10000;
-        width: 300px; 
+        width: 450px; 
         background: transparent !important;
         border: none !important;
         padding: 0 !important;
     }}
     .legend-box img {{ width: 100%; display: block; }}
 
-    /* 6. STYLE BẢNG THÔNG TIN (INFO TABLE) - BẢNG TRẮNG ĐƠN GIẢN */
+    /* 6. STYLE BẢNG THÔNG TIN (INFO TABLE) */
     .info-box {{
         position: fixed; 
-        top: 250px; /* Nằm dưới chú thích */
+        top: 280px; 
         right: 20px; 
         z-index: 9999;
-        width: 450px;
+        width: fit-content !important;
+        min-width: 200px;
+        
         background: rgba(255, 255, 255, 0.95);
-        border: 1px solid #ccc;
-        padding: 15px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        border: 1px solid #999; 
+        padding: 5px; 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         color: #000;
     }}
     
     .info-title {{
-        text-align: center; font-weight: bold; font-size: 18px; 
-        margin-bottom: 5px; text-transform: uppercase; color: #000;
+        text-align: center; font-weight: bold; font-size: 16px; 
+        margin: 5px 0; text-transform: uppercase; color: #000;
     }}
     
     .info-subtitle {{
-        text-align: center; font-size: 13px; margin-bottom: 10px; 
+        text-align: center; font-size: 11px; margin-bottom: 5px; 
         font-style: italic; color: #333;
     }}
 
-    table {{ width: 100%; border-collapse: collapse; font-size: 14px; color: #000; }}
+    table {{ 
+        border-collapse: collapse; 
+        font-size: 13px; 
+        color: #000; 
+        white-space: nowrap;
+        margin: 0;
+    }}
     th {{ 
         background: transparent !important; color: #000 !important; 
-        padding: 8px; font-weight: bold; border-bottom: 2px solid #000; text-align: center;
+        padding: 4px 8px; font-weight: bold; border-bottom: 1px solid #000; text-align: center;
     }}
     td {{ 
-        padding: 6px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
+        padding: 3px 8px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
     }}
     
     .leaflet-control-layers {{
@@ -173,6 +181,17 @@ def get_rainviewer_ts():
         return r.json()['satellite']['infrared'][-1]['time']
     except: return None
 
+# >>> HÀM MỚI: CHUYỂN ẢNH THÀNH BASE64 ĐỂ FOLIUM HIỂU <<<
+def image_to_base64(image_path):
+    if not os.path.exists(image_path):
+        return None
+    with open(image_path, "rb") as f:
+        encoded = base64.b64encode(f.read()).decode()
+    # Xác định đuôi ảnh để tạo header đúng
+    ext = image_path.split('.')[-1].lower()
+    mime_type = f"image/{ext}" if ext != 'jpg' else "image/jpeg"
+    return f"data:{mime_type};base64,{encoded}"
+
 def normalize_columns(df):
     df.columns = df.columns.str.strip().str.lower()
     rename = {
@@ -181,7 +200,7 @@ def normalize_columns(df):
         "vĩ độ": "lat", "kinh độ": "lon", "gió (kt)": "wind_kt",
         "cường độ (cấp bf)": "bf", "bán kính gió mạnh cấp 6 (km)": "r6", 
         "bán kính gió mạnh cấp 10 (km)": "r10", "bán kính tâm (km)": "rc",
-        "khí áp": "pressure", "khí áp (mb)": "pressure", "pmin (mb)": "pressure"
+        "khí áp": "pressure", "khí áp (mb)": "pressure", "pmin": "pressure", "pmin (mb)": "pressure"
     }
     df = df.rename(columns={k:v for k,v in rename.items() if k in df.columns})
     return df
@@ -270,11 +289,11 @@ def create_info_table(df, title):
         <table>
             <thead>
                 <tr>
-                    <th>Ngày - Giờ</th>
+                    <th>Ngày-Giờ</th>
                     <th>Kinh độ</th>
                     <th>Vĩ độ</th>
                     <th>Cấp gió</th>
-                    <th>Pmin(mb)</th>
+                    <th>Pmin</th>
                 </tr>
             </thead>
             <tbody>{rows}</tbody>
@@ -293,7 +312,6 @@ def create_legend(img_b64):
 # ==============================================================================
 def main():
     
-    # --- SIDEBAR MENU ---
     with st.sidebar:
         st.title("🌪️ TRUNG TÂM BÃO")
         
@@ -318,17 +336,16 @@ def main():
                 dashboard_title = "TIN BÃO KHẨN CẤP"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
-                    f = st.file_uploader("Upload besttrack.csv", type="csv", key="o1") # Đã sửa type thành csv
+                    f = st.file_uploader("Upload besttrack.csv", type="csv", key="o1")
                     path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
                     
                     def process_file(f_path):
                         if not f_path: return pd.DataFrame()
                         try:
-                            # Tự động nhận diện đuôi file để dùng hàm đọc phù hợp
                             if isinstance(f_path, str):
                                 if f_path.endswith('.csv'): df = pd.read_csv(f_path)
                                 else: df = pd.read_excel(f_path)
-                            else: # Nếu là file upload (UploadedFile object)
+                            else: 
                                 if f_path.name.endswith('.csv'): df = pd.read_csv(f_path)
                                 else: df = pd.read_excel(f_path)
                                 
@@ -402,14 +419,19 @@ def main():
                         if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
                     
-                    # --- VẼ ICON BÃO ---
+                    # --- VẼ ICON BÃO (Đã sửa để dùng Base64) ---
                     for _, r in sub.iterrows():
                         icon_name = get_icon_name(r)
                         icon_path = os.path.join(ICON_DIR, f"{icon_name}.png")
-                        if os.path.exists(icon_path):
-                            icon = folium.CustomIcon(icon_image=icon_path, icon_size=(45, 45))
+                        
+                        # Chuyển ảnh sang Base64
+                        icon_base64 = image_to_base64(icon_path)
+                        
+                        if icon_base64:
+                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(45, 45))
                             folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_kt', 0)} kt").add_to(fg_storm)
                         else:
+                            # Dự phòng
                             folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
             else: 
                 for n in final_df['name'].unique():
@@ -436,5 +458,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
