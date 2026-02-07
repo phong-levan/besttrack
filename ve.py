@@ -38,25 +38,28 @@ ICON_PATHS = {
     "sieubao_dubao": os.path.join(ICON_DIR, 'sieubao.PNG')
 }
 
+# --- DANH SÁCH LINK WEB ---
 LINK_WEATHEROBS = "https://weatherobs.com/"
 LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
 LINK_KMA_FORECAST = "https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm=2026.02.06.12&delta=000&ftm=2026.02.06.12"
 
+# Màu sắc
 COLOR_BG = "#ffffff"
 COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
+SIDEBAR_WIDTH = "320px"
 
-# CẤU HÌNH TRANG
+# CẤU HÌNH TRANG: Expanded để luôn mở sidebar
 st.set_page_config(
     page_title="Storm Monitor",
     layout="wide",
-    initial_sidebar_state="expanded" # Cố gắng mở rộng
+    initial_sidebar_state="expanded" 
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (ĐÃ RESET ĐỂ HIỆN LẠI NÚT MENU)
+# 2. CSS CHUNG (FIX CỨNG SIDEBAR, RESET NÚT MENU)
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -70,12 +73,12 @@ st.markdown(f"""
     footer {{ display: none !important; }}
 
     /* 2. KHÔI PHỤC NÚT MỞ MENU (QUAN TRỌNG NHẤT) */
-    /* Đây là nút mũi tên > hiện ra khi menu bị đóng */
+    /* Nút này hiện ở góc trái nếu menu bị đóng */
     [data-testid="stSidebarCollapsedControl"] {{
-        display: block !important; /* BẮT BUỘC HIỆN */
+        display: block !important; 
         color: #000 !important;
         background-color: white !important;
-        border: 2px solid #007bff; /* Viền xanh để dễ nhìn */
+        border: 2px solid #ccc; 
         border-radius: 5px;
         top: 15px !important;
         left: 15px !important;
@@ -90,7 +93,7 @@ st.markdown(f"""
         border-right: 1px solid #ddd;
     }}
     
-    /* Ẩn nút "Thu gọn" bên trong menu để tránh bấm nhầm lần nữa */
+    /* Ẩn nút "Thu gọn" bên trong menu để tránh bấm nhầm */
     [data-testid="stSidebarCollapseBtn"] {{
         display: none !important;
     }}
@@ -312,5 +315,141 @@ def main():
         active_mode = ""
         obs_mode = ""
 
+        # FIX LỖI SYNTAX Ở ĐÂY: Khởi tạo obs_mode trước
         if topic == "Dữ liệu quan trắc":
-            obs_mode =
+            obs_mode = st.radio("Chọn nguồn dữ liệu:", ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)"])
+
+        if topic == "Bản đồ Bão":
+            storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
+            active_mode = storm_opt
+            
+            if "Hiện trạng" in storm_opt:
+                dashboard_title = "TIN BÃO KHẨN CẤP"
+                if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
+                    show_widgets = True
+                    f = st.file_uploader("Upload besttrack.csv", type="csv", key="o1")
+                    path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
+                    
+                    def process_file(f_path):
+                        if not f_path: return pd.DataFrame()
+                        try:
+                            if isinstance(f_path, str):
+                                if f_path.endswith('.csv'): df = pd.read_csv(f_path)
+                                else: df = pd.read_excel(f_path)
+                            else: 
+                                if f_path.name.endswith('.csv'): df = pd.read_csv(f_path)
+                                else: df = pd.read_excel(f_path)
+                                
+                            df = normalize_columns(df)
+                            if 'name' not in df.columns and 'storm_no' not in df.columns:
+                                df['name'] = 'Cơn bão'
+                                df['storm_no'] = 'Current Storm'
+
+                            for c in ['wind_km/h', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
+                                if c not in df.columns: df[c] = 0
+                            if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
+                            elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
+                            for c in ['lat','lon','wind_km/h', 'pressure', 'bf']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                            return df.dropna(subset=['lat','lon'])
+                        except: return pd.DataFrame()
+
+                    df = process_file(path)
+                    if not df.empty:
+                        if 'storm_no' in df.columns:
+                            all_s = df['storm_no'].unique()
+                            sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s)
+                            final_df = df[df['storm_no'].isin(sel)]
+                        else:
+                            final_df = df
+                    else: st.warning("Vui lòng tải file.")
+            else: 
+                dashboard_title = "THỐNG KÊ LỊCH SỬ"
+                if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
+                    show_widgets = True
+                    f = st.file_uploader("Upload besttrack_capgio.xlsx", type="xlsx", key="o2")
+                    path = f if f else (FILE_OPT2 if os.path.exists(FILE_OPT2) else None)
+                    if path:
+                        try:
+                            df = pd.read_excel(path)
+                            df = normalize_columns(df)
+                            for c in ['wind_km/h', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
+                                if c not in df.columns: df[c] = 0
+                            if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
+                            elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
+                            for c in ['lat','lon','wind_km/h', 'pressure']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                            df = df.dropna(subset=['lat','lon'])
+
+                            years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
+                            temp = df[df['year'].isin(years)]
+                            names = st.multiselect("Tên bão:", temp['name'].unique(), default=temp['name'].unique())
+                            final_df = temp[temp['name'].isin(names)]
+                        except: pass
+                    else: st.warning("Vui lòng tải file.")
+
+    # --- MAIN CONTENT ---
+    if topic == "Ảnh mây vệ tinh":
+        components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
+    elif topic == "Dữ liệu quan trắc":
+        if "WeatherObs" in obs_mode:
+            components.iframe(LINK_WEATHEROBS, scrolling=True)
+        elif "Gió tự động" in obs_mode:
+            components.iframe(LINK_WIND_AUTO, scrolling=True)
+    elif topic == "Dự báo điểm (KMA)":
+        components.iframe(LINK_KMA_FORECAST, scrolling=True)
+    elif topic == "Bản đồ Bão":
+        m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
+        folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
+        folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
+        folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
+        
+        ts = get_rainviewer_ts()
+        if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
+
+        fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
+        if not final_df.empty and show_widgets:
+            if "Hiện trạng" in str(active_mode):
+                groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
+                for g in groups:
+                    sub = final_df[final_df['storm_no']==g] if g else final_df
+                    dense = densify_track(sub)
+                    f6, f10, fc = create_storm_swaths(dense)
+                    for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#90EE90',0.6)]:
+                        if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
+                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
+                    
+                    # --- VẼ ICON BÃO ---
+                    for _, r in sub.iterrows():
+                        icon_key = get_icon_name(r)
+                        icon_path = ICON_PATHS.get(icon_key)
+                        icon_base64 = None
+                        if icon_path:
+                            icon_base64 = image_to_base64(icon_path)
+                        
+                        if icon_base64:
+                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(40, 40), icon_anchor=(20, 20))
+                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
+            else: 
+                for n in final_df['name'].unique():
+                    sub = final_df[final_df['name']==n].sort_values('dt')
+                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
+                    for _, r in sub.iterrows():
+                        c = '#00f2ff' if r.get('wind_km/h',0)<64 else '#ff0055'
+                        folium.CircleMarker([r['lat'],r['lon']], radius=3, color=c, fill=True, popup=f"{n}").add_to(fg_storm)
+        
+        fg_storm.add_to(m)
+        folium.LayerControl(position='topleft', collapsed=False).add_to(m)
+        
+        if show_widgets:
+            if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
+                with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
+                st.markdown(create_legend(b64), unsafe_allow_html=True)
+            
+            if not final_df.empty: 
+                st.markdown(create_info_table(final_df, dashboard_title), unsafe_allow_html=True)
+            else: 
+                st.markdown(create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU..."), unsafe_allow_html=True)
+        
+        st_folium(m, width=None, height=1000, use_container_width=True)
+
+if __name__ == "__main__":
+    main()
