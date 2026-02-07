@@ -481,7 +481,8 @@ def main():
             else: 
                 st.markdown(create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU..."), unsafe_allow_html=True)
         
-        st_folium(m, width=None, height=400, use_container_width=True)
+        st_folium(m, width=None, height=1000, use_container_width=True)
 
 if __name__ == "__main__":
     main()
+
