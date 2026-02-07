@@ -47,17 +47,17 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG TOÀN BỘ)
+# 2. CSS CHUNG (FIX CỨNG & STYLE MỚI)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. KHÓA CUỘN TRANG CHÍNH (FULL SCREEN APP) */
+    /* 1. KHÓA CUỘN TRANG CHÍNH */
     html, body, .stApp {{
         overflow: hidden !important;
         height: 100vh !important;
         margin: 0 !important;
         padding: 0 !important;
-        font-family: Arial, sans-serif;
+        font-family: Arial, sans-serif !important;
     }}
 
     /* 2. ẨN HEADER & FOOTER */
@@ -68,7 +68,7 @@ st.markdown(f"""
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     
-    /* 3. CẤU HÌNH SIDEBAR (CỐ ĐỊNH TRÁI) */
+    /* 3. SIDEBAR (CỐ ĐỊNH) */
     section[data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
@@ -83,22 +83,20 @@ st.markdown(f"""
         padding-top: 0 !important;
     }}
     
-    /* Nội dung Sidebar có thể cuộn */
     [data-testid="stSidebarUserContent"] {{
         padding: 20px;
         height: 100vh;
         overflow-y: auto !important;
     }}
     
-    /* Ẩn nút đóng (Khóa cứng) */
     [data-testid="stSidebarCollapseBtn"] {{ display: none !important; }}
-    /* Nút mở cứu hộ */
+    
     [data-testid="stSidebarCollapsedControl"] {{
         display: flex !important; z-index: 1000000;
         top: 10px; left: 10px; background: white; border: 1px solid #ccc;
     }}
 
-    /* 4. CẤU HÌNH NỘI DUNG CHÍNH (CỐ ĐỊNH PHẢI - TRÀN VIỀN) */
+    /* 4. FULL SCREEN MAP/IFRAME */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
@@ -110,50 +108,67 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 5. STYLE CHÚ THÍCH (LEGEND) - CHỈ ẢNH, KHÔNG VIỀN */
+    /* -----------------------------------------------------------
+       5. STYLE MỚI: BẢNG CHÚ THÍCH (TO HƠN)
+    ----------------------------------------------------------- */
     .legend-box {{
         position: fixed; 
-        top: 20px; /* Nằm trên */
+        top: 20px; 
         right: 20px; 
         z-index: 10000;
-        width: 300px; 
+        width: 450px; /* Tăng kích thước để ảnh to hơn */
         background: transparent !important;
         border: none !important;
         padding: 0 !important;
     }}
-    .legend-box img {{ width: 100%; display: block; }}
+    .legend-box img {{
+        width: 100%;
+        display: block;
+    }}
 
-    /* 6. STYLE BẢNG THÔNG TIN (INFO TABLE) - BẢNG TRẮNG ĐƠN GIẢN */
+    /* -----------------------------------------------------------
+       6. STYLE MỚI: BẢNG THÔNG TIN (VỪA KHÍT NỘI DUNG)
+    ----------------------------------------------------------- */
     .info-box {{
         position: fixed; 
-        top: 250px; /* Nằm dưới chú thích */
+        top: 280px; /* Nằm dưới chú thích */
         right: 20px; 
         z-index: 9999;
-        width: 450px;
+        /* Width tự động co giãn theo nội dung, không fix cứng rộng quá */
+        width: fit-content !important; 
+        min-width: 300px;
+        max-width: 500px;
+        
         background: rgba(255, 255, 255, 0.95);
         border: 1px solid #ccc;
-        padding: 15px;
+        padding: 10px; /* Giảm padding để gọn hơn */
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         color: #000;
     }}
     
     .info-title {{
-        text-align: center; font-weight: bold; font-size: 18px; 
+        text-align: center; font-weight: bold; font-size: 16px; 
         margin-bottom: 5px; text-transform: uppercase; color: #000;
     }}
     
     .info-subtitle {{
-        text-align: center; font-size: 13px; margin-bottom: 10px; 
+        text-align: center; font-size: 12px; margin-bottom: 8px; 
         font-style: italic; color: #333;
     }}
 
-    table {{ width: 100%; border-collapse: collapse; font-size: 14px; color: #000; }}
+    table {{ 
+        width: 100%; 
+        border-collapse: collapse; 
+        font-size: 13px; /* Chữ vừa phải */
+        color: #000; 
+        white-space: nowrap; /* Không cho xuống dòng để bảng gọn */
+    }}
     th {{ 
         background: transparent !important; color: #000 !important; 
-        padding: 8px; font-weight: bold; border-bottom: 2px solid #000; text-align: center;
+        padding: 6px 10px; font-weight: bold; border-bottom: 2px solid #000; text-align: center;
     }}
     td {{ 
-        padding: 6px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
+        padding: 5px 10px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
     }}
     
     .leaflet-control-layers {{
@@ -223,20 +238,29 @@ def create_storm_swaths(dense_df):
 def get_icon_name(row):
     w = row.get('wind_kt', 0)
     bf = row.get('bf', 0)
+    # Tự động tính cấp gió nếu thiếu
     if pd.isna(bf) or bf == 0:
         if w < 34: bf = 6
         elif w < 64: bf = 8
         elif w < 100: bf = 10
         else: bf = 12
-    status = 'dubao' if 'forecast' in str(row.get('status_raw','')).lower() else 'daqua'
+    
+    # Xác định trạng thái: Dự báo hay Đã qua
+    status_raw = str(row.get('status_raw','')).lower()
+    is_forecast = 'forecast' in status_raw or 'dự báo' in status_raw
+    status = 'dubao' if is_forecast else 'daqua'
+    
+    # Logic chọn tên icon (File ảnh phải có tên y hệt thế này)
     if bf < 6: return f"vungthap_{status}"
     if bf < 8: return f"atnd_{status}"
     if bf <= 11: return f"bnd_{status}"
     return f"sieubao_{status}"
 
-# === HÀM TẠO BẢNG THÔNG TIN (STYLE TRẮNG ĐEN) ===
+# === HÀM TẠO BẢNG THÔNG TIN (STYLE MỚI) ===
 def create_info_table(df, title):
     if df.empty: return ""
+    
+    # Lọc lấy 1 dòng hiện tại + các dòng dự báo
     if 'status_raw' in df.columns:
          cur = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
          fut = df[df['status_raw'].astype(str).str.contains("dự báo|forecast", case=False, na=False)]
@@ -273,11 +297,11 @@ def create_info_table(df, title):
         <table>
             <thead>
                 <tr>
-                    <th>Ngày - Giờ</th>
+                    <th>Ngày-Giờ</th>
                     <th>Kinh độ</th>
                     <th>Vĩ độ</th>
                     <th>Cấp gió</th>
-                    <th>Pmin(mb)</th>
+                    <th>Pmin</th>
                 </tr>
             </thead>
             <tbody>{rows}</tbody>
@@ -297,7 +321,6 @@ def create_legend(img_b64):
 # ==============================================================================
 def main():
     
-    # --- SIDEBAR MENU ---
     with st.sidebar:
         st.title("🌪️ TRUNG TÂM BÃO")
         
@@ -399,12 +422,12 @@ def main():
                         if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
                     
-                    # --- ICON BÃO ---
+                    # --- VẼ ICON BÃO ---
                     for _, r in sub.iterrows():
                         icon_name = get_icon_name(r)
                         icon_path = os.path.join(ICON_DIR, f"{icon_name}.png")
                         if os.path.exists(icon_path):
-                            icon = folium.CustomIcon(icon_image=icon_path, icon_size=(40, 40))
+                            icon = folium.CustomIcon(icon_image=icon_path, icon_size=(45, 45)) # Tăng size icon chút
                             folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_kt', 0)} kt").add_to(fg_storm)
                         else:
                             folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
