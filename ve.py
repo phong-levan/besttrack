@@ -232,26 +232,11 @@ def densify_track(df, step_km=10):
     new_rows.append(df.iloc[-1])
     return pd.DataFrame(new_rows)
 
-def create_storm_swaths(dense_df):
-    polys = {'r6': [], 'r10': [], 'rc': []}
-    geo = geodesic.Geodesic()
-    for _, row in dense_df.iterrows():
-        for r, key in [(row.get('r6',0), 'r6'), (row.get('r10',0), 'r10'), (row.get('rc',0), 'rc')]:
-            if r > 0:
-                circle = geo.circle(lon=row['lon'], lat=row['lat'], radius=r*1000, n_samples=30)
-                polys[key].append(Polygon(circle))
-    u = {k: unary_union(v) if v else None for k, v in polys.items()}
-    f_rc = u['rc']
-    f_r10 = u['r10'].difference(u['rc']) if u['r10'] and u['rc'] else u['r10']
-    f_r6 = u['r6'].difference(u['r10']) if u['r6'] and u['r10'] else u['r6']
-    return f_r6, f_r10, f_rc
-
-# >>> CẬP NHẬT LOGIC LẤY TÊN ICON: "HIỆN TẠI" -> MÀU ĐỎ (DAQUA) NHƯNG ĐÚNG CẤP ĐỘ <<<
+# >>> CẬP NHẬT LOGIC LẤY TÊN ICON: "HIỆN TẠI" -> BẮT BUỘC DÙNG DAQUA (ĐỎ) <<<
 def get_icon_name(row):
     wind_speed = row.get('bf', 0) 
     w = row.get('wind_km/h', 0)
     
-    # Tính cấp gió nếu thiếu
     if pd.isna(wind_speed) or wind_speed == 0:
         if w > 0:
             if w < 34: wind_speed = 5
@@ -261,10 +246,15 @@ def get_icon_name(row):
     
     status_raw = str(row.get('status_raw','')).lower()
     
-    # Logic:
-    # - Nếu là "forecast" hoặc "dự báo" -> đuôi _dubao (icon nhạt/khác)
-    # - Nếu là "hiện tại" hoặc "dự báo" -> đuôi _dubao (icon đỏ/đậm)
-    status = 'dubao' if ('forecast' in status_raw or 'dự báo' in status_raw) else 'daqua'
+    # 1. Nếu là "Hiện tại" hoặc "Current" -> Bắt buộc dùng icon Đỏ (daqua)
+    if 'hiện tại' in status_raw or 'current' in status_raw:
+        status = 'daqua'
+    # 2. Nếu là "Dự báo" -> Dùng icon Đen/Nhạt (dubao)
+    elif 'forecast' in status_raw or 'dự báo' in status_raw:
+        status = 'dubao'
+    # 3. Các trường hợp khác (Quá khứ) -> Dùng icon Đỏ (daqua)
+    else:
+        status = 'daqua'
     
     if pd.isna(wind_speed): return f"vungthap_{status}"
     if wind_speed < 6:      return f"vungthap_{status}"
@@ -442,9 +432,7 @@ def main():
                     
                     # --- VẼ ICON BÃO ---
                     for _, r in sub.iterrows():
-                        # Lấy key của icon (logic đã sửa: hiện tại = dubao = icon đỏ)
                         icon_key = get_icon_name(r)
-                        
                         icon_path = ICON_PATHS.get(icon_key)
                         icon_base64 = None
                         if icon_path:
@@ -452,7 +440,7 @@ def main():
                         
                         if icon_base64:
                             icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(45, 45))
-                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Vmax: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
+                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
                         else:
                             folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
             else: 
@@ -480,5 +468,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
