@@ -47,17 +47,17 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG & STYLE MỚI)
+# 2. CSS CHUNG (FIX CỨNG TOÀN BỘ)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. KHÓA CUỘN TRANG CHÍNH */
+    /* 1. KHÓA CUỘN TRANG CHÍNH (FULL SCREEN APP) */
     html, body, .stApp {{
         overflow: hidden !important;
         height: 100vh !important;
         margin: 0 !important;
         padding: 0 !important;
-        font-family: Arial, sans-serif !important;
+        font-family: Arial, sans-serif;
     }}
 
     /* 2. ẨN HEADER & FOOTER */
@@ -68,7 +68,7 @@ st.markdown(f"""
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     
-    /* 3. SIDEBAR (CỐ ĐỊNH) */
+    /* 3. CẤU HÌNH SIDEBAR (CỐ ĐỊNH TRÁI) */
     section[data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
@@ -83,20 +83,22 @@ st.markdown(f"""
         padding-top: 0 !important;
     }}
     
+    /* Nội dung Sidebar có thể cuộn */
     [data-testid="stSidebarUserContent"] {{
         padding: 20px;
         height: 100vh;
         overflow-y: auto !important;
     }}
     
+    /* Ẩn nút đóng (Khóa cứng) */
     [data-testid="stSidebarCollapseBtn"] {{ display: none !important; }}
-    
+    /* Nút mở cứu hộ */
     [data-testid="stSidebarCollapsedControl"] {{
         display: flex !important; z-index: 1000000;
         top: 10px; left: 10px; background: white; border: 1px solid #ccc;
     }}
 
-    /* 4. FULL SCREEN MAP/IFRAME */
+    /* 4. CẤU HÌNH NỘI DUNG CHÍNH (CỐ ĐỊNH PHẢI - TRÀN VIỀN) */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
@@ -108,93 +110,55 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* -----------------------------------------------------------
-       5. STYLE MỚI CHO BẢNG CHÚ THÍCH (LEGEND) - CHỈ CÓ ẢNH
-    ----------------------------------------------------------- */
+    /* 5. STYLE CHÚ THÍCH (LEGEND) - CHỈ ẢNH, KHÔNG VIỀN */
     .legend-box {{
         position: fixed; 
-        top: 20px; 
+        top: 20px; /* Nằm trên */
         right: 20px; 
         z-index: 10000;
         width: 300px; 
-        /* Xóa bỏ hoàn toàn khung viền và nền */
         background: transparent !important;
         border: none !important;
-        box-shadow: none !important;
         padding: 0 !important;
     }}
-    .legend-box img {{
-        width: 100%;
-        display: block;
-        /* Nếu ảnh gốc không có viền trắng, có thể thêm bo góc nhẹ nếu muốn */
-        border-radius: 4px; 
-    }}
+    .legend-box img {{ width: 100%; display: block; }}
 
-    /* -----------------------------------------------------------
-       6. STYLE MỚI CHO BẢNG THÔNG TIN (INFO TABLE) - DẠNG VĂN BẢN
-    ----------------------------------------------------------- */
+    /* 6. STYLE BẢNG THÔNG TIN (INFO TABLE) - BẢNG TRẮNG ĐƠN GIẢN */
     .info-box {{
         position: fixed; 
-        top: 250px; /* Cách top đủ xa để nằm dưới chú thích */
+        top: 250px; /* Nằm dưới chú thích */
         right: 20px; 
         z-index: 9999;
-        width: 450px; /* Rộng hơn để chứa đủ cột */
-        
-        /* Style Bảng Trắng */
-        background: rgba(255, 255, 255, 0.95); /* Trắng đục */
-        border: 1px solid #ccc; /* Viền mảnh màu xám */
-        border-radius: 0px; /* Vuông vức, không bo tròn nhiều */
-        color: #000; /* Chữ đen */
+        width: 450px;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #ccc;
         padding: 15px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        color: #000;
     }}
     
-    /* Tiêu đề bảng */
     .info-title {{
-        text-align: center;
-        font-weight: bold;
-        font-size: 18px;
-        margin-bottom: 5px;
-        text-transform: uppercase;
-        color: #000;
+        text-align: center; font-weight: bold; font-size: 18px; 
+        margin-bottom: 5px; text-transform: uppercase; color: #000;
     }}
     
     .info-subtitle {{
-        text-align: center;
-        font-size: 13px;
-        margin-bottom: 10px;
-        font-style: italic;
-        color: #333;
+        text-align: center; font-size: 13px; margin-bottom: 10px; 
+        font-style: italic; color: #333;
     }}
 
-    /* Cấu trúc Table bên trong */
-    table {{ 
-        width: 100%; 
-        border-collapse: collapse; 
-        font-size: 14px; 
-        color: #000;
-    }}
-    
+    table {{ width: 100%; border-collapse: collapse; font-size: 14px; color: #000; }}
     th {{ 
-        background-color: transparent !important; /* Bỏ màu nền header */
-        color: #000 !important; /* Chữ đen */
-        padding: 8px; 
-        font-weight: bold; 
-        border-bottom: 2px solid #000; /* Đường kẻ đậm dưới header */
-        text-align: center;
+        background: transparent !important; color: #000 !important; 
+        padding: 8px; font-weight: bold; border-bottom: 2px solid #000; text-align: center;
     }}
-    
     td {{ 
-        padding: 6px; 
-        border-bottom: 1px solid #ccc; /* Đường kẻ mờ giữa các dòng */
-        text-align: center; 
-        color: #000;
+        padding: 6px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
     }}
     
-    /* Layer Control mặc định của Folium */
     .leaflet-control-layers {{
-        background: white !important; color: #333 !important;
-        border: 1px solid #ccc !important; padding: 10px !important;
+        background: white !important; color: {COLOR_TEXT} !important;
+        border: 1px solid {COLOR_BORDER} !important; padding: 10px !important;
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -302,7 +266,6 @@ def create_info_table(df, title):
 
         rows += f"<tr><td>{t}</td><td>{lon}</td><td>{lat}</td><td>{cap_gio}</td><td>{pmin}</td></tr>"
     
-    # Bảng trắng tinh, không màu mè
     return textwrap.dedent(f"""
     <div class="info-box">
         <div class="info-title">{title}</div>
@@ -321,7 +284,7 @@ def create_info_table(df, title):
         </table>
     </div>""")
 
-# === HÀM TẠO CHÚ GIẢI (CHỈ ẢNH, KHÔNG KHUNG) ===
+# === HÀM TẠO CHÚ GIẢI (CHỈ ẢNH) ===
 def create_legend(img_b64):
     if not img_b64: return ""
     return textwrap.dedent(f"""
@@ -334,4 +297,139 @@ def create_legend(img_b64):
 # ==============================================================================
 def main():
     
+    # --- SIDEBAR MENU ---
     with st.sidebar:
+        st.title("🌪️ TRUNG TÂM BÃO")
+        
+        topic = st.radio("CHỌN CHẾ ĐỘ:", 
+                         ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
+        st.markdown("---")
+        
+        final_df = pd.DataFrame()
+        dashboard_title = ""
+        show_widgets = False
+        active_mode = ""
+        obs_mode = ""
+
+        if topic == "Dữ liệu quan trắc":
+            obs_mode = st.radio("Chọn nguồn dữ liệu:", ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)"])
+
+        if topic == "Bản đồ Bão":
+            storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
+            active_mode = storm_opt
+            
+            if "Hiện trạng" in storm_opt:
+                dashboard_title = "TIN BÃO KHẨN CẤP"
+                if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
+                    show_widgets = True
+                    f = st.file_uploader("Upload besttrack.xlsx", type="xlsx", key="o1")
+                    path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
+                    
+                    def process_excel(f_path):
+                        if not f_path or not os.path.exists(f_path): return pd.DataFrame()
+                        try:
+                            df = pd.read_excel(f_path)
+                            df = normalize_columns(df)
+                            for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
+                                if c not in df.columns: df[c] = 0
+                            if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
+                            elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
+                            for c in ['lat','lon','wind_kt', 'pressure', 'bf']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                            return df.dropna(subset=['lat','lon'])
+                        except: return pd.DataFrame()
+
+                    df = process_excel(path)
+                    if not df.empty:
+                        all_s = df['storm_no'].unique() if 'storm_no' in df.columns else []
+                        sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s)
+                        final_df = df[df['storm_no'].isin(sel)] if 'storm_no' in df.columns else df
+                    else: st.warning("Vui lòng tải file.")
+            else: 
+                dashboard_title = "THỐNG KÊ LỊCH SỬ"
+                if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
+                    show_widgets = True
+                    f = st.file_uploader("Upload besttrack_capgio.xlsx", type="xlsx", key="o2")
+                    path = f if f else (FILE_OPT2 if os.path.exists(FILE_OPT2) else None)
+                    if path:
+                        try:
+                            df = pd.read_excel(path)
+                            df = normalize_columns(df)
+                            for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
+                                if c not in df.columns: df[c] = 0
+                            if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
+                            elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
+                            for c in ['lat','lon','wind_kt', 'pressure']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                            df = df.dropna(subset=['lat','lon'])
+
+                            years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
+                            temp = df[df['year'].isin(years)]
+                            names = st.multiselect("Tên bão:", temp['name'].unique(), default=temp['name'].unique())
+                            final_df = temp[temp['name'].isin(names)]
+                        except: pass
+                    else: st.warning("Vui lòng tải file.")
+
+    # --- MAIN CONTENT ---
+    if topic == "Ảnh mây vệ tinh":
+        components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
+    elif topic == "Dữ liệu quan trắc":
+        if "WeatherObs" in obs_mode:
+            components.iframe(LINK_WEATHEROBS, scrolling=True)
+        elif "Gió tự động" in obs_mode:
+            components.iframe(LINK_WIND_AUTO, scrolling=True)
+    elif topic == "Dự báo điểm (KMA)":
+        components.iframe(LINK_KMA_FORECAST, scrolling=True)
+    elif topic == "Bản đồ Bão":
+        m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
+        folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
+        folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
+        folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
+        
+        ts = get_rainviewer_ts()
+        if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
+
+        fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
+        if not final_df.empty and show_widgets:
+            if "Hiện trạng" in str(active_mode):
+                groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
+                for g in groups:
+                    sub = final_df[final_df['storm_no']==g] if g else final_df
+                    dense = densify_track(sub)
+                    f6, f10, fc = create_storm_swaths(dense)
+                    for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#90EE90',0.6)]:
+                        if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
+                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
+                    
+                    # --- ICON BÃO ---
+                    for _, r in sub.iterrows():
+                        icon_name = get_icon_name(r)
+                        icon_path = os.path.join(ICON_DIR, f"{icon_name}.png")
+                        if os.path.exists(icon_path):
+                            icon = folium.CustomIcon(icon_image=icon_path, icon_size=(40, 40))
+                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_kt', 0)} kt").add_to(fg_storm)
+                        else:
+                            folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
+            else: 
+                for n in final_df['name'].unique():
+                    sub = final_df[final_df['name']==n].sort_values('dt')
+                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
+                    for _, r in sub.iterrows():
+                        c = '#00f2ff' if r.get('wind_kt',0)<64 else '#ff0055'
+                        folium.CircleMarker([r['lat'],r['lon']], radius=3, color=c, fill=True, popup=f"{n}").add_to(fg_storm)
+        
+        fg_storm.add_to(m)
+        folium.LayerControl(position='topleft', collapsed=False).add_to(m)
+        
+        if show_widgets:
+            if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
+                with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
+                st.markdown(create_legend(b64), unsafe_allow_html=True)
+            
+            if not final_df.empty: 
+                st.markdown(create_info_table(final_df, dashboard_title), unsafe_allow_html=True)
+            else: 
+                st.markdown(create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU..."), unsafe_allow_html=True)
+        
+        st_folium(m, width=None, height=1000, use_container_width=True)
+
+if __name__ == "__main__":
+    main()
