@@ -8,14 +8,13 @@ import os
 import base64
 import requests
 import streamlit.components.v1 as components
-from math import radians, sin, cos, asin, sqrt
+from math import radians, sin, cos, asin, sqrt, pi
 import warnings
 import textwrap
 
 # Thư viện hình học
 from shapely.geometry import Polygon, mapping
 from shapely.ops import unary_union
-from cartopy import geodesic
 
 warnings.filterwarnings("ignore")
 
@@ -50,132 +49,125 @@ COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
-SIDEBAR_WIDTH = "320px"
 
+# Cấu hình trang
 st.set_page_config(
     page_title="Storm Monitor",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded" # Mặc định mở
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG TOÀN BỘ)
+# 2. CSS CHUNG (GIAO DIỆN CHUẨN - ỔN ĐỊNH)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. KHÓA CUỘN TRANG CHÍNH */
-    html, body, .stApp {{
-        overflow: hidden !important;
-        height: 100vh !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        font-family: Arial, sans-serif;
+    /* 1. TỐI ƯU KHÔNG GIAN */
+    .block-container {{
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 0rem !important;
+        padding-right: 0rem !important;
+        max-width: 100% !important;
     }}
-
-    /* 2. ẨN HEADER & FOOTER */
-    header, footer, [data-testid="stHeader"], [data-testid="stToolbar"] {{
+    
+    /* Ẩn Header/Footer mặc định của Streamlit cho gọn */
+    header[data-testid="stHeader"] {{
         display: none !important;
     }}
-    .block-container {{
-        padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
-    }}
-    
-    /* 3. SIDEBAR (CỐ ĐỊNH) */
-    section[data-testid="stSidebar"] {{
-        background-color: {COLOR_SIDEBAR} !important;
-        border-right: 1px solid {COLOR_BORDER};
-        width: {SIDEBAR_WIDTH} !important;
-        min-width: {SIDEBAR_WIDTH} !important;
-        max-width: {SIDEBAR_WIDTH} !important;
-        top: 0 !important;
-        height: 100vh !important;
-        z-index: 9999999 !important;
-        position: fixed !important;
-        left: 0 !important;
-        padding-top: 0 !important;
-    }}
-    
-    [data-testid="stSidebarUserContent"] {{
-        padding: 20px;
-        height: 100vh;
-        overflow-y: auto !important;
-    }}
-    
-    [data-testid="stSidebarCollapseBtn"] {{ display: none !important; }}
-    
-    [data-testid="stSidebarCollapsedControl"] {{
-        display: flex !important; z-index: 1000000;
-        top: 10px; left: 10px; background: white; border: 1px solid #ccc;
+    footer {{
+        display: none !important;
     }}
 
-    /* 4. FULL SCREEN MAP/IFRAME */
-    iframe, [data-testid="stFoliumMap"] {{
-        position: fixed !important;
-        top: 0 !important;
-        left: {SIDEBAR_WIDTH} !important;
-        width: calc(100vw - {SIDEBAR_WIDTH}) !important;
+    /* 2. THANH SIDEBAR (MENU TRÁI) */
+    section[data-testid="stSidebar"] {{
+        background-color: #ffffff !important; /* Nền trắng */
+        border-right: 1px solid #ddd;
+        z-index: 100 !important;
+    }}
+    
+    /* 3. NÚT ĐÓNG/MỞ MENU (QUAN TRỌNG: PHẢI HIỆN ĐỂ KHÔNG BỊ MẤT) */
+    
+    /* Nút mũi tên khi menu đang ĐÓNG (Nằm góc trái màn hình) */
+    [data-testid="stSidebarCollapsedControl"] {{
+        display: block !important;
+        color: #333 !important;
+        background-color: white !important;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        top: 10px !important;
+        left: 10px !important;
+        z-index: 999999 !important;
+    }}
+
+    /* Nút mũi tên khi menu đang MỞ (Nằm trên Sidebar) */
+    [data-testid="stSidebarCollapseBtn"] {{
+        display: block !important; /* Cho hiện lại để bạn chủ động */
+        color: #333 !important;
+    }}
+
+    /* 4. BẢN ĐỒ (BÊN PHẢI) */
+    /* Code này đảm bảo iframe bản đồ chiếm hết phần còn lại của màn hình */
+    iframe {{
+        width: 100% !important;
         height: 100vh !important;
         border: none !important;
-        z-index: 1 !important;
-        display: block !important;
     }}
-
-    /* 5. STYLE CHÚ THÍCH (LEGEND) */
+    
+    /* 5. CÁC WIDGET NỔI (CHÚ THÍCH & BẢNG TIN) */
     .legend-box {{
         position: fixed; 
         top: 20px; 
         right: 20px; 
-        z-index: 10000;
-        width: 450px; 
+        z-index: 999;
+        width: 300px; 
         background: transparent !important;
         border: none !important;
         padding: 0 !important;
+        pointer-events: none; /* Để bấm xuyên qua nếu cần */
     }}
     .legend-box img {{ width: 100%; display: block; }}
 
-    /* 6. STYLE BẢNG THÔNG TIN (SÁT VIỀN) */
     .info-box {{
         position: fixed; 
-        top: 280px; 
+        top: 250px; 
         right: 20px; 
-        z-index: 9999;
+        z-index: 999;
         width: fit-content !important;
-        min-width: 200px;
-        background: rgba(255, 255, 255, 0.95);
-        border: 1px solid #999; 
-        padding: 5px; 
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        min-width: 150px; 
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #ccc; /* Thêm viền nhẹ để tách biệt */
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        padding: 5px !important; 
         color: #000;
+        border-radius: 6px;
     }}
     
     .info-title {{
         text-align: center; font-weight: bold; font-size: 16px; 
-        margin: 5px 0; text-transform: uppercase; color: #000;
+        margin: 0 0 5px 0; text-transform: uppercase; color: #000;
     }}
-    
     .info-subtitle {{
         text-align: center; font-size: 11px; margin-bottom: 5px; 
         font-style: italic; color: #333;
     }}
-
     table {{ 
-        border-collapse: collapse; 
-        font-size: 13px; 
-        color: #000; 
-        white-space: nowrap;
-        margin: 0;
+        border-collapse: collapse; font-size: 13px; color: #000; 
+        white-space: nowrap; margin: 0;
     }}
     th {{ 
         background: transparent !important; color: #000 !important; 
         padding: 4px 8px; font-weight: bold; border-bottom: 1px solid #000; text-align: center;
     }}
     td {{ 
-        padding: 3px 8px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
+        padding: 4px 8px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
     }}
     
+    /* Tùy chỉnh nút Layer Control của Map */
     .leaflet-control-layers {{
-        background: white !important; color: {COLOR_TEXT} !important;
-        border: 1px solid {COLOR_BORDER} !important; padding: 10px !important;
+        background: white !important; color: #333 !important;
+        border: 1px solid #ccc !important; padding: 5px !important;
+        border-radius: 4px;
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -232,26 +224,34 @@ def densify_track(df, step_km=10):
     new_rows.append(df.iloc[-1])
     return pd.DataFrame(new_rows)
 
+def generate_circle_polygon(lat, lon, radius_km, n_points=36):
+    coords = []
+    if radius_km <= 0: return None
+    lat_rad = radians(lat)
+    for i in range(n_points):
+        theta = (i / n_points) * (2 * pi)
+        dy = (radius_km * cos(theta)) / 111.32
+        dx = (radius_km * sin(theta)) / (111.32 * cos(lat_rad))
+        coords.append((lon + dx, lat + dy))
+    return Polygon(coords)
+
 def create_storm_swaths(dense_df):
     polys = {'r6': [], 'r10': [], 'rc': []}
-    geo = geodesic.Geodesic()
     for _, row in dense_df.iterrows():
         for r, key in [(row.get('r6',0), 'r6'), (row.get('r10',0), 'r10'), (row.get('rc',0), 'rc')]:
             if r > 0:
-                circle = geo.circle(lon=row['lon'], lat=row['lat'], radius=r*1000, n_samples=30)
-                polys[key].append(Polygon(circle))
+                poly = generate_circle_polygon(row['lat'], row['lon'], r)
+                if poly: polys[key].append(poly)
     u = {k: unary_union(v) if v else None for k, v in polys.items()}
     f_rc = u['rc']
     f_r10 = u['r10'].difference(u['rc']) if u['r10'] and u['rc'] else u['r10']
     f_r6 = u['r6'].difference(u['r10']) if u['r6'] and u['r10'] else u['r6']
     return f_r6, f_r10, f_rc
 
-# >>> CẬP NHẬT LOGIC LẤY TÊN ICON: "HIỆN TẠI" -> MÀU ĐỎ (DAQUA) NHƯNG ĐÚNG CẤP ĐỘ <<<
 def get_icon_name(row):
     wind_speed = row.get('bf', 0) 
     w = row.get('wind_km/h', 0)
     
-    # Tính cấp gió nếu thiếu
     if pd.isna(wind_speed) or wind_speed == 0:
         if w > 0:
             if w < 34: wind_speed = 5
@@ -261,10 +261,9 @@ def get_icon_name(row):
     
     status_raw = str(row.get('status_raw','')).lower()
     
-    # Logic:
-    # - Nếu là "forecast" hoặc "dự báo" -> đuôi _dubao (icon nhạt/khác)
-    # - Nếu là "hiện tại" hoặc "quá khứ" -> đuôi _daqua (icon đỏ/đậm)
-    status = 'dubao' if ('forecast' in status_raw or 'dự báo' in status_raw) else 'daqua'
+    status = 'dubao' 
+    if 'quá khứ' in status_raw or 'past' in status_raw:
+        status = 'daqua'
     
     if pd.isna(wind_speed): return f"vungthap_{status}"
     if wind_speed < 6:      return f"vungthap_{status}"
@@ -371,6 +370,10 @@ def main():
                                 else: df = pd.read_excel(f_path)
                                 
                             df = normalize_columns(df)
+                            if 'name' not in df.columns and 'storm_no' not in df.columns:
+                                df['name'] = 'Cơn bão'
+                                df['storm_no'] = 'Current Storm'
+
                             for c in ['wind_km/h', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
                                 if c not in df.columns: df[c] = 0
                             if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
@@ -381,11 +384,15 @@ def main():
 
                     df = process_file(path)
                     if not df.empty:
-                        all_s = df['storm_no'].unique() if 'storm_no' in df.columns else []
-                        sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s)
-                        final_df = df[df['storm_no'].isin(sel)] if 'storm_no' in df.columns else df
+                        if 'storm_no' in df.columns:
+                            all_s = df['storm_no'].unique()
+                            sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s)
+                            final_df = df[df['storm_no'].isin(sel)]
+                        else:
+                            final_df = df
                     else: st.warning("Vui lòng tải file.")
             else: 
+                # (Phần lịch sử giữ nguyên)
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
@@ -442,19 +449,15 @@ def main():
                     
                     # --- VẼ ICON BÃO ---
                     for _, r in sub.iterrows():
-                        # Lấy key của icon (logic đã sửa: hiện tại = daqua = icon đỏ)
                         icon_key = get_icon_name(r)
-                        
                         icon_path = ICON_PATHS.get(icon_key)
                         icon_base64 = None
                         if icon_path:
                             icon_base64 = image_to_base64(icon_path)
                         
                         if icon_base64:
-                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(45, 45))
+                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(40, 40), icon_anchor=(20, 20))
                             folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
-                        else:
-                            folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
             else: 
                 for n in final_df['name'].unique():
                     sub = final_df[final_df['name']==n].sort_values('dt')
