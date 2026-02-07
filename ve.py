@@ -232,7 +232,7 @@ def densify_track(df, step_km=10):
     new_rows.append(df.iloc[-1])
     return pd.DataFrame(new_rows)
 
-# >>> CẬP NHẬT LOGIC: HIỆN TẠI DÙNG ICON DỰ BÁO (DUBAO) <<<
+# >>> CẬP NHẬT LOGIC LẤY TÊN ICON CHÍNH XÁC HƠN <<<
 def get_icon_name(row):
     wind_speed = row.get('bf', 0) 
     w = row.get('wind_km/h', 0)
@@ -247,14 +247,17 @@ def get_icon_name(row):
     
     status_raw = str(row.get('status_raw','')).lower()
     
-    # Mặc định là DỰ BÁO (dubao) - Bao gồm cả "Hiện tại" và "Dự báo"
+    # MẶC ĐỊNH LÀ "DỰ BÁO" (Đen/Nhạt)
     status = 'dubao'
     
-    # Chỉ khi nào là "Quá khứ" thì mới dùng style Đã qua (daqua)
-    if 'quá khứ' in status_raw or 'past' in status_raw:
-        status = 'daqua'
+    # NẾU LÀ "HIỆN TẠI" HOẶC "QUÁ KHỨ" -> CHUYỂN SANG "ĐÃ QUA" (Đỏ/Đậm)
+    if 'hiện tại' in status_raw or 'current' in status_raw or 'quá khứ' in status_raw or 'past' in status_raw:
+        status = 'dubao'
+        
+    # NẾU CÓ CHỮ "DỰ BÁO" -> CHẮC CHẮN LÀ DỰ BÁO
+    if 'forecast' in status_raw or 'dự báo' in status_raw:
+        status = 'dubao'
     
-    # Phân loại icon theo cấp gió
     if pd.isna(wind_speed): return f"vungthap_{status}"
     if wind_speed < 6:      return f"vungthap_{status}"
     if wind_speed < 8:      return f"atnd_{status}"
