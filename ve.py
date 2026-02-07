@@ -27,7 +27,7 @@ FILE_OPT1 = "besttrack.csv"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# --- ĐỊNH NGHĨA ICON PATHS (THEO YÊU CẦU MỚI) ---
+# --- ĐỊNH NGHĨA ICON PATHS ---
 ICON_PATHS = {
     "vungthap_daqua": os.path.join(ICON_DIR, 'vungthapdaqua.png'),
     "atnd_daqua": os.path.join(ICON_DIR, 'atnddaqua.PNG'),
@@ -69,7 +69,7 @@ st.markdown(f"""
         height: 100vh !important;
         margin: 0 !important;
         padding: 0 !important;
-        font-family: Arial, sans-serif !important;
+        font-family: Arial, sans-serif;
     }}
 
     /* 2. ẨN HEADER & FOOTER */
@@ -246,13 +246,12 @@ def create_storm_swaths(dense_df):
     f_r6 = u['r6'].difference(u['r10']) if u['r6'] and u['r10'] else u['r6']
     return f_r6, f_r10, f_rc
 
-# >>> CẬP NHẬT LOGIC LẤY TÊN ICON THEO YÊU CẦU <<<
+# >>> CẬP NHẬT LOGIC LẤY TÊN ICON: "HIỆN TẠI" -> MÀU ĐỎ (DAQUA) NHƯNG ĐÚNG CẤP ĐỘ <<<
 def get_icon_name(row):
-    # Lấy dữ liệu
-    wind_speed = row.get('bf', 0) # Sử dụng cột 'bf' đã được normalize
+    wind_speed = row.get('bf', 0) 
     w = row.get('wind_km/h', 0)
     
-    # Nếu bf chưa có, tính từ wind_km/h
+    # Tính cấp gió nếu thiếu
     if pd.isna(wind_speed) or wind_speed == 0:
         if w > 0:
             if w < 34: wind_speed = 5
@@ -260,12 +259,13 @@ def get_icon_name(row):
             elif w < 100: wind_speed = 10
             else: wind_speed = 12
     
-    # Xác định trạng thái (dựa vào cột status_raw)
     status_raw = str(row.get('status_raw','')).lower()
-    # Nếu có chữ "forecast" hoặc "dự báo" -> dubao, ngược lại -> daqua
+    
+    # Logic:
+    # - Nếu là "forecast" hoặc "dự báo" -> đuôi _dubao (icon nhạt/khác)
+    # - Nếu là "hiện tại" hoặc "quá khứ" -> đuôi _daqua (icon đỏ/đậm)
     status = 'dubao' if ('forecast' in status_raw or 'dự báo' in status_raw) else 'daqua'
     
-    # Phân loại theo cấp gió (Code bạn cung cấp)
     if pd.isna(wind_speed): return f"vungthap_{status}"
     if wind_speed < 6:      return f"vungthap_{status}"
     if wind_speed < 8:      return f"atnd_{status}"
@@ -306,7 +306,7 @@ def create_info_table(df, title):
     return textwrap.dedent(f"""
     <div class="info-box">
         <div class="info-title">{title}</div>
-        <div class="info-subtitle">Tin phát lúc 10h00</div>
+        <div class="info-subtitle">(Dữ liệu cập nhật từ Besttrack)</div>
         <table>
             <thead>
                 <tr>
@@ -334,7 +334,7 @@ def create_legend(img_b64):
 def main():
     
     with st.sidebar:
-        st.title("Dữ liệu khí tượng")
+        st.title("🌪️ TRUNG TÂM BÃO")
         
         topic = st.radio("CHỌN CHẾ ĐỘ:", 
                          ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
@@ -440,16 +440,12 @@ def main():
                         if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
                     
-                    # --- VẼ ICON BÃO (SỬ DỤNG ICON_PATHS) ---
+                    # --- VẼ ICON BÃO ---
                     for _, r in sub.iterrows():
-                        # Lấy key của icon (vd: sieubao_dubao)
+                        # Lấy key của icon (logic đã sửa: hiện tại = daqua = icon đỏ)
                         icon_key = get_icon_name(r)
                         
-                        # Lấy đường dẫn file từ dict ICON_PATHS
-                        # Nếu key không có trong dict, trả về None
                         icon_path = ICON_PATHS.get(icon_key)
-                        
-                        # Chuyển ảnh sang Base64
                         icon_base64 = None
                         if icon_path:
                             icon_base64 = image_to_base64(icon_path)
@@ -458,7 +454,6 @@ def main():
                             icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(45, 45))
                             folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
                         else:
-                            # Dự phòng
                             folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
             else: 
                 for n in final_df['name'].unique():
@@ -485,4 +480,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
