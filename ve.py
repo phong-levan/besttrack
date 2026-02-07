@@ -23,7 +23,7 @@ warnings.filterwarnings("ignore")
 # 1. CẤU HÌNH & DỮ LIỆU
 # ==============================================================================
 ICON_DIR = "icon"
-FILE_OPT1 = "besttrack.xlsx"
+FILE_OPT1 = "besttrack.csv" # Đã sửa thành csv theo yêu cầu của bạn
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
@@ -47,7 +47,7 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG & STYLE MỚI)
+# 2. CSS CHUNG (FIX CỨNG TOÀN BỘ)
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -57,7 +57,7 @@ st.markdown(f"""
         height: 100vh !important;
         margin: 0 !important;
         padding: 0 !important;
-        font-family: Arial, sans-serif !important;
+        font-family: Arial, sans-serif;
     }}
 
     /* 2. ẨN HEADER & FOOTER */
@@ -108,67 +108,50 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* -----------------------------------------------------------
-       5. STYLE MỚI: BẢNG CHÚ THÍCH (TO HƠN)
-    ----------------------------------------------------------- */
+    /* 5. STYLE CHÚ THÍCH (LEGEND) - CHỈ ẢNH, KHÔNG VIỀN */
     .legend-box {{
         position: fixed; 
-        top: 20px; 
+        top: 20px; /* Nằm trên */
         right: 20px; 
         z-index: 10000;
-        width: 300px; /* Tăng kích thước để ảnh to hơn */
+        width: 300px; 
         background: transparent !important;
         border: none !important;
         padding: 0 !important;
     }}
-    .legend-box img {{
-        width: 100%;
-        display: block;
-    }}
+    .legend-box img {{ width: 100%; display: block; }}
 
-    /* -----------------------------------------------------------
-       6. STYLE MỚI: BẢNG THÔNG TIN (VỪA KHÍT NỘI DUNG)
-    ----------------------------------------------------------- */
+    /* 6. STYLE BẢNG THÔNG TIN (INFO TABLE) - BẢNG TRẮNG ĐƠN GIẢN */
     .info-box {{
         position: fixed; 
-        top: 280px; /* Nằm dưới chú thích */
+        top: 250px; /* Nằm dưới chú thích */
         right: 20px; 
         z-index: 9999;
-        /* Width tự động co giãn theo nội dung, không fix cứng rộng quá */
-        width: fit-content !important; 
-        min-width: 300px;
-        max-width: 500px;
-        
+        width: 450px;
         background: rgba(255, 255, 255, 0.95);
         border: 1px solid #ccc;
-        padding: 10px; /* Giảm padding để gọn hơn */
+        padding: 15px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         color: #000;
     }}
     
     .info-title {{
-        text-align: center; font-weight: bold; font-size: 16px; 
+        text-align: center; font-weight: bold; font-size: 18px; 
         margin-bottom: 5px; text-transform: uppercase; color: #000;
     }}
     
     .info-subtitle {{
-        text-align: center; font-size: 12px; margin-bottom: 8px; 
+        text-align: center; font-size: 13px; margin-bottom: 10px; 
         font-style: italic; color: #333;
     }}
 
-    table {{ 
-        width: 100%; 
-        border-collapse: collapse; 
-        font-size: 13px; /* Chữ vừa phải */
-        color: #000; 
-        white-space: nowrap; /* Không cho xuống dòng để bảng gọn */
-    }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 14px; color: #000; }}
     th {{ 
         background: transparent !important; color: #000 !important; 
-        padding: 6px 10px; font-weight: bold; border-bottom: 2px solid #000; text-align: center;
+        padding: 8px; font-weight: bold; border-bottom: 2px solid #000; text-align: center;
     }}
     td {{ 
-        padding: 5px 10px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
+        padding: 6px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
     }}
     
     .leaflet-control-layers {{
@@ -238,29 +221,19 @@ def create_storm_swaths(dense_df):
 def get_icon_name(row):
     w = row.get('wind_kt', 0)
     bf = row.get('bf', 0)
-    # Tự động tính cấp gió nếu thiếu
     if pd.isna(bf) or bf == 0:
         if w < 34: bf = 6
         elif w < 64: bf = 8
         elif w < 100: bf = 10
         else: bf = 12
-    
-    # Xác định trạng thái: Dự báo hay Đã qua
-    status_raw = str(row.get('status_raw','')).lower()
-    is_forecast = 'forecast' in status_raw or 'dự báo' in status_raw
-    status = 'dubao' if is_forecast else 'daqua'
-    
-    # Logic chọn tên icon (File ảnh phải có tên y hệt thế này)
+    status = 'dubao' if 'forecast' in str(row.get('status_raw','')).lower() else 'daqua'
     if bf < 6: return f"vungthap_{status}"
     if bf < 8: return f"atnd_{status}"
     if bf <= 11: return f"bnd_{status}"
     return f"sieubao_{status}"
 
-# === HÀM TẠO BẢNG THÔNG TIN (STYLE MỚI) ===
 def create_info_table(df, title):
     if df.empty: return ""
-    
-    # Lọc lấy 1 dòng hiện tại + các dòng dự báo
     if 'status_raw' in df.columns:
          cur = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
          fut = df[df['status_raw'].astype(str).str.contains("dự báo|forecast", case=False, na=False)]
@@ -272,12 +245,12 @@ def create_info_table(df, title):
     for _, r in display_df.iterrows():
         t = r.get('datetime_str', r.get('dt'))
         if not isinstance(t, str): t = t.strftime('%d/%m %Hh')
+        w = r.get('wind_kt', 0)
         
         lon = f"{r.get('lon', 0):.1f}E"
         lat = f"{r.get('lat', 0):.1f}N"
         
         bf = r.get('bf', 0)
-        w = r.get('wind_kt', 0)
         if (pd.isna(bf) or bf == 0) and w > 0:
              if w < 34: bf = 6
              elif w < 64: bf = 8
@@ -297,18 +270,17 @@ def create_info_table(df, title):
         <table>
             <thead>
                 <tr>
-                    <th>Ngày-Giờ</th>
+                    <th>Ngày - Giờ</th>
                     <th>Kinh độ</th>
                     <th>Vĩ độ</th>
                     <th>Cấp gió</th>
-                    <th>Pmin</th>
+                    <th>Pmin(mb)</th>
                 </tr>
             </thead>
             <tbody>{rows}</tbody>
         </table>
     </div>""")
 
-# === HÀM TẠO CHÚ GIẢI (CHỈ ẢNH) ===
 def create_legend(img_b64):
     if not img_b64: return ""
     return textwrap.dedent(f"""
@@ -321,6 +293,7 @@ def create_legend(img_b64):
 # ==============================================================================
 def main():
     
+    # --- SIDEBAR MENU ---
     with st.sidebar:
         st.title("🌪️ TRUNG TÂM BÃO")
         
@@ -345,13 +318,20 @@ def main():
                 dashboard_title = "TIN BÃO KHẨN CẤP"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
-                    f = st.file_uploader("Upload besttrack.xlsx", type="xlsx", key="o1")
+                    f = st.file_uploader("Upload besttrack.csv", type="csv", key="o1") # Đã sửa type thành csv
                     path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
                     
-                    def process_excel(f_path):
-                        if not f_path or not os.path.exists(f_path): return pd.DataFrame()
+                    def process_file(f_path):
+                        if not f_path: return pd.DataFrame()
                         try:
-                            df = pd.read_excel(f_path)
+                            # Tự động nhận diện đuôi file để dùng hàm đọc phù hợp
+                            if isinstance(f_path, str):
+                                if f_path.endswith('.csv'): df = pd.read_csv(f_path)
+                                else: df = pd.read_excel(f_path)
+                            else: # Nếu là file upload (UploadedFile object)
+                                if f_path.name.endswith('.csv'): df = pd.read_csv(f_path)
+                                else: df = pd.read_excel(f_path)
+                                
                             df = normalize_columns(df)
                             for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
                                 if c not in df.columns: df[c] = 0
@@ -361,7 +341,7 @@ def main():
                             return df.dropna(subset=['lat','lon'])
                         except: return pd.DataFrame()
 
-                    df = process_excel(path)
+                    df = process_file(path)
                     if not df.empty:
                         all_s = df['storm_no'].unique() if 'storm_no' in df.columns else []
                         sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s)
@@ -427,7 +407,7 @@ def main():
                         icon_name = get_icon_name(r)
                         icon_path = os.path.join(ICON_DIR, f"{icon_name}.png")
                         if os.path.exists(icon_path):
-                            icon = folium.CustomIcon(icon_image=icon_path, icon_size=(45, 45)) # Tăng size icon chút
+                            icon = folium.CustomIcon(icon_image=icon_path, icon_size=(45, 45))
                             folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_kt', 0)} kt").add_to(fg_storm)
                         else:
                             folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
@@ -456,5 +436,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
