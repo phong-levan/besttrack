@@ -8,14 +8,13 @@ import os
 import base64
 import requests
 import streamlit.components.v1 as components
-from math import radians, sin, cos, asin, sqrt
+from math import radians, sin, cos, asin, sqrt, pi
 import warnings
 import textwrap
 
 # Thư viện hình học
 from shapely.geometry import Polygon, mapping
 from shapely.ops import unary_union
-from cartopy import geodesic
 
 warnings.filterwarnings("ignore")
 
@@ -63,7 +62,6 @@ st.set_page_config(
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. KHÓA CUỘN TRANG CHÍNH */
     html, body, .stApp {{
         overflow: hidden !important;
         height: 100vh !important;
@@ -71,8 +69,6 @@ st.markdown(f"""
         padding: 0 !important;
         font-family: Arial, sans-serif;
     }}
-
-    /* 2. ẨN HEADER & FOOTER */
     header, footer, [data-testid="stHeader"], [data-testid="stToolbar"] {{
         display: none !important;
     }}
@@ -80,7 +76,7 @@ st.markdown(f"""
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     
-    /* 3. SIDEBAR (CỐ ĐỊNH) */
+    /* SIDEBAR */
     section[data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
@@ -94,21 +90,18 @@ st.markdown(f"""
         left: 0 !important;
         padding-top: 0 !important;
     }}
-    
     [data-testid="stSidebarUserContent"] {{
         padding: 20px;
         height: 100vh;
         overflow-y: auto !important;
     }}
-    
     [data-testid="stSidebarCollapseBtn"] {{ display: none !important; }}
-    
     [data-testid="stSidebarCollapsedControl"] {{
         display: flex !important; z-index: 1000000;
         top: 10px; left: 10px; background: white; border: 1px solid #ccc;
     }}
 
-    /* 4. FULL SCREEN MAP/IFRAME */
+    /* MAP/IFRAME */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
@@ -120,57 +113,51 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 5. STYLE CHÚ THÍCH (LEGEND) */
+    /* CHÚ THÍCH (LEGEND) */
     .legend-box {{
         position: fixed; 
         top: 20px; 
         right: 20px; 
         z-index: 10000;
-        width: 450px; 
+        width: 300px; 
         background: transparent !important;
         border: none !important;
         padding: 0 !important;
     }}
     .legend-box img {{ width: 100%; display: block; }}
 
-    /* 6. STYLE BẢNG THÔNG TIN (SÁT VIỀN) */
+    /* BẢNG THÔNG TIN */
     .info-box {{
         position: fixed; 
-        top: 280px; 
+        top: 250px; 
         right: 20px; 
         z-index: 9999;
         width: fit-content !important;
-        min-width: 200px;
-        background: rgba(255, 255, 255, 0.95);
-        border: 1px solid #999; 
-        padding: 5px; 
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        min-width: 150px; 
+        background: rgba(255, 255, 255, 0.9);
+        border: none !important; 
+        box-shadow: none !important;
+        padding: 5px !important; 
         color: #000;
     }}
-    
     .info-title {{
         text-align: center; font-weight: bold; font-size: 16px; 
-        margin: 5px 0; text-transform: uppercase; color: #000;
+        margin: 0 0 5px 0; text-transform: uppercase; color: #000;
     }}
-    
     .info-subtitle {{
         text-align: center; font-size: 11px; margin-bottom: 5px; 
         font-style: italic; color: #333;
     }}
-
     table {{ 
-        border-collapse: collapse; 
-        font-size: 13px; 
-        color: #000; 
-        white-space: nowrap;
-        margin: 0;
+        border-collapse: collapse; font-size: 13px; color: #000; 
+        white-space: nowrap; margin: 0;
     }}
     th {{ 
         background: transparent !important; color: #000 !important; 
-        padding: 4px 8px; font-weight: bold; border-bottom: 1px solid #000; text-align: center;
+        padding: 2px 8px; font-weight: bold; border-bottom: 1px solid #000; text-align: center;
     }}
     td {{ 
-        padding: 3px 8px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
+        padding: 2px 8px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
     }}
     
     .leaflet-control-layers {{
@@ -232,6 +219,43 @@ def densify_track(df, step_km=10):
     new_rows.append(df.iloc[-1])
     return pd.DataFrame(new_rows)
 
+# >>> HÀM TẠO HÌNH TRÒN KHÔNG DÙNG CARTOPY ĐỂ TRÁNH LỖI <<<
+def generate_circle_polygon(lat, lon, radius_km, n_points=36):
+    coords = []
+    if radius_km <= 0: return None
+    
+    # 1 độ vĩ độ ~ 111.32 km
+    # 1 độ kinh độ ~ 111.32 * cos(lat) km
+    lat_rad = radians(lat)
+    
+    for i in range(n_points):
+        theta = (i / n_points) * (2 * pi)
+        # Tính delta độ
+        dy = (radius_km * cos(theta)) / 111.32
+        dx = (radius_km * sin(theta)) / (111.32 * cos(lat_rad))
+        
+        coords.append((lon + dx, lat + dy)) # Shapely dùng (lon, lat)
+    
+    return Polygon(coords)
+
+def create_storm_swaths(dense_df):
+    polys = {'r6': [], 'r10': [], 'rc': []}
+    
+    for _, row in dense_df.iterrows():
+        for r, key in [(row.get('r6',0), 'r6'), (row.get('r10',0), 'r10'), (row.get('rc',0), 'rc')]:
+            if r > 0:
+                # Sử dụng hàm tự viết thay vì geodesic của cartopy
+                poly = generate_circle_polygon(row['lat'], row['lon'], r)
+                if poly:
+                    polys[key].append(poly)
+                    
+    u = {k: unary_union(v) if v else None for k, v in polys.items()}
+    f_rc = u['rc']
+    f_r10 = u['r10'].difference(u['rc']) if u['r10'] and u['rc'] else u['r10']
+    f_r6 = u['r6'].difference(u['r10']) if u['r6'] and u['r10'] else u['r6']
+    return f_r6, f_r10, f_rc
+
+# >>> CẬP NHẬT LOGIC LẤY TÊN ICON: "HIỆN TẠI" -> DÙNG DUBAO (MÀU ĐEN) <<<
 def get_icon_name(row):
     wind_speed = row.get('bf', 0) 
     w = row.get('wind_km/h', 0)
@@ -245,7 +269,12 @@ def get_icon_name(row):
     
     status_raw = str(row.get('status_raw','')).lower()
     
-    status = 'dubao' if ('forecast' in status_raw or 'dự báo' in status_raw) else 'daqua'
+    # Mặc định là DỰ BÁO (dubao) - Bao gồm cả "Hiện tại"
+    status = 'dubao'
+    
+    # Chỉ khi nào là "Quá khứ" thì mới dùng style Đã qua (daqua - màu đỏ)
+    if 'quá khứ' in status_raw or 'past' in status_raw:
+        status = 'daqua'
     
     if pd.isna(wind_speed): return f"vungthap_{status}"
     if wind_speed < 6:      return f"vungthap_{status}"
@@ -352,6 +381,12 @@ def main():
                                 else: df = pd.read_excel(f_path)
                                 
                             df = normalize_columns(df)
+                            
+                            # TỰ ĐỘNG THÊM CỘT TÊN BÃO NẾU THIẾU
+                            if 'name' not in df.columns and 'storm_no' not in df.columns:
+                                df['name'] = 'Cơn bão'
+                                df['storm_no'] = 'Current Storm'
+
                             for c in ['wind_km/h', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
                                 if c not in df.columns: df[c] = 0
                             if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
@@ -362,11 +397,16 @@ def main():
 
                     df = process_file(path)
                     if not df.empty:
-                        all_s = df['storm_no'].unique() if 'storm_no' in df.columns else []
-                        sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s)
-                        final_df = df[df['storm_no'].isin(sel)] if 'storm_no' in df.columns else df
+                        # Logic hiển thị Selectbox nếu có nhiều bão
+                        if 'storm_no' in df.columns:
+                            all_s = df['storm_no'].unique()
+                            sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s)
+                            final_df = df[df['storm_no'].isin(sel)]
+                        else:
+                            final_df = df
                     else: st.warning("Vui lòng tải file.")
             else: 
+                # (Phần lịch sử giữ nguyên logic cũ)
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
@@ -412,7 +452,9 @@ def main():
         fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
         if not final_df.empty and show_widgets:
             if "Hiện trạng" in str(active_mode):
+                # Xử lý trường hợp không có cột storm_no
                 groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
+                
                 for g in groups:
                     sub = final_df[final_df['storm_no']==g] if g else final_df
                     dense = densify_track(sub)
@@ -430,11 +472,8 @@ def main():
                             icon_base64 = image_to_base64(icon_path)
                         
                         if icon_base64:
-                            # >>> ĐIỀU CHỈNH KÍCH THƯỚC ICON CỐ ĐỊNH Ở ĐÂY <<<
-                            # Thống nhất 40x40 cho mọi loại icon để chúng bằng nhau
-                            icon_size = (40, 40)
-                            
-                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=icon_size)
+                            # Set kích thước cố định 40x40 cho đồng đều
+                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(40, 40))
                             folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
                         else:
                             folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
