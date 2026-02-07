@@ -47,17 +47,27 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (SIDEBAR & HEADER)
+# 2. CSS CHUNG (FIX CỨNG TOÀN BỘ)
 # ==============================================================================
-# CSS này áp dụng cho TẤT CẢ các trang
 st.markdown(f"""
     <style>
-    /* 1. Ẩn Header & Footer mặc định */
+    /* 1. KHÓA CUỘN TRANG CHÍNH (FULL SCREEN APP) */
+    html, body, .stApp {{
+        overflow: hidden !important;
+        height: 100vh !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }}
+
+    /* 2. ẨN HEADER & FOOTER */
     header, footer, [data-testid="stHeader"], [data-testid="stToolbar"] {{
         display: none !important;
     }}
+    .block-container {{
+        padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
+    }}
     
-    /* 2. CẤU HÌNH SIDEBAR (LUÔN CỐ ĐỊNH & NỔI LÊN TRÊN) */
+    /* 3. CẤU HÌNH SIDEBAR (CỐ ĐỊNH TRÁI) */
     section[data-testid="stSidebar"] {{
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid {COLOR_BORDER};
@@ -72,23 +82,35 @@ st.markdown(f"""
         padding-top: 0 !important;
     }}
     
-    /* Nội dung bên trong Sidebar */
+    /* Nội dung Sidebar có thể cuộn */
     [data-testid="stSidebarUserContent"] {{
         padding: 20px;
         height: 100vh;
         overflow-y: auto !important;
     }}
     
-    /* Ẩn nút đóng sidebar (Khóa cứng) */
+    /* Ẩn nút đóng (Khóa cứng) */
     [data-testid="stSidebarCollapseBtn"] {{ display: none !important; }}
-    
-    /* Nút mở sidebar cứu hộ (Phòng khi bị lỗi) */
+    /* Nút mở cứu hộ */
     [data-testid="stSidebarCollapsedControl"] {{
         display: flex !important; z-index: 1000000;
         top: 10px; left: 10px; background: white; border: 1px solid #ccc;
     }}
-    
-    /* 3. Style chung cho bảng & Info box */
+
+    /* 4. CẤU HÌNH NỘI DUNG CHÍNH (CỐ ĐỊNH PHẢI - TRÀN VIỀN) */
+    /* Áp dụng cho MỌI iframe và bản đồ */
+    iframe, [data-testid="stFoliumMap"] {{
+        position: fixed !important;
+        top: 0 !important;
+        left: {SIDEBAR_WIDTH} !important; /* Đẩy sang phải */
+        width: calc(100vw - {SIDEBAR_WIDTH}) !important; /* Lấp đầy phần còn lại */
+        height: 100vh !important;
+        border: none !important;
+        z-index: 1 !important;
+        display: block !important;
+    }}
+
+    /* 5. Info Box */
     .info-box {{
         position: fixed; z-index: 9999; right: 20px;
         font-family: 'Segoe UI', sans-serif;
@@ -96,6 +118,7 @@ st.markdown(f"""
         border: 1px solid {COLOR_BORDER}; border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15); color: {COLOR_TEXT};
     }}
+    
     table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
     th {{ background-color: {COLOR_ACCENT}; color: white; padding: 8px; text-transform: uppercase; }}
     td {{ padding: 6px; border-bottom: 1px solid {COLOR_BORDER}; text-align: center; color: {COLOR_TEXT}; }}
@@ -218,8 +241,15 @@ def main():
         st.title("🌪️ TRUNG TÂM BÃO")
         st.caption("Phiên bản giao diện sáng")
         
+        # Cập nhật danh sách menu mới (Tách riêng các mục)
         topic = st.radio("CHỌN CHẾ ĐỘ:", 
-                         ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
+                         [
+                             "Bản đồ Bão", 
+                             "Ảnh mây vệ tinh", 
+                             "Quan trắc: Thời tiết",   # WeatherObs
+                             "Quan trắc: Gió tự động", # KTTV Tudong
+                             "Dự báo điểm (KMA)"
+                         ])
         st.markdown("---")
         
         final_df = pd.DataFrame()
@@ -271,107 +301,65 @@ def main():
                         final_df = temp[temp['name'].isin(names)]
                     else: st.warning("Vui lòng tải file.")
 
-    # --- XỬ LÝ GIAO DIỆN CHÍNH (MAIN AREA) ---
+    # --- XỬ LÝ GIAO DIỆN CHÍNH (TẤT CẢ ĐỀU LÀ FULL SCREEN FIX CỨNG) ---
 
-    # 1. NHÓM FULL SCREEN CỐ ĐỊNH (BẢN ĐỒ, VỆ TINH, KMA)
-    if topic in ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dự báo điểm (KMA)"]:
-        # CSS riêng cho nhóm này: Khóa cuộn trang chính, ép Iframe full
-        st.markdown(f"""
-            <style>
-            html, body, .stApp {{ overflow: hidden !important; }}
-            .block-container {{ padding: 0 !important; margin: 0 !important; max-width: 100vw !important; }}
-            iframe, [data-testid="stFoliumMap"] {{
-                position: fixed !important; top: 0 !important; left: {SIDEBAR_WIDTH} !important;
-                width: calc(100vw - {SIDEBAR_WIDTH}) !important; height: 100vh !important;
-                border: none !important; z-index: 1 !important; display: block !important;
-            }}
-            </style>
-        """, unsafe_allow_html=True)
-
-        if topic == "Ảnh mây vệ tinh":
-            components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
-        
-        elif topic == "Dự báo điểm (KMA)":
-            components.iframe(LINK_KMA_FORECAST, scrolling=True)
-            
-        elif topic == "Bản đồ Bão":
-            m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
-            folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
-            folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
-            folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
-            
-            ts = get_rainviewer_ts()
-            if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
-
-            fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
-            if not final_df.empty and show_widgets:
-                if "Hiện trạng" in str(active_mode):
-                    groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
-                    for g in groups:
-                        sub = final_df[final_df['storm_no']==g] if g else final_df
-                        dense = densify_track(sub)
-                        f6, f10, fc = create_storm_swaths(dense)
-                        for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#90EE90',0.6)]:
-                            if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
-                        folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
-                        for _, r in sub.iterrows():
-                            icon_path = os.path.join(ICON_DIR, f"{get_icon_name(r)}.png")
-                            if os.path.exists(icon_path): folium.Marker([r['lat'],r['lon']], icon=folium.CustomIcon(icon_path, icon_size=(35,35))).add_to(fg_storm)
-                            else: folium.CircleMarker([r['lat'],r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
-                else: 
-                    for n in final_df['name'].unique():
-                        sub = final_df[final_df['name']==n].sort_values('dt')
-                        folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
-                        for _, r in sub.iterrows():
-                            c = '#00f2ff' if r.get('wind_kt',0)<64 else '#ff0055'
-                            folium.CircleMarker([r['lat'],r['lon']], radius=3, color=c, fill=True, popup=f"{n}").add_to(fg_storm)
-            fg_storm.add_to(m)
-            folium.LayerControl(position='topleft', collapsed=False).add_to(m)
-            if show_widgets:
-                if not final_df.empty: st.markdown(create_info_table(final_df, dashboard_title), unsafe_allow_html=True)
-                else: st.markdown(create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU..."), unsafe_allow_html=True)
-                if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
-                    with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
-                    st.markdown(create_legend(b64), unsafe_allow_html=True)
-            st_folium(m, width=None, height=1000, use_container_width=True)
-
-    # 2. NHÓM CÓ THANH CUỘN (DỮ LIỆU QUAN TRẮC)
-    elif topic == "Dữ liệu quan trắc":
-        # CSS riêng cho mục này: Kích hoạt cuộn, reset vị trí iframe để xếp chồng
-        st.markdown(f"""
-            <style>
-            /* Reset body để cho phép cuộn */
-            html, body, .stApp {{ overflow: auto !important; height: auto !important; }}
-            
-            /* Đẩy nội dung sang phải để tránh Sidebar */
-            .block-container {{
-                margin-left: {SIDEBAR_WIDTH} !important;
-                width: calc(100vw - {SIDEBAR_WIDTH}) !important;
-                max-width: none !important;
-                padding-top: 1rem !important;
-                padding-bottom: 5rem !important;
-            }}
-            
-            /* Iframe ở chế độ này KHÔNG fixed, để nó trôi theo dòng chảy trang */
-            iframe {{
-                position: relative !important; /* Quan trọng: Để xếp chồng được */
-                width: 100% !important;
-                height: 900px !important; /* Chiều cao cố định cho mỗi khung */
-                display: block !important;
-                border: 1px solid #ddd !important;
-                border-radius: 8px !important;
-                margin-bottom: 20px !important;
-            }}
-            </style>
-        """, unsafe_allow_html=True)
-
-        st.subheader("📡 Thời tiết (WeatherObs)")
+    # 1. ẢNH MÂY VỆ TINH
+    if topic == "Ảnh mây vệ tinh":
+        components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
+    
+    # 2. QUAN TRẮC: THỜI TIẾT (WeatherObs) - Mới tách
+    elif topic == "Quan trắc: Thời tiết":
         components.iframe(LINK_WEATHEROBS, scrolling=True)
-        
-        st.divider() # Đường kẻ phân cách
-        
-        st.subheader("🌬️ Số liệu Gió Tự động")
+
+    # 3. QUAN TRẮC: GIÓ TỰ ĐỘNG (KTTV Tudong) - Mới tách
+    elif topic == "Quan trắc: Gió tự động":
         components.iframe(LINK_WIND_AUTO, scrolling=True)
+
+    # 4. DỰ BÁO ĐIỂM (KMA)
+    elif topic == "Dự báo điểm (KMA)":
+        components.iframe(LINK_KMA_FORECAST, scrolling=True)
+            
+    # 5. BẢN ĐỒ BÃO (FOLIUM)
+    elif topic == "Bản đồ Bão":
+        m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
+        folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
+        folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
+        folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
+        
+        ts = get_rainviewer_ts()
+        if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
+
+        fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
+        if not final_df.empty and show_widgets:
+            if "Hiện trạng" in str(active_mode):
+                groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
+                for g in groups:
+                    sub = final_df[final_df['storm_no']==g] if g else final_df
+                    dense = densify_track(sub)
+                    f6, f10, fc = create_storm_swaths(dense)
+                    for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#90EE90',0.6)]:
+                        if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
+                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
+                    for _, r in sub.iterrows():
+                        icon_path = os.path.join(ICON_DIR, f"{get_icon_name(r)}.png")
+                        if os.path.exists(icon_path): folium.Marker([r['lat'],r['lon']], icon=folium.CustomIcon(icon_path, icon_size=(35,35))).add_to(fg_storm)
+                        else: folium.CircleMarker([r['lat'],r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
+            else: 
+                for n in final_df['name'].unique():
+                    sub = final_df[final_df['name']==n].sort_values('dt')
+                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
+                    for _, r in sub.iterrows():
+                        c = '#00f2ff' if r.get('wind_kt',0)<64 else '#ff0055'
+                        folium.CircleMarker([r['lat'],r['lon']], radius=3, color=c, fill=True, popup=f"{n}").add_to(fg_storm)
+        fg_storm.add_to(m)
+        folium.LayerControl(position='topleft', collapsed=False).add_to(m)
+        if show_widgets:
+            if not final_df.empty: st.markdown(create_info_table(final_df, dashboard_title), unsafe_allow_html=True)
+            else: st.markdown(create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU..."), unsafe_allow_html=True)
+            if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
+                with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
+                st.markdown(create_legend(b64), unsafe_allow_html=True)
+        st_folium(m, width=None, height=1000, use_container_width=True)
 
 if __name__ == "__main__":
     main()
