@@ -456,7 +456,7 @@ def main():
                         
                         if icon_base64:
                             icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(45, 45))
-                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Vmax: {r.get('wind_km/h', 0)} kmh").add_to(fg_storm)
+                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Vmax: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
                         else:
                             # Dự phòng
                             folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
@@ -485,6 +485,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
