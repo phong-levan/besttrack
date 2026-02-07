@@ -51,7 +51,6 @@ COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
 SIDEBAR_WIDTH = "320px"
 
-# Thiết lập trang luôn mở sidebar
 st.set_page_config(
     page_title="Storm Monitor",
     layout="wide",
@@ -59,7 +58,7 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG & KHÓA SIDEBAR)
+# 2. CSS CHUNG (CHỈ ẨN NÚT ĐÓNG, GIỮ NÚT MỞ)
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -80,12 +79,13 @@ st.markdown(f"""
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     
-    /* 3. CỐ ĐỊNH THANH SIDEBAR (MENU TRÁI) */
+    /* 3. CỐ ĐỊNH THANH SIDEBAR (BÊN TRÁI) */
     section[data-testid="stSidebar"] {{
         width: {SIDEBAR_WIDTH} !important;
         min-width: {SIDEBAR_WIDTH} !important;
         max-width: {SIDEBAR_WIDTH} !important;
-        background-color: {COLOR_SIDEBAR} !important; /* Màu nền sidebar */
+        
+        background-color: {COLOR_SIDEBAR} !important; 
         border-right: 1px solid {COLOR_BORDER};
         
         /* Fix cứng vị trí */
@@ -93,38 +93,48 @@ st.markdown(f"""
         top: 0 !important;
         left: 0 !important;
         height: 100vh !important;
-        z-index: 9999999 !important; /* Luôn nổi lên trên cùng */
-        
-        /* Chỉnh lại padding bên trong */
+        z-index: 9999999 !important;
         padding-top: 0 !important;
     }}
     
-    /* >>> QUAN TRỌNG: ẨN NÚT MŨI TÊN/DẤU X (Cái ô màu cam bạn nói) <<< */
+    /* >>> ĐÂY LÀ PHẦN SỬA ĐỔI <<< */
+    
+    /* CHỈ ẨN nút thu gọn (dấu mũi tên <) nằm BÊN TRONG Sidebar */
     [data-testid="stSidebarCollapseBtn"] {{
-        display: none !important;
-        visibility: hidden !important;
-    }}
-    /* Ẩn nút mở lại (nếu lỡ bị đóng) */
-    [data-testid="stSidebarCollapsedControl"] {{
         display: none !important;
     }}
     
-    /* Nội dung bên trong sidebar */
+    /* VẪN HIỆN nút mở rộng (dấu mũi tên >) ở góc trái màn hình (nếu Sidebar bị đóng) */
+    [data-testid="stSidebarCollapsedControl"] {{
+        display: flex !important; /* Đảm bảo nút này hiện nếu cần */
+        z-index: 10000000;
+        left: 10px;
+        top: 10px;
+        background: white;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+    }}
+    
     [data-testid="stSidebarUserContent"] {{
         padding: 20px;
         height: 100vh;
         overflow-y: auto !important;
     }}
 
-    /* 4. FULL SCREEN MAP/IFRAME */
+    /* 4. BẢN ĐỒ NẰM GỌN BÊN PHẢI */
     iframe, [data-testid="stFoliumMap"] {{
         position: fixed !important;
         top: 0 !important;
-        left: 0 !important; /* Tràn từ mép trái màn hình */
-        width: 100vw !important;
+        
+        /* Map bắt đầu từ mép phải của Sidebar */
+        left: {SIDEBAR_WIDTH} !important; 
+        
+        /* Width = Màn hình trừ đi Sidebar */
+        width: calc(100vw - {SIDEBAR_WIDTH}) !important;
+        
         height: 100vh !important;
         border: none !important;
-        z-index: 1 !important; /* Nằm dưới sidebar */
+        z-index: 1 !important;
         display: block !important;
     }}
 
@@ -272,10 +282,7 @@ def get_icon_name(row):
     
     status_raw = str(row.get('status_raw','')).lower()
     
-    # Mặc định là DỰ BÁO (dubao) - Bao gồm cả "Hiện tại"
-    status = 'dubao'
-    
-    # Chỉ khi nào là "Quá khứ" thì mới dùng style Đã qua (daqua - màu đỏ)
+    status = 'dubao' 
     if 'quá khứ' in status_raw or 'past' in status_raw:
         status = 'daqua'
     
