@@ -50,7 +50,7 @@ COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
-SIDEBAR_WIDTH = "320px"
+SIDEBAR_WIDTH = "300px"
 
 st.set_page_config(
     page_title="Storm Monitor",
@@ -126,7 +126,7 @@ st.markdown(f"""
         top: 20px; 
         right: 20px; 
         z-index: 10000;
-        width: 450px; 
+        width: 300px; 
         background: transparent !important;
         border: none !important;
         padding: 0 !important;
