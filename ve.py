@@ -23,16 +23,11 @@ warnings.filterwarnings("ignore")
 # 1. CẤU HÌNH & DỮ LIỆU
 # ==============================================================================
 ICON_DIR = "icon"
-FILE_OPT1 = "besttrack.csv" # Đã sửa thành csv theo yêu cầu của bạn
+FILE_OPT1 = "besttrack.csv"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# --- DANH SÁCH LINK WEB ---
-LINK_WEATHEROBS = "https://weatherobs.com/"
-LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
-LINK_KMA_FORECAST = "https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm=2026.02.06.12&delta=000&ftm=2026.02.06.12"
-
-# --- ĐỊNH NGHĨA ICON PATHS ---
+# --- ĐỊNH NGHĨA ICON PATHS (THEO YÊU CẦU MỚI) ---
 ICON_PATHS = {
     "vungthap_daqua": os.path.join(ICON_DIR, 'vungthapdaqua.png'),
     "atnd_daqua": os.path.join(ICON_DIR, 'atnddaqua.PNG'),
@@ -43,6 +38,11 @@ ICON_PATHS = {
     "bnd_dubao": os.path.join(ICON_DIR, 'bnd.PNG'),
     "sieubao_dubao": os.path.join(ICON_DIR, 'sieubao.PNG')
 }
+
+# --- DANH SÁCH LINK WEB ---
+LINK_WEATHEROBS = "https://weatherobs.com/"
+LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
+LINK_KMA_FORECAST = "https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm=2026.02.06.12&delta=000&ftm=2026.02.06.12"
 
 # Màu sắc
 COLOR_BG = "#ffffff"
@@ -69,7 +69,7 @@ st.markdown(f"""
         height: 100vh !important;
         margin: 0 !important;
         padding: 0 !important;
-        font-family: Arial, sans-serif;
+        font-family: Arial, sans-serif !important;
     }}
 
     /* 2. ẨN HEADER & FOOTER */
@@ -120,50 +120,57 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 5. STYLE CHÚ THÍCH (LEGEND) - CHỈ ẢNH, KHÔNG VIỀN */
+    /* 5. STYLE CHÚ THÍCH (LEGEND) */
     .legend-box {{
         position: fixed; 
-        top: 20px; /* Nằm trên */
+        top: 20px; 
         right: 20px; 
         z-index: 10000;
-        width: 300px; 
+        width: 450px; 
         background: transparent !important;
         border: none !important;
         padding: 0 !important;
     }}
     .legend-box img {{ width: 100%; display: block; }}
 
-    /* 6. STYLE BẢNG THÔNG TIN (INFO TABLE) - BẢNG TRẮNG ĐƠN GIẢN */
+    /* 6. STYLE BẢNG THÔNG TIN (SÁT VIỀN) */
     .info-box {{
         position: fixed; 
-        top: 250px; /* Nằm dưới chú thích */
+        top: 280px; 
         right: 20px; 
         z-index: 9999;
-        width: 450px;
+        width: fit-content !important;
+        min-width: 200px;
         background: rgba(255, 255, 255, 0.95);
-        border: 1px solid #ccc;
-        padding: 15px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        border: 1px solid #999; 
+        padding: 5px; 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         color: #000;
     }}
     
     .info-title {{
-        text-align: center; font-weight: bold; font-size: 18px; 
-        margin-bottom: 5px; text-transform: uppercase; color: #000;
+        text-align: center; font-weight: bold; font-size: 16px; 
+        margin: 5px 0; text-transform: uppercase; color: #000;
     }}
     
     .info-subtitle {{
-        text-align: center; font-size: 13px; margin-bottom: 10px; 
+        text-align: center; font-size: 11px; margin-bottom: 5px; 
         font-style: italic; color: #333;
     }}
 
-    table {{ width: 100%; border-collapse: collapse; font-size: 14px; color: #000; }}
+    table {{ 
+        border-collapse: collapse; 
+        font-size: 13px; 
+        color: #000; 
+        white-space: nowrap;
+        margin: 0;
+    }}
     th {{ 
         background: transparent !important; color: #000 !important; 
-        padding: 8px; font-weight: bold; border-bottom: 2px solid #000; text-align: center;
+        padding: 4px 8px; font-weight: bold; border-bottom: 1px solid #000; text-align: center;
     }}
     td {{ 
-        padding: 6px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
+        padding: 3px 8px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
     }}
     
     .leaflet-control-layers {{
@@ -199,7 +206,7 @@ def normalize_columns(df):
     rename = {
         "tên bão": "name", "biển đông": "storm_no", "số hiệu": "storm_no",
         "thời điểm": "status_raw", "ngày - giờ": "datetime_str",
-        "vĩ độ": "lat", "kinh độ": "lon", "gió (kt)": "wind_kt",
+        "vĩ độ": "lat", "kinh độ": "lon", "vmax (km/h)": "wind_km/h",
         "cường độ (cấp bf)": "bf", "bán kính gió mạnh cấp 6 (km)": "r6", 
         "bán kính gió mạnh cấp 10 (km)": "r10", "bán kính tâm (km)": "rc",
         "khí áp": "pressure", "khí áp (mb)": "pressure", "pmin": "pressure", "pmin (mb)": "pressure"
@@ -239,18 +246,30 @@ def create_storm_swaths(dense_df):
     f_r6 = u['r6'].difference(u['r10']) if u['r6'] and u['r10'] else u['r6']
     return f_r6, f_r10, f_rc
 
+# >>> CẬP NHẬT LOGIC LẤY TÊN ICON THEO YÊU CẦU <<<
 def get_icon_name(row):
-    w = row.get('wind_kt', 0)
-    bf = row.get('bf', 0)
-    if pd.isna(bf) or bf == 0:
-        if w < 34: bf = 6
-        elif w < 64: bf = 8
-        elif w < 100: bf = 10
-        else: bf = 12
-    status = 'dubao' if 'forecast' in str(row.get('status_raw','')).lower() else 'daqua'
-    if bf < 6: return f"vungthap_{status}"
-    if bf < 8: return f"atnd_{status}"
-    if bf <= 11: return f"bnd_{status}"
+    # Lấy dữ liệu
+    wind_speed = row.get('bf', 0) # Sử dụng cột 'bf' đã được normalize
+    w = row.get('wind_km/h', 0)
+    
+    # Nếu bf chưa có, tính từ wind_km/h
+    if pd.isna(wind_speed) or wind_speed == 0:
+        if w > 0:
+            if w < 34: wind_speed = 5
+            elif w < 64: wind_speed = 7
+            elif w < 100: wind_speed = 10
+            else: wind_speed = 12
+    
+    # Xác định trạng thái (dựa vào cột status_raw)
+    status_raw = str(row.get('status_raw','')).lower()
+    # Nếu có chữ "forecast" hoặc "dự báo" -> dubao, ngược lại -> daqua
+    status = 'dubao' if ('forecast' in status_raw or 'dự báo' in status_raw) else 'daqua'
+    
+    # Phân loại theo cấp gió (Code bạn cung cấp)
+    if pd.isna(wind_speed): return f"vungthap_{status}"
+    if wind_speed < 6:      return f"vungthap_{status}"
+    if wind_speed < 8:      return f"atnd_{status}"
+    if wind_speed <= 11:    return f"bnd_{status}"
     return f"sieubao_{status}"
 
 def create_info_table(df, title):
@@ -266,7 +285,7 @@ def create_info_table(df, title):
     for _, r in display_df.iterrows():
         t = r.get('datetime_str', r.get('dt'))
         if not isinstance(t, str): t = t.strftime('%d/%m %Hh')
-        w = r.get('wind_kt', 0)
+        w = r.get('wind_km/h', 0)
         
         lon = f"{r.get('lon', 0):.1f}E"
         lat = f"{r.get('lat', 0):.1f}N"
@@ -287,7 +306,7 @@ def create_info_table(df, title):
     return textwrap.dedent(f"""
     <div class="info-box">
         <div class="info-title">{title}</div>
-        <div class="info-subtitle">(Dữ liệu cập nhật từ Besttrack)</div>
+        <div class="info-subtitle">Tin phát lúc 10h00</div>
         <table>
             <thead>
                 <tr>
@@ -315,7 +334,7 @@ def create_legend(img_b64):
 def main():
     
     with st.sidebar:
-        st.title("🌪️ TRUNG TÂM BÃO")
+        st.title("Dữ liệu khí tượng")
         
         topic = st.radio("CHỌN CHẾ ĐỘ:", 
                          ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
@@ -352,11 +371,11 @@ def main():
                                 else: df = pd.read_excel(f_path)
                                 
                             df = normalize_columns(df)
-                            for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
+                            for c in ['wind_km/h', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
                                 if c not in df.columns: df[c] = 0
                             if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
                             elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
-                            for c in ['lat','lon','wind_kt', 'pressure', 'bf']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                            for c in ['lat','lon','wind_km/h', 'pressure', 'bf']: df[c] = pd.to_numeric(df[c], errors='coerce')
                             return df.dropna(subset=['lat','lon'])
                         except: return pd.DataFrame()
 
@@ -376,11 +395,11 @@ def main():
                         try:
                             df = pd.read_excel(path)
                             df = normalize_columns(df)
-                            for c in ['wind_kt', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
+                            for c in ['wind_km/h', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
                                 if c not in df.columns: df[c] = 0
                             if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
                             elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
-                            for c in ['lat','lon','wind_kt', 'pressure']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                            for c in ['lat','lon','wind_km/h', 'pressure']: df[c] = pd.to_numeric(df[c], errors='coerce')
                             df = df.dropna(subset=['lat','lon'])
 
                             years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
@@ -437,7 +456,7 @@ def main():
                         
                         if icon_base64:
                             icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(45, 45))
-                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_kt', 0)} kt").add_to(fg_storm)
+                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} kt").add_to(fg_storm)
                         else:
                             # Dự phòng
                             folium.CircleMarker([r['lat'], r['lon']], radius=4, color='red', fill=True).add_to(fg_storm)
@@ -446,7 +465,7 @@ def main():
                     sub = final_df[final_df['name']==n].sort_values('dt')
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
                     for _, r in sub.iterrows():
-                        c = '#00f2ff' if r.get('wind_kt',0)<64 else '#ff0055'
+                        c = '#00f2ff' if r.get('wind_km/h',0)<64 else '#ff0055'
                         folium.CircleMarker([r['lat'],r['lon']], radius=3, color=c, fill=True, popup=f"{n}").add_to(fg_storm)
         
         fg_storm.add_to(m)
