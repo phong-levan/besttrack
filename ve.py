@@ -116,7 +116,7 @@ st.markdown(f"""
         top: 20px; 
         right: 20px; 
         z-index: 10000;
-        width: 200px; /* Tăng kích thước để ảnh to hơn */
+        width: 300px; /* Tăng kích thước để ảnh to hơn */
         background: transparent !important;
         border: none !important;
         padding: 0 !important;
@@ -456,4 +456,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
