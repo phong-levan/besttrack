@@ -59,75 +59,68 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (FIX LỖI TRẮNG SIDEBAR)
+# 2. CSS CHUNG (FIX CỨNG SIDEBAR - CHỐNG ĐÓNG)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. Reset lề trang web */
+    /* 1. XÓA LỀ MẶC ĐỊNH */
     .block-container {{
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     header, footer {{ display: none !important; }}
 
-    /* 2. CẤU HÌNH SIDEBAR */
+    /* 2. ÉP BUỘC HIỂN THỊ SIDEBAR (MENU TRÁI) */
+    /* Dùng !important để ghi đè mọi trạng thái đóng/mở của Streamlit */
     section[data-testid="stSidebar"] {{
+        display: block !important; /* Luôn hiện */
+        visibility: visible !important;
         width: {SIDEBAR_WIDTH} !important;
         min-width: {SIDEBAR_WIDTH} !important;
         max-width: {SIDEBAR_WIDTH} !important;
-        background-color: {COLOR_SIDEBAR} !important;
-        border-right: 1px solid {COLOR_BORDER};
+        transform: none !important; /* Ngăn hiệu ứng trượt vào/ra */
         
-        /* Ghim vị trí */
+        background-color: {COLOR_SIDEBAR} !important;
+        border-right: 1px solid #ddd;
+        
+        /* Cố định vị trí */
         position: fixed !important;
-        top: 0; left: 0; bottom: 0;
-        z-index: 100 !important;
+        top: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        z-index: 99999 !important;
     }}
-
-    /* >>> QUAN TRỌNG: NÚT ĐIỀU KHIỂN <<< */
     
-    /* ẨN nút ĐÓNG (Dấu << trong menu) -> Để không bấm đóng được */
-    [data-testid="stSidebarCollapseBtn"] {{
+    /* ẨN NÚT ĐÓNG/MỞ SIDEBAR (KHÔNG CHO NGƯỜI DÙNG BẤM NỮA) */
+    [data-testid="stSidebarCollapseBtn"], [data-testid="stSidebarCollapsedControl"] {{
         display: none !important;
     }}
-    
-    /* HIỆN nút MỞ (Dấu > ở góc trái) -> Để cứu hộ khi bị trắng trơn */
-    /* Nút này sẽ hiện đè lên trên cùng, bạn bấm vào đây để menu hiện nội dung lại */
-    [data-testid="stSidebarCollapsedControl"] {{
-        display: block !important;
-        z-index: 999999 !important;
-        left: 10px !important;
-        top: 10px !important;
-        background-color: white !important;
-        border: 2px solid #007bff !important; /* Viền xanh dễ thấy */
-        color: #000 !important;
-        border-radius: 5px;
-    }}
 
-    /* 3. ĐẨY KHUNG BẢN ĐỒ SANG PHẢI */
+    /* 3. ÉP BUỘC KHUNG CHÍNH (MAP) DỊCH SANG PHẢI */
+    /* Để tránh bị Sidebar che mất */
     .main .block-container {{
-        margin-left: {SIDEBAR_WIDTH} !important; /* Chừa chỗ cho Sidebar */
+        margin-left: {SIDEBAR_WIDTH} !important; /* Đẩy sang phải bằng độ rộng Sidebar */
         width: calc(100vw - {SIDEBAR_WIDTH}) !important; /* Tính lại chiều rộng */
     }}
-
-    /* 4. IFRAME FULL CHIỀU CAO */
-    iframe, [data-testid="stFoliumMap"] {{
+    
+    /* Fix iframe bản đồ */
+    iframe {{
         width: 100% !important;
         height: 100vh !important;
         border: none !important;
         display: block !important;
     }}
     
-    /* 5. CÁC WIDGET NỔI */
+    /* 4. CÁC WIDGET NỔI (CHÚ THÍCH & BẢNG TIN) */
     .legend-box {{
-        position: fixed; top: 20px; right: 20px; z-index: 9999;
+        position: fixed; top: 20px; right: 20px; z-index: 10000;
         width: 300px; pointer-events: none;
     }}
     .legend-box img {{ width: 100%; display: block; }}
 
     .info-box {{
-        position: fixed; top: 250px; right: 20px; z-index: 9999;
+        position: fixed; top: 250px; right: 20px; z-index: 10000;
         width: fit-content !important; min-width: 150px; 
-        background: rgba(255, 255, 255, 0.95);
+        background: rgba(255, 255, 255, 0.9);
         border: 1px solid #ccc;
         box-shadow: 0 2px 6px rgba(0,0,0,0.2);
         padding: 5px !important; color: #000; border-radius: 6px;
@@ -150,11 +143,6 @@ st.markdown(f"""
     }}
     td {{ 
         padding: 4px 8px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
-    }}
-    
-    .leaflet-control-layers {{
-        background: white !important; color: {COLOR_TEXT} !important;
-        border: 1px solid {COLOR_BORDER} !important; padding: 10px !important;
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -331,7 +319,7 @@ def main():
         show_widgets = False
         active_mode = ""
         
-        # Khởi tạo mặc định
+        # Khởi tạo mặc định để tránh lỗi Syntax
         obs_mode = ""
 
         if topic == "Dữ liệu quan trắc":
@@ -381,6 +369,7 @@ def main():
                             final_df = df
                     else: st.warning("Vui lòng tải file.")
             else: 
+                # (Phần lịch sử giữ nguyên)
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
