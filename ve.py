@@ -59,62 +59,65 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG LAYOUT - ẨN NÚT THU GỌN)
+# 2. CSS CHUNG (CHIA ĐÔI MÀN HÌNH: FIX TRÁI - ĐẨY PHẢI)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. Reset lề trang */
-    .block-container {{
-        padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
-    }}
+    /* 1. ẨN CÁC THÀNH PHẦN THỪA CỦA STREAMLIT */
     header, footer {{ display: none !important; }}
+    [data-testid="stSidebarCollapseBtn"] {{ display: none !important; }}
+    [data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
 
-    /* 2. CỐ ĐỊNH SIDEBAR (MENU TRÁI) - KHÔNG CHO ĐÓNG */
+    /* 2. CỐ ĐỊNH SIDEBAR (MENU TRÁI) */
     section[data-testid="stSidebar"] {{
-        display: block !important;
         width: {SIDEBAR_WIDTH} !important;
         min-width: {SIDEBAR_WIDTH} !important;
         max-width: {SIDEBAR_WIDTH} !important;
-        background-color: {COLOR_SIDEBAR} !important;
-        border-right: 1px solid {COLOR_BORDER};
-        position: fixed !important;
-        top: 0; left: 0; bottom: 0;
-        z-index: 100 !important;
-    }}
-
-    /* >>> QUAN TRỌNG: XÓA SỔ NÚT MŨI TÊN THU GỌN <<< */
-    [data-testid="stSidebarCollapseBtn"] {{
-        display: none !important;
-        visibility: hidden !important;
-    }}
-    
-    /* Ẩn luôn nút mở rộng (để đảm bảo không có gì hiện ra đè lên map) */
-    [data-testid="stSidebarCollapsedControl"] {{
-        display: none !important;
-    }}
-
-    /* 3. BẢN ĐỒ (NẰM BÊN PHẢI SIDEBAR) */
-    /* Tính toán vị trí: Cách trái 320px, Rộng = Màn hình - 320px */
-    iframe, [data-testid="stFoliumMap"] {{
+        
         position: fixed !important;
         top: 0 !important;
-        left: {SIDEBAR_WIDTH} !important; 
+        left: 0 !important;
+        bottom: 0 !important;
+        
+        background-color: {COLOR_SIDEBAR} !important;
+        border-right: 1px solid {COLOR_BORDER};
+        z-index: 1000 !important; /* Luôn nằm trên */
+        box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+    }}
+
+    /* 3. ĐẨY NỘI DUNG CHÍNH (BẢN ĐỒ) SANG PHẢI */
+    /* Đây là mấu chốt để không bị che lấp */
+    .main .block-container {{
+        max-width: unset !important;
+        padding-top: 0 !important;
+        padding-right: 0 !important;
+        padding-left: 0 !important;
+        padding-bottom: 0 !important;
+        
+        /* Đẩy lề trái bằng đúng kích thước Sidebar */
+        margin-left: {SIDEBAR_WIDTH} !important; 
+        
+        /* Chiều rộng còn lại */
         width: calc(100vw - {SIDEBAR_WIDTH}) !important;
+    }}
+
+    /* 4. IFRAME BẢN ĐỒ FULL KHUNG */
+    iframe, [data-testid="stFoliumMap"] {{
+        width: 100% !important;
         height: 100vh !important;
         border: none !important;
         display: block !important;
-        z-index: 1 !important;
     }}
     
-    /* 4. WIDGET NỔI */
+    /* 5. CÁC WIDGET NỔI */
     .legend-box {{
-        position: fixed; top: 20px; right: 20px; z-index: 10000;
+        position: fixed; top: 20px; right: 20px; z-index: 9999;
         width: 300px; pointer-events: none;
     }}
     .legend-box img {{ width: 100%; display: block; }}
 
     .info-box {{
-        position: fixed; top: 250px; right: 20px; z-index: 10000;
+        position: fixed; top: 250px; right: 20px; z-index: 9999;
         width: fit-content !important; min-width: 150px; 
         background: rgba(255, 255, 255, 0.95);
         border: 1px solid #ccc;
@@ -320,7 +323,7 @@ def main():
         show_widgets = False
         active_mode = ""
         
-        # >>> SỬA LỖI Ở ĐÂY: Gán giá trị mặc định cho obs_mode <<<
+        # >>> Gán giá trị mặc định cho obs_mode để tránh lỗi Syntax
         obs_mode = "" 
 
         if topic == "Dữ liệu quan trắc":
@@ -370,7 +373,6 @@ def main():
                             final_df = df
                     else: st.warning("Vui lòng tải file.")
             else: 
-                # (Phần lịch sử giữ nguyên)
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
