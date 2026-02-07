@@ -264,7 +264,7 @@ def get_icon_name(row):
     # Logic:
     # - Nếu là "forecast" hoặc "dự báo" -> đuôi _dubao (icon nhạt/khác)
     # - Nếu là "hiện tại" hoặc "dự báo" -> đuôi _dubao (icon đỏ/đậm)
-    status = 'dubao' if ('forecast' in status_raw or 'dự báo' in status_raw) else 'dubao'
+    status = 'dubao' if ('forecast' in status_raw or 'dự báo' in status_raw) else 'daqua'
     
     if pd.isna(wind_speed): return f"vungthap_{status}"
     if wind_speed < 6:      return f"vungthap_{status}"
@@ -480,4 +480,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
