@@ -50,28 +50,28 @@ COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
 
-# Cấu hình trang
+# CẤU HÌNH TRANG
 st.set_page_config(
     page_title="Storm Monitor",
     layout="wide",
-    initial_sidebar_state="expanded" # Mặc định mở
+    initial_sidebar_state="expanded" 
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (GIAO DIỆN CHUẨN - ỔN ĐỊNH)
+# 2. CSS CHUNG (ĐÃ CHỈNH NÚT MỞ MENU THẤP XUỐNG)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. TỐI ƯU KHÔNG GIAN */
+    /* 1. XÓA KHOẢNG TRẮNG THỪA */
     .block-container {{
         padding-top: 0rem !important;
         padding-bottom: 0rem !important;
         padding-left: 0rem !important;
         padding-right: 0rem !important;
-        max-width: 100% !important;
+        max-width: 100vw !important;
     }}
     
-    /* Ẩn Header/Footer mặc định của Streamlit cho gọn */
+    /* Ẩn Header mặc định */
     header[data-testid="stHeader"] {{
         display: none !important;
     }}
@@ -79,42 +79,38 @@ st.markdown(f"""
         display: none !important;
     }}
 
-    /* 2. THANH SIDEBAR (MENU TRÁI) */
-    section[data-testid="stSidebar"] {{
-        background-color: #ffffff !important; /* Nền trắng */
-        border-right: 1px solid #ddd;
-        z-index: 100 !important;
-    }}
-    
-    /* 3. NÚT ĐÓNG/MỞ MENU (QUAN TRỌNG: PHẢI HIỆN ĐỂ KHÔNG BỊ MẤT) */
-    
-    /* Nút mũi tên khi menu đang ĐÓNG (Nằm góc trái màn hình) */
+    /* 2. NÚT MỞ MENU (ĐÃ CHỈNH VỊ TRÍ) */
+    /* Nút này hiện khi menu bị đóng */
     [data-testid="stSidebarCollapsedControl"] {{
         display: block !important;
-        color: #333 !important;
+        color: #000 !important;
         background-color: white !important;
         border: 1px solid #ccc;
-        border-radius: 4px;
-        top: 10px !important;
+        border-radius: 5px;
+        
+        /* >>> ĐÃ SỬA: Dời xuống thấp (70px) để tránh thanh địa chỉ <<< */
+        top: 70px !important; 
         left: 10px !important;
-        z-index: 999999 !important;
+        
+        z-index: 1000000;
     }}
 
-    /* Nút mũi tên khi menu đang MỞ (Nằm trên Sidebar) */
-    [data-testid="stSidebarCollapseBtn"] {{
-        display: block !important; /* Cho hiện lại để bạn chủ động */
-        color: #333 !important;
+    /* 3. TÙY CHỈNH THANH SIDEBAR (MENU TRÁI) */
+    section[data-testid="stSidebar"] {{
+        background-color: {COLOR_SIDEBAR} !important;
+        border-right: 1px solid #ddd;
+        padding-top: 20px !important;
     }}
 
-    /* 4. BẢN ĐỒ (BÊN PHẢI) */
-    /* Code này đảm bảo iframe bản đồ chiếm hết phần còn lại của màn hình */
+    /* 4. BẢN ĐỒ FULL KHUNG HÌNH (TỰ ĐỘNG CO GIÃN) */
     iframe {{
         width: 100% !important;
         height: 100vh !important;
         border: none !important;
+        display: block !important;
     }}
     
-    /* 5. CÁC WIDGET NỔI (CHÚ THÍCH & BẢNG TIN) */
+    /* 5. CÁC WIDGET NỔI */
     .legend-box {{
         position: fixed; 
         top: 20px; 
@@ -124,7 +120,7 @@ st.markdown(f"""
         background: transparent !important;
         border: none !important;
         padding: 0 !important;
-        pointer-events: none; /* Để bấm xuyên qua nếu cần */
+        pointer-events: none; 
     }}
     .legend-box img {{ width: 100%; display: block; }}
 
@@ -136,7 +132,7 @@ st.markdown(f"""
         width: fit-content !important;
         min-width: 150px; 
         background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #ccc; /* Thêm viền nhẹ để tách biệt */
+        border: 1px solid #ccc;
         box-shadow: 0 2px 6px rgba(0,0,0,0.2);
         padding: 5px !important; 
         color: #000;
@@ -163,7 +159,6 @@ st.markdown(f"""
         padding: 4px 8px; border-bottom: 1px solid #ccc; text-align: center; color: #000; 
     }}
     
-    /* Tùy chỉnh nút Layer Control của Map */
     .leaflet-control-layers {{
         background: white !important; color: #333 !important;
         border: 1px solid #ccc !important; padding: 5px !important;
