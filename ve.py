@@ -232,7 +232,21 @@ def densify_track(df, step_km=10):
     new_rows.append(df.iloc[-1])
     return pd.DataFrame(new_rows)
 
-# >>> CẬP NHẬT LOGIC LẤY TÊN ICON CHÍNH XÁC HƠN <<<
+def create_storm_swaths(dense_df):
+    polys = {'r6': [], 'r10': [], 'rc': []}
+    geo = geodesic.Geodesic()
+    for _, row in dense_df.iterrows():
+        for r, key in [(row.get('r6',0), 'r6'), (row.get('r10',0), 'r10'), (row.get('rc',0), 'rc')]:
+            if r > 0:
+                circle = geo.circle(lon=row['lon'], lat=row['lat'], radius=r*1000, n_samples=30)
+                polys[key].append(Polygon(circle))
+    u = {k: unary_union(v) if v else None for k, v in polys.items()}
+    f_rc = u['rc']
+    f_r10 = u['r10'].difference(u['rc']) if u['r10'] and u['rc'] else u['r10']
+    f_r6 = u['r6'].difference(u['r10']) if u['r6'] and u['r10'] else u['r6']
+    return f_r6, f_r10, f_rc
+
+# >>> CẬP NHẬT LOGIC LẤY TÊN ICON: "HIỆN TẠI" -> MÀU ĐỎ (DAQUA) NHƯNG ĐÚNG CẤP ĐỘ <<<
 def get_icon_name(row):
     wind_speed = row.get('bf', 0) 
     w = row.get('wind_km/h', 0)
@@ -247,16 +261,10 @@ def get_icon_name(row):
     
     status_raw = str(row.get('status_raw','')).lower()
     
-    # MẶC ĐỊNH LÀ "DỰ BÁO" (Đen/Nhạt)
-    status = 'dubao'
-    
-    # NẾU LÀ "HIỆN TẠI" HOẶC "QUÁ KHỨ" -> CHUYỂN SANG "ĐÃ QUA" (Đỏ/Đậm)
-    if 'hiện tại' in status_raw or 'current' in status_raw or 'quá khứ' in status_raw or 'past' in status_raw:
-        status = 'dubao'
-        
-    # NẾU CÓ CHỮ "DỰ BÁO" -> CHẮC CHẮN LÀ DỰ BÁO
-    if 'forecast' in status_raw or 'dự báo' in status_raw:
-        status = 'dubao'
+    # Logic:
+    # - Nếu là "forecast" hoặc "dự báo" -> đuôi _dubao (icon nhạt/khác)
+    # - Nếu là "hiện tại" hoặc "dự báo" -> đuôi _dubao (icon đỏ/đậm)
+    status = 'dubao' if ('forecast' in status_raw or 'dự báo' in status_raw) else 'daqua'
     
     if pd.isna(wind_speed): return f"vungthap_{status}"
     if wind_speed < 6:      return f"vungthap_{status}"
@@ -434,6 +442,7 @@ def main():
                     
                     # --- VẼ ICON BÃO ---
                     for _, r in sub.iterrows():
+                        # Lấy key của icon (logic đã sửa: hiện tại = dubao = icon đỏ)
                         icon_key = get_icon_name(r)
                         
                         icon_path = ICON_PATHS.get(icon_key)
