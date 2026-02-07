@@ -51,6 +51,7 @@ COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
 SIDEBAR_WIDTH = "320px"
 
+# Thiết lập luôn mở sidebar ban đầu
 st.set_page_config(
     page_title="Storm Monitor",
     layout="wide",
@@ -58,7 +59,7 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (ĐÃ SỬA LỖI MẤT NÚT MỞ MENU)
+# 2. CSS CHUNG (FIX CỨNG SIDEBAR - HIỆN NÚT CỨU HỘ)
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -97,24 +98,25 @@ st.markdown(f"""
         padding-top: 0 !important;
     }}
     
-    /* >>> SỬA LỖI Ở ĐÂY: CHỈ ẨN NÚT ĐÓNG, NHƯNG HIỆN NÚT MỞ <<< */
+    /* >>> KHU VỰC QUAN TRỌNG: ĐIỀU KHIỂN NÚT ĐÓNG MỞ <<< */
     
-    /* Ẩn nút "Thu gọn" (dấu <) nằm trong Sidebar để hạn chế bấm nhầm */
+    /* 1. ẨN nút "Thu gọn" (dấu < hoặc X) nằm BÊN TRONG Sidebar */
+    /* Để người dùng không bấm nhầm đóng lại */
     [data-testid="stSidebarCollapseBtn"] {{
         display: none !important;
     }}
     
-    /* HIỆN nút "Mở rộng" (dấu >) ở góc trái trên cùng nếu Sidebar bị đóng */
+    /* 2. HIỆN nút "Mở rộng" (dấu >) ở góc trái màn hình */
+    /* Để nếu sidebar bị đóng (do lỗi hoặc do màn hình nhỏ), nút này sẽ hiện ra để bấm mở lại */
     [data-testid="stSidebarCollapsedControl"] {{
-        display: block !important; /* Bắt buộc hiện */
-        z-index: 10000000;
-        top: 10px;
-        left: 10px;
-        color: #000; /* Màu đen cho dễ nhìn */
-        background-color: rgba(255,255,255,0.8);
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        padding: 5px;
+        display: block !important; 
+        z-index: 10000000; /* Luôn nổi lên trên cùng */
+        left: 10px !important;
+        top: 10px !important;
+        background-color: white !important;
+        border: 1px solid #ccc !important;
+        border-radius: 4px !important;
+        color: black !important;
     }}
     
     [data-testid="stSidebarUserContent"] {{
