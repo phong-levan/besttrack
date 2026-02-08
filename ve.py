@@ -58,11 +58,11 @@ st.set_page_config(
     initial_sidebar_state="expanded" 
 )
 # ==============================================================================
-# 2. CSS CHUNG (LẤP ĐẦY BẢN ĐỒ - XÓA HOÀN TOÀN Ô TRỐNG CHÂN TRANG)
+# 2. CSS CHUNG (FIX LỖI KHOẢNG TRẮNG, FULL BẢN ĐỒ & XÓA THANH CUỘN)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. KHÓA CHẶT TRÌNH DUYỆT - KHÔNG CHO PHÉP CUỘN */
+    /* 1. RESET TOÀN BỘ KHUNG NHÌN - KHÓA CUỘN */
     html, body, [data-testid="stAppViewContainer"] {{
         overflow: hidden !important;
         height: 100vh !important;
@@ -75,13 +75,12 @@ st.markdown(f"""
         display: none !important;
     }}
     
-    /* 3. ÉP TOÀN BỘ APP TRÀN VIỀN */
+    /* 3. ÉP GIAO DIỆN SÁT MÉP TRÊN */
     .stApp {{
-        margin-top: -65px !important;
-        height: 100vh !important;
+        margin-top: -60px !important;
     }}
 
-    /* 4. TRIỆT TIÊU KHOẢNG TRẮNG CỦA BLOCK CONTAINER */
+    /* 4. TRIỆT TIÊU KHOẢNG TRỐNG TRẮNG Ở GIỮA (BLOCK CONTAINER) */
     .main .block-container {{
         padding: 0 !important;
         margin: 0 !important;
@@ -91,12 +90,12 @@ st.markdown(f"""
         flex-direction: column !important;
     }}
     
-    /* Xóa các khoảng trống thừa từ các thành phần con của Streamlit */
+    /* Loại bỏ khoảng trống giữa các phần tử bên trong */
     [data-testid="stVerticalBlock"] {{
         gap: 0 !important;
     }}
 
-    /* 5. SIDEBAR BÊN TRÁI CỐ ĐỊNH */
+    /* 5. SIDEBAR BÊN TRÁI: HIỆN CỐ ĐỊNH & KHÔNG CUỘN */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -119,7 +118,7 @@ st.markdown(f"""
         display: none !important;
     }}
 
-    /* 6. ÉP NỘI DUNG CHÍNH (MAIN VIEW) LẤP ĐẦY TẬN ĐÁY */
+    /* 6. PHẦN NỘI DUNG CHÍNH (MAIN VIEW): LẤP ĐẦY 100% CHIỀU CAO */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
     }}
@@ -127,10 +126,10 @@ st.markdown(f"""
     [data-testid="stMainViewContainer"] {{
         height: 100vh !important;
         width: 100% !important;
-        overflow: hidden !important; /* Xóa thanh cuộn bên phải */
+        overflow: hidden !important;
     }}
 
-    /* 7. ÉP BẢN ĐỒ/IFRAME LẤP ĐẦY 100% KHÔNG GIAN CÒN LẠI */
+    /* 7. ÉP BẢN ĐỒ VÀ IFRAME FULL TẬN ĐÁY (XÓA Ô ĐEN/TRẮNG) */
     iframe, .stFolium, div[data-testid="stHtml"], .element-container {{
         width: 100% !important;
         height: 100vh !important;
@@ -140,11 +139,15 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 8. CÁC THÀNH PHẦN NỔI (300PX) */
+    /* 8. WIDGET NỔI (CHÚ THÍCH & TIN BÃO) - RỘNG 300PX */
     .legend-box {{
-        position: fixed; top: 15px; right: 15px; z-index: 9999;
+        position: fixed; top: 10px; right: 15px; z-index: 9999;
         width: 300px !important; pointer-events: none;
     }}
+    .legend-box img {{
+        width: 100% !important; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }}
+
     .info-box {{
         position: fixed; top: 230px; right: 15px; z-index: 9999;
         width: 300px !important; background: rgba(255, 255, 255, 0.95);
@@ -152,11 +155,17 @@ st.markdown(f"""
         padding: 10px !important; color: #000;
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }}
+    .info-title {{
+        text-align: center; font-weight: bold; font-size: 14px; margin-bottom: 5px; color: #d32f2f;
+    }}
+    .info-subtitle {{
+        text-align: center; font-size: 10px; margin-bottom: 5px; font-style: italic;
+    }}
     .info-box table {{
-        width: 100%; border-collapse: collapse; font-size: 12px;
+        width: 100%; border-collapse: collapse; font-size: 11px;
     }}
     .info-box th, .info-box td {{
-        text-align: center !important; padding: 5px 2px; border-bottom: 1px solid #eee;
+        text-align: center !important; padding: 4px 1px; border-bottom: 1px solid #eee;
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -470,6 +479,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
