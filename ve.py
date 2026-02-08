@@ -49,7 +49,7 @@ COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
-SIDEBAR_WIDTH = "300px"
+SIDEBAR_WIDTH = "320px"
 
 # Cấu hình trang
 st.set_page_config(
@@ -448,4 +448,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
