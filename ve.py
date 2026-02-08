@@ -58,26 +58,21 @@ st.set_page_config(
     initial_sidebar_state="expanded" 
 )
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG SIDEBAR, ĐẨY NỘI DUNG & CĂN CHỈNH WIDGET NỔI)
+# 2. CSS CHUNG (FIX CỨNG SIDEBAR & ĐẨY NỘI DUNG)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. TRIỆT TIÊU HEADER & KHOẢNG TRẮNG DƯ THỪA */
-    [data-testid="stHeader"] {{
-        display: none !important;
-    }}
-    
-    .stApp {{
-        margin-top: -50px !important; /* Đẩy nhẹ để xóa dải trắng nhưng không làm mất nội dung */
-    }}
-
+    /* 1. THIẾT LẬP CHUNG */
     .block-container {{
         padding: 0 !important;
         margin: 0 !important;
         max-width: 100% !important;
     }}
+    header, footer {{
+        display: none !important;
+    }}
 
-    /* 2. SIDEBAR BÊN TRÁI CỐ ĐỊNH */
+    /* 2. ÉP SIDEBAR LUÔN HIỆN CỐ ĐỊNH BÊN TRÁI */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -88,83 +83,48 @@ st.markdown(f"""
         left: 0 !important;
         top: 0 !important;
         height: 100vh !important;
-        transform: none !important;
+        transform: none !important; /* Chặn hiệu ứng trượt mất sidebar */
         z-index: 100000 !important;
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid #ddd;
-        overflow: hidden !important;
     }}
 
+    /* ẨN NÚT ĐÓNG/MỞ SIDEBAR ĐỂ KHÔNG BỊ NHẢY */
     [data-testid="stSidebarCollapseBtn"],
     [data-testid="stSidebarCollapsedControl"] {{
         display: none !important;
     }}
 
-    /* 3. KHUNG NỘI DUNG CHÍNH (MAP) */
+    /* 3. ĐẨY NỘI DUNG CHÍNH SANG PHẢI (BẮT ĐẦU TỪ 320PX) */
+    /* Target vào AppViewContainer để đẩy toàn bộ nội dung bên phải sidebar */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
-        overflow: hidden !important;
     }}
 
-    /* 4. CHÚ THÍCH (LEGEND) - NẰM TRONG BẢN ĐỒ, RỘNG 300PX */
-    .legend-box {{
-        position: fixed; 
-        top: 20px; 
-        right: 20px; 
-        z-index: 9999;
-        width: 300px !important; /* Khóa kích thước 300px */
-        pointer-events: none;
-    }}
-    .legend-box img {{
+    /* Đảm bảo khung Main không có lề trái thừa */
+    [data-testid="stMainViewContainer"] {{
+        margin-left: 0 !important;
         width: 100% !important;
-        border-radius: 5px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     }}
 
-    /* 5. BẢNG TIN BÃO - CĂN GIỮA NỘI DUNG, NẰM TRONG BẢN ĐỒ */
-    .info-box {{
-        position: fixed; 
-        top: 240px; /* Nằm dưới chú thích */
-        right: 20px; 
-        z-index: 9999;
-        width: 300px !important; /* Đồng bộ kích thước với chú thích */
-        background: rgba(255, 255, 255, 0.95);
-        border: 1px solid #ccc; 
-        border-radius: 8px;
-        padding: 10px !important; 
-        color: #000;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    }}
-    .info-title {{
-        text-align: center; 
-        font-weight: bold; 
-        font-size: 15px; 
-        margin-bottom: 5px;
-        color: #d32f2f;
-    }}
-    .info-subtitle {{
-        text-align: center; 
-        font-size: 10px; 
-        margin-bottom: 8px; 
-        font-style: italic;
-    }}
-    .info-box table {{
-        width: 100%;
-        margin: 0 auto;
-        border-collapse: collapse;
-        font-size: 12px;
-    }}
-    .info-box th, .info-box td {{
-        text-align: center !important;
-        padding: 4px 2px;
-        border-bottom: 1px solid #eee;
-    }}
-
-    /* 6. FIX IFRAME FULL MÀN HÌNH */
+    /* 4. TỐI ƯU CHO IFRAME (KMA, WINDY) */
     iframe {{
         width: 100% !important;
         height: 100vh !important;
         border: none !important;
+        display: block !important;
+    }}
+
+    /* 5. WIDGET NỔI (BẢNG TIN & CHÚ THÍCH) */
+    .legend-box {{
+        position: fixed; top: 10px; right: 20px; z-index: 9999;
+        width: 280px; pointer-events: none;
+    }}
+    .info-box {{
+        position: fixed; top: 220px; right: 20px; z-index: 9999;
+        width: fit-content; background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #ccc; border-radius: 6px;
+        padding: 8px !important; color: #000;
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -320,7 +280,7 @@ def create_legend(img_b64):
     if not img_b64: return ""
     return textwrap.dedent(f"""
     <div class="legend-box">
-        <img src="data:image/png;base64,{img_b64}" style="width:100%">
+        <img src="data:image/png;base64,{img_b64}">
     </div>""")
 
 # ==============================================================================
@@ -340,6 +300,7 @@ def main():
         show_widgets = False
         active_mode = ""
         
+        # Khởi tạo mặc định để tránh lỗi Syntax
         obs_mode = ""
 
         if topic == "Dữ liệu quan trắc":
@@ -389,6 +350,7 @@ def main():
                             final_df = df
                     else: st.warning("Vui lòng tải file.")
             else: 
+                # (Phần lịch sử giữ nguyên)
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
@@ -443,6 +405,7 @@ def main():
                         if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
                     
+                    # --- VẼ ICON BÃO ---
                     for _, r in sub.iterrows():
                         icon_key = get_icon_name(r)
                         icon_path = ICON_PATHS.get(icon_key)
@@ -478,10 +441,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
 
 
 
