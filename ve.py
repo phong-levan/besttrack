@@ -58,16 +58,11 @@ st.set_page_config(
     initial_sidebar_state="expanded" 
 )
 # ==============================================================================
-# 2. CSS CHUNG (FULL MÀN HÌNH, KHÔNG FOOTER, CHÚ THÍCH 300PX)
+# 2. CSS CHUNG (LẤP ĐẦY BẢN ĐỒ - XÓA HOÀN TOÀN Ô TRỐNG CHÂN TRANG)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. TRIỆT TIÊU HEADER & FOOTER MẶC ĐỊNH */
-    [data-testid="stHeader"], [data-testid="stFooter"] {{
-        display: none !important;
-    }}
-    
-    /* 2. ÉP TOÀN BỘ APP FULL CHIỀU CAO, LOẠI BỎ CUỘN */
+    /* 1. KHÓA CHẶT TRÌNH DUYỆT - KHÔNG CHO PHÉP CUỘN */
     html, body, [data-testid="stAppViewContainer"] {{
         overflow: hidden !important;
         height: 100vh !important;
@@ -75,19 +70,33 @@ st.markdown(f"""
         padding: 0 !important;
     }}
 
+    /* 2. ẨN HEADER VÀ FOOTER */
+    [data-testid="stHeader"], [data-testid="stFooter"] {{
+        display: none !important;
+    }}
+    
+    /* 3. ÉP TOÀN BỘ APP TRÀN VIỀN */
     .stApp {{
-        margin-top: -50px !important;
+        margin-top: -65px !important;
+        height: 100vh !important;
     }}
 
-    /* Xóa padding mặc định của container chứa nội dung chính */
-    .block-container {{
+    /* 4. TRIỆT TIÊU KHOẢNG TRẮNG CỦA BLOCK CONTAINER */
+    .main .block-container {{
         padding: 0 !important;
         margin: 0 !important;
         max-width: 100% !important;
         height: 100vh !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }}
+    
+    /* Xóa các khoảng trống thừa từ các thành phần con của Streamlit */
+    [data-testid="stVerticalBlock"] {{
+        gap: 0 !important;
     }}
 
-    /* 3. SIDEBAR BÊN TRÁI CỐ ĐỊNH, KHÔNG THANH CUỘN */
+    /* 5. SIDEBAR BÊN TRÁI CỐ ĐỊNH */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -105,69 +114,49 @@ st.markdown(f"""
         overflow: hidden !important;
     }}
 
-    /* 4. ĐẨY NỘI DUNG CHÍNH SANG PHẢI VÀ FULL CHIỀU DỌC */
+    [data-testid="stSidebarCollapseBtn"],
+    [data-testid="stSidebarCollapsedControl"] {{
+        display: none !important;
+    }}
+
+    /* 6. ÉP NỘI DUNG CHÍNH (MAIN VIEW) LẤP ĐẦY TẬN ĐÁY */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
     }}
 
     [data-testid="stMainViewContainer"] {{
         height: 100vh !important;
-        display: flex !important;
-        flex-direction: column !important;
-    }}
-
-    /* 5. CHÚ THÍCH (LEGEND) - RỘNG 300PX, NẰM TRONG BẢN ĐỒ */
-    .legend-box {{
-        position: fixed; 
-        top: 20px; 
-        right: 20px; 
-        z-index: 9999;
-        width: 300px !important;
-        pointer-events: none;
-    }}
-    .legend-box img {{
         width: 100% !important;
-        border-radius: 5px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        overflow: hidden !important; /* Xóa thanh cuộn bên phải */
     }}
 
-    /* 6. BẢNG TIN BÃO - CĂN GIỮA, RỘNG 300PX */
-    .info-box {{
-        position: fixed; 
-        top: 240px; 
-        right: 20px; 
-        z-index: 9999;
-        width: 300px !important;
-        background: rgba(255, 255, 255, 0.95);
-        border: 1px solid #ccc; 
-        border-radius: 8px;
-        padding: 10px !important; 
-        color: #000;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    }}
-    .info-title {{
-        text-align: center; font-weight: bold; font-size: 15px; margin-bottom: 5px; color: #d32f2f;
-    }}
-    .info-subtitle {{
-        text-align: center; font-size: 10px; margin-bottom: 8px; font-style: italic;
-    }}
-    .info-box table {{
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 12px;
-    }}
-    .info-box th, .info-box td {{
-        text-align: center !important;
-        padding: 4px 2px;
-        border-bottom: 1px solid #eee;
-    }}
-
-    /* 7. ÉP IFRAME VÀ BẢN ĐỒ FULL TẬN ĐÁY */
-    iframe, .stFolium, div[data-testid="stHtml"] {{
+    /* 7. ÉP BẢN ĐỒ/IFRAME LẤP ĐẦY 100% KHÔNG GIAN CÒN LẠI */
+    iframe, .stFolium, div[data-testid="stHtml"], .element-container {{
         width: 100% !important;
         height: 100vh !important;
         border: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
         display: block !important;
+    }}
+
+    /* 8. CÁC THÀNH PHẦN NỔI (300PX) */
+    .legend-box {{
+        position: fixed; top: 15px; right: 15px; z-index: 9999;
+        width: 300px !important; pointer-events: none;
+    }}
+    .info-box {{
+        position: fixed; top: 230px; right: 15px; z-index: 9999;
+        width: 300px !important; background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #ccc; border-radius: 8px;
+        padding: 10px !important; color: #000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }}
+    .info-box table {{
+        width: 100%; border-collapse: collapse; font-size: 12px;
+    }}
+    .info-box th, .info-box td {{
+        text-align: center !important; padding: 5px 2px; border-bottom: 1px solid #eee;
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -481,6 +470,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
