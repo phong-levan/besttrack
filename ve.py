@@ -59,14 +59,18 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG SIDEBAR, ĐẨY NỘI DUNG & LOẠI BỎ THANH CUỘN)
+# 2. CSS CHUNG (LOẠI BỎ KHOẢNG TRẮNG TRÊN & FIX CỨNG GIAO DIỆN)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. THIẾT LẬP CHUNG & LOẠI BỎ THANH CUỘN TOÀN TRANG */
-    html, body, [data-testid="stAppViewContainer"] {{
-        overflow: hidden !important;
-        height: 100vh;
+    /* 1. TRIỆT TIÊU HOÀN TOÀN HEADER MẶC ĐỊNH CỦA STREAMLIT */
+    [data-testid="stHeader"] {{
+        display: none !important;
+    }}
+    
+    /* 2. ĐẨY TOÀN BỘ NỘI DUNG SÁT LÊN MÉP TRÊN CÙNG */
+    .stApp {{
+        margin-top: -60px !important;
     }}
 
     .block-container {{
@@ -74,11 +78,8 @@ st.markdown(f"""
         margin: 0 !important;
         max-width: 100% !important;
     }}
-    header, footer {{
-        display: none !important;
-    }}
 
-    /* 2. ÉP SIDEBAR LUÔN HIỆN CỐ ĐỊNH BÊN TRÁI & KHÔNG THANH CUỘN */
+    /* 3. ÉP SIDEBAR LUÔN HIỆN CỐ ĐỊNH BÊN TRÁI */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -93,7 +94,7 @@ st.markdown(f"""
         z-index: 100000 !important;
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid #ddd;
-        overflow: hidden !important;
+        overflow: hidden !important; /* Bỏ thanh cuộn sidebar */
     }}
 
     /* ẨN NÚT ĐÓNG/MỞ SIDEBAR */
@@ -102,9 +103,11 @@ st.markdown(f"""
         display: none !important;
     }}
 
-    /* 3. ĐẨY NỘI DUNG CHÍNH SANG PHẢI */
+    /* 4. ĐẨY NỘI DUNG CHÍNH SANG PHẢI VÀ LOẠI BỎ THANH CUỘN */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
+        overflow: hidden !important;
+        height: 100vh;
     }}
 
     [data-testid="stMainViewContainer"] {{
@@ -113,31 +116,13 @@ st.markdown(f"""
         overflow: hidden !important;
     }}
 
-    /* 4. TỐI ƯU CHO IFRAME */
-    iframe {{
-        width: 100% !important;
-        height: 100vh !important;
-        border: none !important;
-        display: block !important;
-    }}
-
-    /* 5. WIDGET NỔI & CĂN GIỮA BẢNG TIN */
-    .legend-box {{
-        position: fixed; top: 30px; right: 20px; z-index: 9999;
-        width: 330px; pointer-events: none;
-    }}
+    /* 5. CĂN GIỮA NỘI DUNG TRONG INFO-BOX */
     .info-box {{
         position: fixed; top: 220px; right: 20px; z-index: 9999;
         width: fit-content; background: rgba(255, 255, 255, 0.9);
         border: 1px solid #ccc; border-radius: 6px;
         padding: 8px !important; color: #000;
         box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    }}
-    .info-title {{
-        text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 5px;
-    }}
-    .info-subtitle {{
-        text-align: center; font-size: 11px; margin-bottom: 10px; font-style: italic;
     }}
     .info-box table {{
         margin-left: auto;
@@ -148,6 +133,14 @@ st.markdown(f"""
         text-align: center !important;
         padding: 6px 10px;
         border-bottom: 1px solid #ddd;
+    }}
+
+    /* 6. TỐI ƯU CHO IFRAME */
+    iframe {{
+        width: 100% !important;
+        height: 100vh !important;
+        border: none !important;
+        display: block !important;
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -462,3 +455,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
