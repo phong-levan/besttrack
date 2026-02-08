@@ -58,44 +58,26 @@ st.set_page_config(
     initial_sidebar_state="expanded" 
 )
 # ==============================================================================
-# 2. CSS CHUNG (FIX LỖI KHOẢNG TRẮNG, FULL BẢN ĐỒ & XÓA THANH CUỘN)
+# 2. CSS CHUNG (FIX CỨNG SIDEBAR, ĐẨY NỘI DUNG & CĂN CHỈNH WIDGET NỔI)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. RESET TOÀN BỘ KHUNG NHÌN - KHÓA CUỘN */
-    html, body, [data-testid="stAppViewContainer"] {{
-        overflow: hidden !important;
-        height: 100vh !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }}
-
-    /* 2. ẨN HEADER VÀ FOOTER */
-    [data-testid="stHeader"], [data-testid="stFooter"] {{
+    /* 1. TRIỆT TIÊU HEADER & KHOẢNG TRẮNG DƯ THỪA */
+    [data-testid="stHeader"] {{
         display: none !important;
     }}
     
-    /* 3. ÉP GIAO DIỆN SÁT MÉP TRÊN */
     .stApp {{
-        margin-top: -60px !important;
+        margin-top: -50px !important; /* Đẩy nhẹ để xóa dải trắng nhưng không làm mất nội dung */
     }}
 
-    /* 4. TRIỆT TIÊU KHOẢNG TRỐNG TRẮNG Ở GIỮA (BLOCK CONTAINER) */
-    .main .block-container {{
+    .block-container {{
         padding: 0 !important;
         margin: 0 !important;
         max-width: 100% !important;
-        height: 100vh !important;
-        display: flex !important;
-        flex-direction: column !important;
-    }}
-    
-    /* Loại bỏ khoảng trống giữa các phần tử bên trong */
-    [data-testid="stVerticalBlock"] {{
-        gap: 0 !important;
     }}
 
-    /* 5. SIDEBAR BÊN TRÁI: HIỆN CỐ ĐỊNH & KHÔNG CUỘN */
+    /* 2. SIDEBAR BÊN TRÁI CỐ ĐỊNH */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -118,54 +100,71 @@ st.markdown(f"""
         display: none !important;
     }}
 
-    /* 6. PHẦN NỘI DUNG CHÍNH (MAIN VIEW): LẤP ĐẦY 100% CHIỀU CAO */
+    /* 3. KHUNG NỘI DUNG CHÍNH (MAP) */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
-    }}
-
-    [data-testid="stMainViewContainer"] {{
-        height: 100vh !important;
-        width: 100% !important;
         overflow: hidden !important;
     }}
 
-    /* 7. ÉP BẢN ĐỒ VÀ IFRAME FULL TẬN ĐÁY (XÓA Ô ĐEN/TRẮNG) */
-    iframe, .stFolium, div[data-testid="stHtml"], .element-container {{
+    /* 4. CHÚ THÍCH (LEGEND) - NẰM TRONG BẢN ĐỒ, RỘNG 300PX */
+    .legend-box {{
+        position: fixed; 
+        top: 20px; 
+        right: 20px; 
+        z-index: 9999;
+        width: 300px !important; /* Khóa kích thước 300px */
+        pointer-events: none;
+    }}
+    .legend-box img {{
+        width: 100% !important;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }}
+
+    /* 5. BẢNG TIN BÃO - CĂN GIỮA NỘI DUNG, NẰM TRONG BẢN ĐỒ */
+    .info-box {{
+        position: fixed; 
+        top: 240px; /* Nằm dưới chú thích */
+        right: 20px; 
+        z-index: 9999;
+        width: 300px !important; /* Đồng bộ kích thước với chú thích */
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #ccc; 
+        border-radius: 8px;
+        padding: 10px !important; 
+        color: #000;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }}
+    .info-title {{
+        text-align: center; 
+        font-weight: bold; 
+        font-size: 15px; 
+        margin-bottom: 5px;
+        color: #d32f2f;
+    }}
+    .info-subtitle {{
+        text-align: center; 
+        font-size: 10px; 
+        margin-bottom: 8px; 
+        font-style: italic;
+    }}
+    .info-box table {{
+        width: 100%;
+        margin: 0 auto;
+        border-collapse: collapse;
+        font-size: 12px;
+    }}
+    .info-box th, .info-box td {{
+        text-align: center !important;
+        padding: 4px 2px;
+        border-bottom: 1px solid #eee;
+    }}
+
+    /* 6. FIX IFRAME FULL MÀN HÌNH */
+    iframe {{
         width: 100% !important;
         height: 100vh !important;
         border: none !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        display: block !important;
-    }}
-
-    /* 8. WIDGET NỔI (CHÚ THÍCH & TIN BÃO) - RỘNG 300PX */
-    .legend-box {{
-        position: fixed; top: 10px; right: 15px; z-index: 9999;
-        width: 300px !important; pointer-events: none;
-    }}
-    .legend-box img {{
-        width: 100% !important; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    }}
-
-    .info-box {{
-        position: fixed; top: 230px; right: 15px; z-index: 9999;
-        width: 300px !important; background: rgba(255, 255, 255, 0.95);
-        border: 1px solid #ccc; border-radius: 8px;
-        padding: 10px !important; color: #000;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }}
-    .info-title {{
-        text-align: center; font-weight: bold; font-size: 14px; margin-bottom: 5px; color: #d32f2f;
-    }}
-    .info-subtitle {{
-        text-align: center; font-size: 10px; margin-bottom: 5px; font-style: italic;
-    }}
-    .info-box table {{
-        width: 100%; border-collapse: collapse; font-size: 11px;
-    }}
-    .info-box th, .info-box td {{
-        text-align: center !important; padding: 4px 1px; border-bottom: 1px solid #eee;
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -479,6 +478,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
