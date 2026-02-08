@@ -57,12 +57,18 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded" 
 )
+
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG SIDEBAR & ĐẨY NỘI DUNG)
+# 2. CSS CHUNG (FIX CỨNG SIDEBAR, ĐẨY NỘI DUNG & LOẠI BỎ THANH CUỘN)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. THIẾT LẬP CHUNG */
+    /* 1. THIẾT LẬP CHUNG & LOẠI BỎ THANH CUỘN TOÀN TRANG */
+    html, body, [data-testid="stAppViewContainer"] {{
+        overflow: hidden !important;
+        height: 100vh;
+    }}
+
     .block-container {{
         padding: 0 !important;
         margin: 0 !important;
@@ -72,7 +78,7 @@ st.markdown(f"""
         display: none !important;
     }}
 
-    /* 2. ÉP SIDEBAR LUÔN HIỆN CỐ ĐỊNH BÊN TRÁI */
+    /* 2. ÉP SIDEBAR LUÔN HIỆN CỐ ĐỊNH BÊN TRÁI & KHÔNG THANH CUỘN */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -83,31 +89,31 @@ st.markdown(f"""
         left: 0 !important;
         top: 0 !important;
         height: 100vh !important;
-        transform: none !important; /* Chặn hiệu ứng trượt mất sidebar */
+        transform: none !important;
         z-index: 100000 !important;
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid #ddd;
+        overflow: hidden !important;
     }}
 
-    /* ẨN NÚT ĐÓNG/MỞ SIDEBAR ĐỂ KHÔNG BỊ NHẢY */
+    /* ẨN NÚT ĐÓNG/MỞ SIDEBAR */
     [data-testid="stSidebarCollapseBtn"],
     [data-testid="stSidebarCollapsedControl"] {{
         display: none !important;
     }}
 
-    /* 3. ĐẨY NỘI DUNG CHÍNH SANG PHẢI (BẮT ĐẦU TỪ 320PX) */
-    /* Target vào AppViewContainer để đẩy toàn bộ nội dung bên phải sidebar */
+    /* 3. ĐẨY NỘI DUNG CHÍNH SANG PHẢI */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
     }}
 
-    /* Đảm bảo khung Main không có lề trái thừa */
     [data-testid="stMainViewContainer"] {{
         margin-left: 0 !important;
         width: 100% !important;
+        overflow: hidden !important;
     }}
 
-    /* 4. TỐI ƯU CHO IFRAME (KMA, WINDY) */
+    /* 4. TỐI ƯU CHO IFRAME */
     iframe {{
         width: 100% !important;
         height: 100vh !important;
@@ -115,7 +121,7 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 5. WIDGET NỔI (BẢNG TIN & CHÚ THÍCH) */
+    /* 5. WIDGET NỔI & CĂN GIỮA BẢNG TIN */
     .legend-box {{
         position: fixed; top: 30px; right: 20px; z-index: 9999;
         width: 330px; pointer-events: none;
@@ -125,9 +131,27 @@ st.markdown(f"""
         width: fit-content; background: rgba(255, 255, 255, 0.9);
         border: 1px solid #ccc; border-radius: 6px;
         padding: 8px !important; color: #000;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }}
+    .info-title {{
+        text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 5px;
+    }}
+    .info-subtitle {{
+        text-align: center; font-size: 11px; margin-bottom: 10px; font-style: italic;
+    }}
+    .info-box table {{
+        margin-left: auto;
+        margin-right: auto;
+        border-collapse: collapse;
+    }}
+    .info-box th, .info-box td {{
+        text-align: center !important;
+        padding: 6px 10px;
+        border-bottom: 1px solid #ddd;
     }}
     </style>
 """, unsafe_allow_html=True)
+
 # ==============================================================================
 # 3. HÀM XỬ LÝ LOGIC
 # ==============================================================================
@@ -280,7 +304,7 @@ def create_legend(img_b64):
     if not img_b64: return ""
     return textwrap.dedent(f"""
     <div class="legend-box">
-        <img src="data:image/png;base64,{img_b64}">
+        <img src="data:image/png;base64,{img_b64}" style="width:100%">
     </div>""")
 
 # ==============================================================================
@@ -300,7 +324,6 @@ def main():
         show_widgets = False
         active_mode = ""
         
-        # Khởi tạo mặc định để tránh lỗi Syntax
         obs_mode = ""
 
         if topic == "Dữ liệu quan trắc":
@@ -350,7 +373,6 @@ def main():
                             final_df = df
                     else: st.warning("Vui lòng tải file.")
             else: 
-                # (Phần lịch sử giữ nguyên)
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
@@ -405,7 +427,6 @@ def main():
                         if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
                     
-                    # --- VẼ ICON BÃO ---
                     for _, r in sub.iterrows():
                         icon_key = get_icon_name(r)
                         icon_path = ICON_PATHS.get(icon_key)
@@ -441,9 +462,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
