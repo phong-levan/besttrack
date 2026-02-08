@@ -59,45 +59,67 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (SPLIT VIEW - CHIA ĐÔI MÀN HÌNH)
+# 2. CSS CHUNG (SPLIT VIEW - CÓ NÚT CỨU HỘ)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. Reset lề và ẩn các thành phần thừa */
+    /* 1. Reset lề */
     .block-container {{
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     header, footer {{ display: none !important; }}
 
-    /* 2. SIDEBAR (KHUNG TRÁI) - CỐ ĐỊNH */
+    /* 2. SIDEBAR (BÊN TRÁI) - CỐ ĐỊNH */
     section[data-testid="stSidebar"] {{
         width: {SIDEBAR_WIDTH} !important;
         min-width: {SIDEBAR_WIDTH} !important;
         max-width: {SIDEBAR_WIDTH} !important;
         
-        /* Màu nền và viền phải tạo cảm giác chia cắt */
         background-color: {COLOR_SIDEBAR} !important;
-        border-right: 1px solid #ccc; /* Đường kẻ dọc ngăn cách */
+        border-right: 2px solid #ccc; /* Đường viền ngăn cách rõ ràng */
         
         position: fixed !important;
         top: 0; left: 0; bottom: 0;
         z-index: 100 !important;
     }}
 
-    /* 3. ẨN NÚT ĐÓNG/MỞ SIDEBAR */
-    [data-testid="stSidebarCollapseBtn"] {{ display: none !important; }}
-    [data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
+    /* >>> QUAN TRỌNG: NÚT ĐIỀU KHIỂN <<< */
+    
+    /* ẨN nút ĐÓNG (Dấu <<) bên trong Sidebar -> Để không ai đóng lại được */
+    [data-testid="stSidebarCollapseBtn"] {{
+        display: none !important;
+    }}
+    
+    /* HIỆN nút MỞ (Dấu >) -> BẮT BUỘC PHẢI CÓ để bấm nếu Sidebar bị trắng */
+    [data-testid="stSidebarCollapsedControl"] {{
+        display: block !important;
+        z-index: 100000 !important;
+        left: 10px !important;
+        top: 10px !important;
+        background-color: white !important;
+        border: 1px solid #999 !important;
+        color: #333 !important;
+        border-radius: 4px;
+        width: 30px; height: 30px;
+        line-height: 30px; text-align: center;
+    }}
 
-    /* 4. NỘI DUNG CHÍNH (KHUNG PHẢI) - TỰ ĐỘNG LẤP ĐẦY */
-    /* Mấu chốt: margin-left đẩy nội dung sang phải đúng bằng chiều rộng Sidebar */
+    /* 3. KHUNG NỘI DUNG CHÍNH (BÊN PHẢI) - TỰ ĐỘNG LẤP ĐẦY */
+    /* Bắt đầu từ tọa độ 320px và chiếm hết phần còn lại */
     [data-testid="stAppViewContainer"] > .main .block-container {{
-        margin-left: {SIDEBAR_WIDTH} !important; 
-        width: calc(100vw - {SIDEBAR_WIDTH}) !important;
-        padding: 0 !important;
+        position: fixed !important;
+        top: 0 !important;
+        
+        left: {SIDEBAR_WIDTH} !important; /* Cách lề trái 320px */
+        right: 0 !important; /* Kéo hết sang phải */
+        bottom: 0 !important;
+        
+        width: calc(100vw - {SIDEBAR_WIDTH}) !important; /* Tự động tính toán chiều rộng */
+        margin-left: 0 !important;
         overflow: hidden !important;
     }}
 
-    /* 5. IFRAME & BẢN ĐỒ */
+    /* 4. IFRAME & BẢN ĐỒ */
     iframe, [data-testid="stFoliumMap"] {{
         width: 100% !important;
         height: 100vh !important;
@@ -105,7 +127,7 @@ st.markdown(f"""
         display: block !important;
     }}
     
-    /* 6. WIDGET NỔI */
+    /* 5. CÁC WIDGET NỔI */
     .legend-box {{
         position: fixed; top: 20px; right: 20px; z-index: 9999;
         width: 300px; pointer-events: none;
