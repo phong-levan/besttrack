@@ -118,7 +118,7 @@ st.markdown(f"""
     /* 5. WIDGET NỔI (BẢNG TIN & CHÚ THÍCH) */
     .legend-box {{
         position: fixed; top: 30px; right: 20px; z-index: 9999;
-        width: 280px; pointer-events: none;
+        width: 330px; pointer-events: none;
     }}
     .info-box {{
         position: fixed; top: 220px; right: 20px; z-index: 9999;
@@ -441,6 +441,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
