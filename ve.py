@@ -48,7 +48,6 @@ COLOR_BG = "#ffffff"
 COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
-COLOR_BORDER = "#dee2e6"
 SIDEBAR_WIDTH = "320px"
 
 # Cấu hình trang
@@ -59,67 +58,70 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG (SPLIT VIEW - CÓ NÚT CỨU HỘ)
+# 2. CSS CHUNG (GIAO DIỆN GEMINI SPLIT VIEW)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. Reset lề */
+    /* 1. Reset Margin/Padding toàn trang */
     .block-container {{
         padding: 0 !important; margin: 0 !important; max-width: 100vw !important;
     }}
     header, footer {{ display: none !important; }}
 
-    /* 2. SIDEBAR (BÊN TRÁI) - CỐ ĐỊNH */
+    /* 2. SIDEBAR (BÊN TRÁI) */
     section[data-testid="stSidebar"] {{
         width: {SIDEBAR_WIDTH} !important;
         min-width: {SIDEBAR_WIDTH} !important;
         max-width: {SIDEBAR_WIDTH} !important;
         
         background-color: {COLOR_SIDEBAR} !important;
-        border-right: 2px solid #ccc; /* Đường viền ngăn cách rõ ràng */
         
+        /* >>> ĐƯỜNG VIỀN NGĂN CÁCH (Giống Gemini) <<< */
+        border-right: 1px solid #d0d7de !important; 
+        
+        /* Cố định vị trí */
         position: fixed !important;
-        top: 0; left: 0; bottom: 0;
-        z-index: 100 !important;
+        top: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        z-index: 9999 !important;
     }}
 
-    /* >>> QUAN TRỌNG: NÚT ĐIỀU KHIỂN <<< */
+    /* 3. NÚT ĐIỀU KHIỂN SIDEBAR */
     
-    /* ẨN nút ĐÓNG (Dấu <<) bên trong Sidebar -> Để không ai đóng lại được */
+    /* ẨN nút "Thu gọn" (Dấu <) bên trong Sidebar -> Để không bấm đóng được */
     [data-testid="stSidebarCollapseBtn"] {{
         display: none !important;
     }}
     
-    /* HIỆN nút MỞ (Dấu >) -> BẮT BUỘC PHẢI CÓ để bấm nếu Sidebar bị trắng */
+    /* HIỆN nút "Mở rộng" (Dấu >) -> Để CỨU HỘ nếu lỡ bị đóng (trắng màn hình) */
+    /* Nút này sẽ hiện ở góc trên cùng bên trái nếu sidebar bị đóng */
     [data-testid="stSidebarCollapsedControl"] {{
         display: block !important;
         z-index: 100000 !important;
         left: 10px !important;
         top: 10px !important;
-        background-color: white !important;
-        border: 1px solid #999 !important;
-        color: #333 !important;
+        background: white;
+        border: 1px solid #ccc;
         border-radius: 4px;
-        width: 30px; height: 30px;
-        line-height: 30px; text-align: center;
+        color: #333;
     }}
 
-    /* 3. KHUNG NỘI DUNG CHÍNH (BÊN PHẢI) - TỰ ĐỘNG LẤP ĐẦY */
-    /* Bắt đầu từ tọa độ 320px và chiếm hết phần còn lại */
+    /* 4. KHUNG NỘI DUNG CHÍNH (BÊN PHẢI) */
+    /* Bắt đầu từ 320px và chiếm hết phần còn lại */
     [data-testid="stAppViewContainer"] > .main .block-container {{
         position: fixed !important;
         top: 0 !important;
-        
         left: {SIDEBAR_WIDTH} !important; /* Cách lề trái 320px */
-        right: 0 !important; /* Kéo hết sang phải */
+        right: 0 !important;
         bottom: 0 !important;
         
-        width: calc(100vw - {SIDEBAR_WIDTH}) !important; /* Tự động tính toán chiều rộng */
+        width: calc(100vw - {SIDEBAR_WIDTH}) !important;
         margin-left: 0 !important;
         overflow: hidden !important;
     }}
 
-    /* 4. IFRAME & BẢN ĐỒ */
+    /* 5. BẢN ĐỒ FULL KHUNG PHẢI */
     iframe, [data-testid="stFoliumMap"] {{
         width: 100% !important;
         height: 100vh !important;
@@ -127,15 +129,15 @@ st.markdown(f"""
         display: block !important;
     }}
     
-    /* 5. CÁC WIDGET NỔI */
+    /* 6. WIDGET NỔI */
     .legend-box {{
-        position: fixed; top: 20px; right: 20px; z-index: 9999;
+        position: fixed; top: 20px; right: 20px; z-index: 10000;
         width: 300px; pointer-events: none;
     }}
     .legend-box img {{ width: 100%; display: block; }}
 
     .info-box {{
-        position: fixed; top: 250px; right: 20px; z-index: 9999;
+        position: fixed; top: 250px; right: 20px; z-index: 10000;
         width: fit-content !important; min-width: 150px; 
         background: rgba(255, 255, 255, 0.95);
         border: 1px solid #ccc;
