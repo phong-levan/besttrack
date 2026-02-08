@@ -48,6 +48,7 @@ COLOR_BG = "#ffffff"
 COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
+COLOR_BORDER = "#dee2e6"
 SIDEBAR_WIDTH = "320px"
 
 # Cấu hình trang
@@ -87,24 +88,14 @@ st.markdown(f"""
         z-index: 9999 !important;
     }}
 
-    /* 3. NÚT ĐIỀU KHIỂN SIDEBAR */
-    
-    /* ẨN nút "Thu gọn" (Dấu <) bên trong Sidebar -> Để không bấm đóng được */
+    /* 3. ẨN NÚT ĐÓNG/MỞ SIDEBAR (CỐ ĐỊNH LUÔN MỞ) */
     [data-testid="stSidebarCollapseBtn"] {{
         display: none !important;
     }}
     
-    /* HIỆN nút "Mở rộng" (Dấu >) -> Để CỨU HỘ nếu lỡ bị đóng (trắng màn hình) */
-    /* Nút này sẽ hiện ở góc trên cùng bên trái nếu sidebar bị đóng */
+    /* Ẩn nút mở rộng luôn vì sidebar đã cố định mở */
     [data-testid="stSidebarCollapsedControl"] {{
-        display: block !important;
-        z-index: 100000 !important;
-        left: 10px !important;
-        top: 10px !important;
-        background: white;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        color: #333;
+        display: none !important;
     }}
 
     /* 4. KHUNG NỘI DUNG CHÍNH (BÊN PHẢI) */
