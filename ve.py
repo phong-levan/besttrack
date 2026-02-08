@@ -58,21 +58,31 @@ st.set_page_config(
     initial_sidebar_state="expanded" 
 )
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG SIDEBAR & ĐẨY NỘI DUNG)
+# 2. CSS CHUNG (CHỈ SỬA ĐỂ XÓA KHOẢNG TRẮNG TRÊN - GIỮ NGUYÊN SIDEBAR)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. THIẾT LẬP CHUNG */
-    .block-container {{
-        padding: 0 !important;
-        margin: 0 !important;
-        max-width: 100% !important;
+    /* 1. XÓA KHOẢNG TRẮNG PHÍA TRÊN CỰC ĐỘ */
+    .stApp {{
+        margin-top: -65px !important; /* Đẩy toàn bộ giao diện sát lên trên */
     }}
+    .main .block-container {{
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        margin-top: 0px !important;
+    }}
+    
+    /* Xóa khoảng cách dòng đầu tiên của Streamlit */
+    [data-testid="stVerticalBlock"] > div:first-child {{
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }}
+
     header, footer {{
         display: none !important;
     }}
 
-    /* 2. ÉP SIDEBAR LUÔN HIỆN CỐ ĐỊNH BÊN TRÁI */
+    /* 2. SIDEBAR BÊN TRÁI CỐ ĐỊNH (GIỮ NGUYÊN CẤU TRÚC BẠN MUỐN) */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -83,39 +93,38 @@ st.markdown(f"""
         left: 0 !important;
         top: 0 !important;
         height: 100vh !important;
-        transform: none !important; /* Chặn hiệu ứng trượt mất sidebar */
+        transform: none !important;
         z-index: 100000 !important;
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid #ddd;
     }}
 
-    /* ẨN NÚT ĐÓNG/MỞ SIDEBAR ĐỂ KHÔNG BỊ NHẢY */
     [data-testid="stSidebarCollapseBtn"],
     [data-testid="stSidebarCollapsedControl"] {{
         display: none !important;
     }}
 
-    /* 3. ĐẨY NỘI DUNG CHÍNH SANG PHẢI (BẮT ĐẦU TỪ 320PX) */
-    /* Target vào AppViewContainer để đẩy toàn bộ nội dung bên phải sidebar */
+    /* 3. PHẦN NỘI DUNG CHÍNH */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
     }}
 
-    /* Đảm bảo khung Main không có lề trái thừa */
     [data-testid="stMainViewContainer"] {{
         margin-left: 0 !important;
         width: 100% !important;
+        margin-top: 0 !important;
     }}
 
-    /* 4. TỐI ƯU CHO IFRAME (KMA, WINDY) */
+    /* 4. TỐI ƯU CHO IFRAME LUÔN SÁT TRÊN */
     iframe {{
         width: 100% !important;
         height: 100vh !important;
         border: none !important;
         display: block !important;
+        margin-top: 0px !important;
     }}
 
-    /* 5. WIDGET NỔI (BẢNG TIN & CHÚ THÍCH) */
+    /* 5. CÁC THÀNH PHẦN NỔI */
     .legend-box {{
         position: fixed; top: 10px; right: 20px; z-index: 9999;
         width: 280px; pointer-events: none;
@@ -441,6 +450,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
