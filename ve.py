@@ -58,63 +58,56 @@ st.set_page_config(
     initial_sidebar_state="expanded" 
 )
 # ==============================================================================
-# 2. CSS CHUNG (CHIA TÁCH ĐỘC LẬP SIDEBAR VÀ NỘI DUNG)
+# 2. CSS CHUNG (FIX CỨNG SIDEBAR & ĐẨY NỘI DUNG)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. THIẾT LẬP FLEXBOX CHO TOÀN BỘ APP */
-    [data-testid="stAppViewContainer"] {{
-        display: flex !important;
-        flex-direction: row !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        overflow: hidden !important;
-    }}
-
-    /* 2. SIDEBAR BÊN TRÁI: CHIẾM CỐ ĐỊNH 320PX */
-    section[data-testid="stSidebar"] {{
-        position: relative !important; /* Không dùng fixed để nó giữ chỗ */
-        width: {SIDEBAR_WIDTH} !important;
-        min-width: {SIDEBAR_WIDTH} !important;
-        max-width: {SIDEBAR_WIDTH} !important;
-        height: 100vh !important;
-        background-color: {COLOR_SIDEBAR} !important;
-        border-right: 1px solid #ddd;
-        margin: 0 !important;
-        z-index: 2 !important;
-    }}
-
-    /* 3. PHẦN NỘI DUNG CHÍNH: CHIẾM TOÀN BỘ PHẦN CÒN LẠI */
-    [data-testid="stMainViewContainer"] {{
-        flex: 1 !important; /* Tự động lấp đầy phần màn hình từ 320px trở đi */
-        display: flex !important;
-        flex-direction: column !important;
-        min-width: 0 !important;
-        height: 100vh !important;
-        background-color: white !important;
-        overflow: hidden !important;
-    }}
-
-    /* XÓA CÁC LỚP ĐỆM CỦA STREAMLIT ĐỂ IFRAME TRÀN VIỀN */
+    /* 1. THIẾT LẬP CHUNG */
     .block-container {{
         padding: 0 !important;
         margin: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
         max-width: 100% !important;
     }}
-    
     header, footer {{
         display: none !important;
     }}
 
-    /* ẨN NÚT ĐÓNG/MỞ SIDEBAR */
+    /* 2. ÉP SIDEBAR LUÔN HIỆN CỐ ĐỊNH BÊN TRÁI */
+    section[data-testid="stSidebar"] {{
+        display: block !important;
+        visibility: visible !important;
+        width: {SIDEBAR_WIDTH} !important;
+        min-width: {SIDEBAR_WIDTH} !important;
+        max-width: {SIDEBAR_WIDTH} !important;
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        height: 100vh !important;
+        transform: none !important; /* Chặn hiệu ứng trượt mất sidebar */
+        z-index: 100000 !important;
+        background-color: {COLOR_SIDEBAR} !important;
+        border-right: 1px solid #ddd;
+    }}
+
+    /* ẨN NÚT ĐÓNG/MỞ SIDEBAR ĐỂ KHÔNG BỊ NHẢY */
     [data-testid="stSidebarCollapseBtn"],
     [data-testid="stSidebarCollapsedControl"] {{
         display: none !important;
     }}
 
-    /* 4. ÉP IFRAME PHẢI VỪA KHÍT TRONG PHẦN CÒN LẠI */
+    /* 3. ĐẨY NỘI DUNG CHÍNH SANG PHẢI (BẮT ĐẦU TỪ 320PX) */
+    /* Target vào AppViewContainer để đẩy toàn bộ nội dung bên phải sidebar */
+    [data-testid="stAppViewContainer"] {{
+        padding-left: {SIDEBAR_WIDTH} !important;
+    }}
+
+    /* Đảm bảo khung Main không có lề trái thừa */
+    [data-testid="stMainViewContainer"] {{
+        margin-left: 0 !important;
+        width: 100% !important;
+    }}
+
+    /* 4. TỐI ƯU CHO IFRAME (KMA, WINDY) */
     iframe {{
         width: 100% !important;
         height: 100vh !important;
@@ -122,13 +115,13 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 5. CÁC WIDGET NỔI TRÊN BẢN ĐỒ */
+    /* 5. WIDGET NỔI (BẢNG TIN & CHÚ THÍCH) */
     .legend-box {{
-        position: fixed; top: 10px; right: 10px; z-index: 1000;
+        position: fixed; top: 10px; right: 20px; z-index: 9999;
         width: 280px; pointer-events: none;
     }}
     .info-box {{
-        position: fixed; top: 220px; right: 10px; z-index: 1000;
+        position: fixed; top: 220px; right: 20px; z-index: 9999;
         width: fit-content; background: rgba(255, 255, 255, 0.9);
         border: 1px solid #ccc; border-radius: 6px;
         padding: 8px !important; color: #000;
@@ -448,5 +441,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
