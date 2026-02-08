@@ -59,22 +59,25 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG SIDEBAR - CHỐNG CHỒNG LẤN)
+# 2. CSS CHUNG (FIX CỨNG SIDEBAR - CHỐNG ĐÈ NỀN)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. XÓA KHOẢNG TRẮNG MẶC ĐỊNH CỦA STREAMLIT */
+    /* 1. XÓA LỀ VÀ CỐ ĐỊNH CHIỀU CAO TOÀN TRANG */
+    html, body, [data-testid="stAppViewContainer"] {{
+        overflow: hidden;
+    }}
+    
     .block-container {{
         padding: 0 !important;
         margin: 0 !important;
-        max-width: 100vw !important;
+        max-width: 100% !important;
     }}
     header, footer {{
         display: none !important;
     }}
 
-    /* 2. CẤU HÌNH SIDEBAR CỐ ĐỊNH (BÊN TRÁI) */
+    /* 2. CẤU HÌNH SIDEBAR BÊN TRÁI */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -82,70 +85,45 @@ st.markdown(f"""
         min-width: {SIDEBAR_WIDTH} !important;
         max-width: {SIDEBAR_WIDTH} !important;
         position: fixed !important;
-        top: 0 !important;
         left: 0 !important;
-        bottom: 0 !important;
-        transform: none !important;
-        z-index: 100000 !important;
+        z-index: 999 !important; /* Thấp hơn bảng tin nếu cần */
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid #ddd;
     }}
 
-    /* 3. ĐẨY KHUNG CHÍNH (MAP) SANG PHẢI ĐỂ KHÔNG BỊ ĐÈ */
-    /* Quan trọng: Target chính xác phần bao quanh app content */
-    section.main {{
+    /* 3. ĐẨY KHUNG CHÍNH SANG PHẢI - FIX LỖI ĐÈ LÊN IFRAME */
+    /* Chúng ta target vào lớp chứa nội dung chính để ép nó lùi lại */
+    [data-testid="stMainViewContainer"] {{
         margin-left: {SIDEBAR_WIDTH} !important;
         width: calc(100vw - {SIDEBAR_WIDTH}) !important;
-        overflow-x: hidden;
     }}
-
-    /* Đảm bảo block-container bên trong main cũng tuân thủ chiều rộng mới */
-    section.main .block-container {{
-        width: 100% !important;
-        padding: 0 !important;
-    }}
-
-    /* ẨN NÚT ĐÓNG/MỞ SIDEBAR */
+    
+    /* ẨN NÚT ĐÓNG/MỞ SIDEBAR ĐỂ TRÁNH NHẢY GIAO DIỆN */
     [data-testid="stSidebarCollapseBtn"],
     [data-testid="stSidebarCollapsedControl"] {{
         display: none !important;
     }}
 
-    /* 4. FIX IFRAME BẢN ĐỒ FULL MÀN HÌNH CÒN LẠI */
+    /* 4. FIX IFRAME LUÔN FULL MÀN HÌNH CÒN LẠI */
     iframe {{
         width: 100% !important;
         height: 100vh !important;
         border: none !important;
-        display: block !important;
     }}
 
-    /* 5. CÁC WIDGET NỔI TRÊN BẢN ĐỒ (BÊN PHẢI) */
+    /* 5. CÁC WIDGET NỔI (BẢNG TIN & CHÚ THÍCH) */
     .legend-box {{
-        position: fixed; 
-        top: 20px; 
-        right: 20px; 
-        z-index: 9999;
-        width: 300px;
-        pointer-events: none;
+        position: fixed; top: 20px; right: 20px; z-index: 1000;
+        width: 300px; pointer-events: none;
     }}
-
     .info-box {{
-        position: fixed; 
-        top: 250px; 
-        right: 20px; 
-        z-index: 9999;
-        width: fit-content; 
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #ccc;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-        padding: 10px !important; 
-        border-radius: 6px;
+        position: fixed; top: 250px; right: 20px; z-index: 1000;
+        width: fit-content; background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #ccc; border-radius: 6px;
+        padding: 8px !important; color: #000;
     }}
-    
-    /* ... (Giữ nguyên các CSS table/text bên dưới của bạn) ... */
     </style>
 """, unsafe_allow_html=True)
-
 # ==============================================================================
 # 3. HÀM XỬ LÝ LOGIC
 # ==============================================================================
@@ -456,4 +434,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
