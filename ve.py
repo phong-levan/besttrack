@@ -114,8 +114,8 @@ st.markdown(f"""
     /* 5. WIDGET NỔI (CONTAINER CHỨA CẢ 2) */
     .floating-container {{
         position: fixed; 
-        top: 20px; 
-        right: 20px; 
+        top: 70px; 
+        right: 60px; 
         z-index: 9999;
         display: flex;
         flex-direction: column; /* Xếp dọc */
@@ -525,3 +525,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
