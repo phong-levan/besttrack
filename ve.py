@@ -111,17 +111,35 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 5. WIDGET NỔI (BẢNG TIN & CHÚ THÍCH) */
-    .legend-box {{
-        position: fixed; top: 10px; right: 20px; z-index: 9999;
-        width: 280px; pointer-events: none;
+    /* 5. WIDGET NỔI (CONTAINER CHỨA CẢ 2) */
+    .floating-container {{
+        position: fixed; 
+        top: 20px; 
+        right: 20px; 
+        z-index: 9999;
+        display: flex;
+        flex-direction: column; /* Xếp dọc */
+        align-items: center;    /* Căn giữa theo trục ngang */
     }}
+
+    /* BẢNG CHÚ THÍCH (LEGEND) */
+    .legend-box {{
+        /* Không fix vị trí nữa vì nằm trong container */
+        width: 280px; 
+        pointer-events: none;
+        margin-bottom: 5px; /* Khoảng cách ngắn với bảng dưới */
+    }}
+    
+    /* BẢNG THÔNG TIN */
     .info-box {{
-        position: fixed; top: 220px; right: 20px; z-index: 9999;
-        width: fit-content; background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #ccc; border-radius: 6px;
-        padding: 10px !important; color: #000;
-        text-align: center; /* Căn giữa nội dung box */
+        /* Không fix vị trí nữa vì nằm trong container */
+        width: fit-content; 
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #ccc; 
+        border-radius: 6px;
+        padding: 10px !important; 
+        color: #000;
+        text-align: center;
     }}
     
     /* Căn giữa bảng */
@@ -131,7 +149,7 @@ st.markdown(f"""
         border-collapse: collapse;
     }}
     .info-box th, .info-box td {{
-        text-align: center !important; /* Căn giữa nội dung ô */
+        text-align: center !important; 
         padding: 4px 8px;
     }}
     .info-title {{
@@ -172,10 +190,7 @@ def normalize_columns(df):
     rename = {
         "tên bão": "name", "biển đông": "storm_no", "số hiệu": "storm_no",
         "thời điểm": "status_raw", "ngày - giờ": "datetime_str",
-        
-        # --- CẬP NHẬT MAPPING THEO ẢNH BẠN GỬI ---
-        "thời gian (giờ)": "hour_explicit", # Map cột C 'thời gian (giờ)' thành 'hour_explicit'
-        
+        "thời gian (giờ)": "hour_explicit", 
         "vĩ độ": "lat", "kinh độ": "lon", "vmax (km/h)": "wind_km/h",
         "cường độ (cấp bf)": "bf", "bán kính gió mạnh cấp 6 (km)": "r6", 
         "bán kính gió mạnh cấp 10 (km)": "r10", "bán kính tâm (km)": "rc",
@@ -258,37 +273,29 @@ def create_info_table(df, title):
         fut = df[df['status_raw'].astype(str).str.contains("dự báo|forecast", case=False, na=False)]
         display_df = pd.concat([cur, fut]).head(8)
     else:
-        # Fallback nếu không có cột status_raw
         display_df = df.sort_values('dt', ascending=False).groupby('name').head(1)
         cur = display_df 
 
-    # 2. Xử lý Subtitle: "Tin phát lúc ...h30"
+    # 2. Xử lý Subtitle
     subtitle = ""
     try:
-        # Tìm dòng 'hiện tại' để lấy giờ
         target_row = None
         if 'status_raw' in df.columns:
-            # Tìm chính xác chữ 'hiện tại'
             current_rows = df[df['status_raw'].astype(str).str.strip().str.lower() == 'hiện tại']
             if not current_rows.empty:
                 target_row = current_rows.iloc[0]
             else:
-                 # Nếu không tìm thấy chính xác, dùng contains
                  current_rows = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
                  if not current_rows.empty:
                     target_row = current_rows.iloc[0]
         
-        # Nếu vẫn không thấy, lấy dòng đầu tiên của display_df
         if target_row is None and not display_df.empty:
             target_row = display_df.iloc[0]
 
-        # Lấy giá trị giờ
         if target_row is not None:
-            # Ưu tiên lấy từ cột 'thời gian (giờ)' (đã map thành hour_explicit)
             if 'hour_explicit' in target_row.index and pd.notna(target_row['hour_explicit']):
                 h = int(target_row['hour_explicit'])
                 subtitle = f"Tin phát lúc {h}h30"
-            # Fallback: Nếu không có cột đó, lấy từ datetime object
             elif 'dt' in target_row.index and pd.notna(target_row['dt']):
                 subtitle = f"Tin phát lúc {target_row['dt'].hour}h30"
             else:
@@ -298,7 +305,7 @@ def create_info_table(df, title):
     except:
         subtitle = "(Dữ liệu cập nhật từ Besttrack)"
     
-    # 3. Tạo HTML cho các dòng
+    # 3. Tạo HTML
     rows = ""
     for _, r in display_df.iterrows():
         t = r.get('datetime_str', r.get('dt'))
@@ -476,13 +483,10 @@ def main():
                             icon_base64 = image_to_base64(icon_path)
                         
                         if icon_base64:
-                            # --- ĐÃ SỬA: ĐIỀU CHỈNH KÍCH THƯỚC ICON ---
                             if 'vungthap' in icon_key:
-                                # Vùng thấp nhỏ hơn (28x28)
                                 i_size = (22, 22)
                                 i_anchor = (10, 10)
                             else:
-                                # Bão giữ nguyên kích thước lớn (40x40)
                                 i_size = (40, 40)
                                 i_anchor = (20, 20)
                             
@@ -499,23 +503,25 @@ def main():
         fg_storm.add_to(m)
         folium.LayerControl(position='topleft', collapsed=False).add_to(m)
         
+        # --- HIỂN THỊ WIDGET TRONG CONTAINER CHUNG ---
         if show_widgets:
+            html_to_render = '<div class="floating-container">'
+            
+            # 1. Thêm Chú thích (Nếu có)
             if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
                 with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
-                st.markdown(create_legend(b64), unsafe_allow_html=True)
+                html_to_render += create_legend(b64)
             
+            # 2. Thêm Bảng thông tin
             if not final_df.empty: 
-                st.markdown(create_info_table(final_df, dashboard_title), unsafe_allow_html=True)
+                html_to_render += create_info_table(final_df, dashboard_title)
             else: 
-                st.markdown(create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU..."), unsafe_allow_html=True)
+                html_to_render += create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU...")
+            
+            html_to_render += '</div>'
+            st.markdown(html_to_render, unsafe_allow_html=True)
         
         st_folium(m, width=None, height=1000, use_container_width=True)
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
