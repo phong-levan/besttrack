@@ -58,28 +58,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG SIDEBAR, ĐẨY NỘI DUNG & XÓA KHOẢNG TRẮNG ĐẦU TRANG)
+# 2. CSS CHUNG (FIX CỨNG SIDEBAR & ĐẨY NỘI DUNG)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. XÓA SẠCH PADDING/MARGIN CỦA STREAMLIT ĐỂ FULL MÀN HÌNH */
+    /* 1. THIẾT LẬP CHUNG */
     .block-container {{
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 0rem !important;
-        padding-right: 0rem !important;
-        margin-top: 0rem !important;
+        padding: 0 !important;
+        margin: 0 !important;
         max-width: 100% !important;
     }}
-    
-    /* Ẩn Header mặc định của Streamlit (thanh 3 gạch và Decoration) */
-    div[data-testid="stToolbar"], 
-    div[data-testid="stDecoration"], 
-    div[data-testid="stStatusWidget"],
-    header {{
-        visibility: hidden !important;
+    header, footer {{
         display: none !important;
-        height: 0px !important;
     }}
 
     /* 2. ÉP SIDEBAR LUÔN HIỆN CỐ ĐỊNH BÊN TRÁI */
@@ -107,12 +97,10 @@ st.markdown(f"""
     /* 3. ĐẨY NỘI DUNG CHÍNH SANG PHẢI */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
-        padding-top: 0 !important; /* Quan trọng cho phần Bão */
     }}
     [data-testid="stMainViewContainer"] {{
         margin-left: 0 !important;
         width: 100% !important;
-        padding-top: 0 !important;
     }}
 
     /* 4. TỐI ƯU CHO IFRAME */
@@ -126,7 +114,7 @@ st.markdown(f"""
     /* 5. WIDGET NỔI (CONTAINER CHỨA CẢ 2) */
     .floating-container {{
         position: fixed; 
-        top: 20px; /* Đã kéo sát lên trên hơn */
+        top: 70px; 
         right: 60px; 
         z-index: 9999;
         display: flex;
@@ -138,7 +126,7 @@ st.markdown(f"""
     .legend-box {{
         width: 340px; 
         pointer-events: none;
-        margin-bottom: 5px; 
+        margin-bottom: 5px; /* Khoảng cách ngắn với bảng dưới */
     }}
     
     /* BẢNG THÔNG TIN */
@@ -277,6 +265,7 @@ def get_icon_name(row):
 def create_info_table(df, title):
     if df.empty: return ""
     
+    # 1. Lọc bảng hiển thị (Hiện tại -> Tương lai)
     if 'status_raw' in df.columns:
         cur = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
         fut = df[df['status_raw'].astype(str).str.contains("dự báo|forecast", case=False, na=False)]
@@ -285,6 +274,7 @@ def create_info_table(df, title):
         display_df = df.sort_values('dt', ascending=False).groupby('name').head(1)
         cur = display_df 
 
+    # 2. Xử lý Subtitle
     subtitle = ""
     try:
         target_row = None
@@ -313,6 +303,7 @@ def create_info_table(df, title):
     except:
         subtitle = "(Dữ liệu cập nhật từ Besttrack)"
     
+    # 3. Tạo HTML
     rows = ""
     for _, r in display_df.iterrows():
         t = r.get('datetime_str', r.get('dt'))
@@ -453,21 +444,20 @@ def main():
 
     # --- MAIN CONTENT ---
     if topic == "Ảnh mây vệ tinh":
-        # CSS padding=0 ở trên đã xử lý việc xóa khoảng trắng đầu trang
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
     elif topic == "Dữ liệu quan trắc":
         
         if "WeatherObs" in obs_mode:
             # WeatherObs: Cắt Header đen (top: -65px)
             html_weather = f"""
-            <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
+            <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
                 <iframe 
                     src="{LINK_WEATHEROBS}" 
                     style="
-                        width: calc(100% + 19px); /* Đẩy thanh cuộn phải ra ngoài */
+                        width: 100%; 
                         height: 1000px; 
                         position: absolute; 
-                        top: -65px;     /* Kéo lên để ẩn Header màu đen */
+                        top: -50px;     /* Kéo lên để ẩn Header màu đen */
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -479,14 +469,14 @@ def main():
         elif "Gió tự động" in obs_mode:
              # KTTV: Cắt Header xanh đậm (top: -100px)
              html_kttv = f"""
-            <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
+            <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
                 <iframe 
                     src="{LINK_WIND_AUTO}" 
                     style="
-                        width: calc(100% + 19px); /* Đẩy thanh cuộn phải ra ngoài */
+                        width: 100%; 
                         height: 1200px; /* Tăng chiều cao nội bộ */
                         position: absolute; 
-                        top: -100px;    /* Kéo lên để ẩn Header màu xanh đậm */
+                        top: -70px;    /* Kéo lên để ẩn Header màu xanh đậm */
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -496,16 +486,16 @@ def main():
              st.markdown(html_kttv, unsafe_allow_html=True)
 
     elif topic == "Dự báo điểm (KMA)":
-        # KMA: Kéo sát lên (-215px), cắt chân trang (height: 700px), bỏ scrollbar (width +19px)
+        # KMA: Cắt Header (top: -140px)
         html_kma = f"""
-        <div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;">
+        <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
             <iframe 
                 src="{LINK_KMA_FORECAST}" 
                 style="
-                    width: calc(100% + 19px); /* Đẩy thanh cuộn sang phải khuất đi */
+                    width: 100%; 
                     height: 1200px; 
                     position: absolute; 
-                    top: -215px;    /* Kéo sát lên để che Header/Menu */
+                    top: -140px; 
                     left: 0px; 
                     border: none;"
                 allow="fullscreen"
@@ -587,3 +577,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
