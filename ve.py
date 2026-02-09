@@ -42,8 +42,6 @@ ICON_PATHS = {
 LINK_WEATHEROBS = "https://weatherobs.com/"
 LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
 LINK_KMA_FORECAST = "https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm=2026.02.06.12&delta=000&ftm=2026.02.06.12"
-# Link nhúng vận hành (Lưu ý: @ trong mật khẩu được mã hóa là %40 nếu điền trực tiếp vào URL)
-LINK_WIND_OPERATIONAL = "http://222.255.11.82/Modules/Gio/MapWind.aspx"
 
 # Màu sắc
 COLOR_BG = "#ffffff"
@@ -448,15 +446,20 @@ def main():
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
     elif topic == "Dữ liệu quan trắc":
         if "Bản đồ gió (Vận hành)" in obs_mode:
-            # Thông tin đăng nhập
-            st.info("Trạng thái: Đang kết nối máy chủ vận hành (MapWind). User: admin | Pass: ttdl@2021")
+            # --- XỬ LÝ ẨN MẬT KHẨU & TỰ ĐỘNG LOGIN ---
+            # Mật khẩu ttdl@2021 có ký tự @ nên phải mã hóa thành %40
+            # Cấu trúc: http://user:password@domain
+            LINK_AUTH = "http://admin:ttdl%402021@222.255.11.82/Modules/Gio/MapWind.aspx"
             
-            # Kỹ thuật CSS Clipping để cắt header trang web gốc, chỉ lấy phần bản đồ
-            # top: -110px dùng để giấu phần banner phía trên của trang web gốc
+            # Link dự phòng (Mở tab mới nếu bị chặn)
+            st.caption("⚠️ Nếu bản đồ bên dưới bị trắng (do trình duyệt chặn HTTP), vui lòng bấm nút dưới đây để mở:")
+            st.link_button("🌐 Mở bản đồ Full màn hình", LINK_AUTH)
+            
+            # Mã HTML Iframe cắt Header
             html_code = f"""
-            <div style="overflow: hidden; width: 100%; height: 90vh; position: relative; border: 1px solid #ddd;">
+            <div style="overflow: hidden; width: 100%; height: 90vh; position: relative; border: 1px solid #ddd; margin-top: 5px;">
                 <iframe 
-                    src="{LINK_WIND_OPERATIONAL}" 
+                    src="{LINK_AUTH}" 
                     style="
                         width: 100%; 
                         height: 115vh; 
