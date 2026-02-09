@@ -476,7 +476,17 @@ def main():
                             icon_base64 = image_to_base64(icon_path)
                         
                         if icon_base64:
-                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=(40, 40), icon_anchor=(20, 20))
+                            # --- ĐÃ SỬA: ĐIỀU CHỈNH KÍCH THƯỚC ICON ---
+                            if 'vungthap' in icon_key:
+                                # Vùng thấp nhỏ hơn (28x28)
+                                i_size = (28, 28)
+                                i_anchor = (14, 14)
+                            else:
+                                # Bão giữ nguyên kích thước lớn (40x40)
+                                i_size = (40, 40)
+                                i_anchor = (20, 20)
+                            
+                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=i_size, icon_anchor=i_anchor)
                             folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
             else: 
                 for n in final_df['name'].unique():
@@ -503,4 +513,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
