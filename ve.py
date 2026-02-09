@@ -248,7 +248,7 @@ def get_icon_name(row):
             if w < 34: wind_speed = 5
             elif w < 64: wind_speed = 7
             elif w < 100: wind_speed = 10
-            else: wind_speed = 12
+            elif w < 134: wind_speed = 12
     
     status_raw = str(row.get('status_raw','')).lower()
     
@@ -447,11 +447,8 @@ def main():
     elif topic == "Dữ liệu quan trắc":
         if "Bản đồ gió (Vận hành)" in obs_mode:
             # --- XỬ LÝ ẨN MẬT KHẨU & TỰ ĐỘNG LOGIN ---
-            # Mật khẩu ttdl@2021 có ký tự @ nên phải mã hóa thành %40
-            # Cấu trúc: http://user:password@domain
             LINK_AUTH = "http://admin:ttdl%402021@222.255.11.82/Modules/Gio/MapWind.aspx"
             
-            # Link dự phòng (Mở tab mới nếu bị chặn)
             st.caption("⚠️ Nếu bản đồ bên dưới bị trắng (do trình duyệt chặn HTTP), vui lòng bấm nút dưới đây để mở:")
             st.link_button("🌐 Mở bản đồ Full màn hình", LINK_AUTH)
             
@@ -477,8 +474,28 @@ def main():
             components.iframe(LINK_WEATHEROBS, scrolling=True)
         elif "Gió tự động" in obs_mode:
              components.iframe(LINK_WIND_AUTO, scrolling=True)
+
     elif topic == "Dự báo điểm (KMA)":
-        components.iframe(LINK_KMA_FORECAST, scrolling=True)
+        # --- CODE SỬA ĐỔI ĐỂ CẮT GIAO DIỆN KMA ---
+        # Sử dụng kỹ thuật CSS Masking để ẩn header "World Friend KOREA" và footer
+        # top: -140px (điều chỉnh để cắt phần Header màu xanh đậm bên trên)
+        html_kma = f"""
+        <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
+            <iframe 
+                src="{LINK_KMA_FORECAST}" 
+                style="
+                    width: 100%; 
+                    height: 1200px; /* Tăng chiều cao nội bộ để load đủ trang */
+                    position: absolute; 
+                    top: -140px;    /* Kéo trang web lên trên để giấu Header */
+                    left: 0px; 
+                    border: none;"
+                allow="fullscreen"
+            ></iframe>
+        </div>
+        """
+        st.markdown(html_kma, unsafe_allow_html=True)
+
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
         folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
@@ -552,5 +569,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
