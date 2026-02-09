@@ -53,7 +53,7 @@ SIDEBAR_WIDTH = "320px"
 
 # Cấu hình trang
 st.set_page_config(
-    page_title="Storm Monitor",
+    page_title="Hệ thống gián sát",
     layout="wide",
     initial_sidebar_state="expanded" 
 )
@@ -289,7 +289,7 @@ def create_legend(img_b64):
 def main():
     
     with st.sidebar:
-        st.title("🌪️ TRUNG TÂM BÃO")
+        st.title("Dữ liệu thời tiết")
         
         topic = st.radio("CHỌN CHẾ ĐỘ:", 
                          ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
@@ -441,6 +441,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
