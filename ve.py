@@ -42,6 +42,8 @@ ICON_PATHS = {
 LINK_WEATHEROBS = "https://weatherobs.com/"
 LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
 LINK_KMA_FORECAST = "https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm=2026.02.06.12&delta=000&ftm=2026.02.06.12"
+# Link nhúng vận hành (Lưu ý: @ trong mật khẩu được mã hóa là %40 nếu điền trực tiếp vào URL)
+LINK_WIND_OPERATIONAL = "http://222.255.11.82/Modules/Gio/MapWind.aspx"
 
 # Màu sắc
 COLOR_BG = "#ffffff"
@@ -124,7 +126,6 @@ st.markdown(f"""
 
     /* BẢNG CHÚ THÍCH (LEGEND) */
     .legend-box {{
-        /* Không fix vị trí nữa vì nằm trong container */
         width: 340px; 
         pointer-events: none;
         margin-bottom: 5px; /* Khoảng cách ngắn với bảng dưới */
@@ -132,7 +133,6 @@ st.markdown(f"""
     
     /* BẢNG THÔNG TIN */
     .info-box {{
-        /* Không fix vị trí nữa vì nằm trong container */
         width: fit-content; 
         background: rgba(255, 255, 255, 0.9);
         border: 1px solid #ccc; 
@@ -333,16 +333,16 @@ def create_info_table(df, title):
         <div class="info-title">{title}</div>
         <div class="info-subtitle">{subtitle}</div>
         <table>
-           <thead>
-               <tr>
-                   <th>Ngày-Giờ</th>
-                   <th>Kinh độ</th>
-                   <th>Vĩ độ</th>
-                   <th>Cấp gió</th>
-                   <th>Pmin</th>
-               </tr>
-           </thead>
-           <tbody>{rows}</tbody>
+            <thead>
+                <tr>
+                    <th>Ngày-Giờ</th>
+                    <th>Kinh độ</th>
+                    <th>Vĩ độ</th>
+                    <th>Cấp gió</th>
+                    <th>Pmin</th>
+                </tr>
+            </thead>
+            <tbody>{rows}</tbody>
         </table>
     </div>""")
 
@@ -373,7 +373,8 @@ def main():
         obs_mode = ""
 
         if topic == "Dữ liệu quan trắc":
-            obs_mode = st.radio("Chọn nguồn dữ liệu:", ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)"])
+            obs_mode = st.radio("Chọn nguồn dữ liệu:", 
+                              ["Bản đồ gió (Vận hành)", "Thời tiết (WeatherObs)", "Gió tự động (KTTV)"])
 
         if topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
@@ -446,7 +447,30 @@ def main():
     if topic == "Ảnh mây vệ tinh":
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
     elif topic == "Dữ liệu quan trắc":
-        if "WeatherObs" in obs_mode:
+        if "Bản đồ gió (Vận hành)" in obs_mode:
+            # Thông tin đăng nhập
+            st.info("Trạng thái: Đang kết nối máy chủ vận hành (MapWind). User: admin | Pass: ttdl@2021")
+            
+            # Kỹ thuật CSS Clipping để cắt header trang web gốc, chỉ lấy phần bản đồ
+            # top: -110px dùng để giấu phần banner phía trên của trang web gốc
+            html_code = f"""
+            <div style="overflow: hidden; width: 100%; height: 90vh; position: relative; border: 1px solid #ddd;">
+                <iframe 
+                    src="{LINK_WIND_OPERATIONAL}" 
+                    style="
+                        width: 100%; 
+                        height: 115vh; 
+                        position: absolute; 
+                        top: -110px; 
+                        left: 0px; 
+                        border: none;"
+                    allow="fullscreen"
+                ></iframe>
+            </div>
+            """
+            st.markdown(html_code, unsafe_allow_html=True)
+
+        elif "WeatherObs" in obs_mode:
             components.iframe(LINK_WEATHEROBS, scrolling=True)
         elif "Gió tự động" in obs_mode:
              components.iframe(LINK_WIND_AUTO, scrolling=True)
@@ -525,6 +549,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
