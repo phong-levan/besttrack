@@ -121,17 +121,17 @@ st.markdown(f"""
         width: fit-content; background: rgba(255, 255, 255, 0.9);
         border: 1px solid #ccc; border-radius: 6px;
         padding: 10px !important; color: #000;
-        text-align: center; /* CĂN GIỮA TOÀN BỘ BOX */
+        text-align: center; /* Căn giữa nội dung box */
     }}
     
-    /* CĂN GIỮA BẢNG VÀ NỘI DUNG */
+    /* Căn giữa bảng */
     .info-box table {{
         width: 100%;
         margin: 0 auto;
         border-collapse: collapse;
     }}
     .info-box th, .info-box td {{
-        text-align: center !important; /* CĂN GIỮA TEXT TRONG CELL */
+        text-align: center !important; /* Căn giữa nội dung ô */
         padding: 4px 8px;
     }}
     .info-title {{
@@ -172,6 +172,10 @@ def normalize_columns(df):
     rename = {
         "tên bão": "name", "biển đông": "storm_no", "số hiệu": "storm_no",
         "thời điểm": "status_raw", "ngày - giờ": "datetime_str",
+        
+        # --- CẬP NHẬT MAPPING THEO ẢNH BẠN GỬI ---
+        "thời gian (giờ)": "hour_explicit", # Map cột C 'thời gian (giờ)' thành 'hour_explicit'
+        
         "vĩ độ": "lat", "kinh độ": "lon", "vmax (km/h)": "wind_km/h",
         "cường độ (cấp bf)": "bf", "bán kính gió mạnh cấp 6 (km)": "r6", 
         "bán kính gió mạnh cấp 10 (km)": "r10", "bán kính tâm (km)": "rc",
@@ -248,34 +252,53 @@ def get_icon_name(row):
 def create_info_table(df, title):
     if df.empty: return ""
     
-    # Logic phân loại Hiện tại / Dự báo
+    # 1. Lọc bảng hiển thị (Hiện tại -> Tương lai)
     if 'status_raw' in df.columns:
         cur = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
         fut = df[df['status_raw'].astype(str).str.contains("dự báo|forecast", case=False, na=False)]
         display_df = pd.concat([cur, fut]).head(8)
     else:
+        # Fallback nếu không có cột status_raw
         display_df = df.sort_values('dt', ascending=False).groupby('name').head(1)
-        cur = display_df # Fallback nếu không có cột status_raw
-    
-    # --- LOGIC MỚI: TẠO DÒNG CHÚ THÍCH THỜI GIAN ---
-    subtitle = "(Dữ liệu cập nhật từ Besttrack)" # Mặc định
-    try:
-        ref_time = None
-        # Ưu tiên lấy thời gian của bản tin "Hiện tại"
-        if 'status_raw' in df.columns and not cur.empty:
-            ref_time = cur.iloc[0]['dt']
-        # Nếu không có "Hiện tại", lấy dòng đầu tiên của bảng hiển thị
-        elif not display_df.empty:
-            ref_time = display_df.iloc[0]['dt']
-            
-        if ref_time and pd.notna(ref_time):
-            # Format: Tin phát lúc 7 giờ (lấy giờ từ cột dt)
-            hour_val = ref_time.hour
-            subtitle = f"Tin phát lúc {hour_val} giờ"
-    except Exception as e:
-        pass # Giữ mặc định nếu lỗi
-    # -----------------------------------------------
+        cur = display_df 
 
+    # 2. Xử lý Subtitle: "Tin phát lúc ... giờ"
+    subtitle = ""
+    try:
+        # Tìm dòng 'hiện tại' để lấy giờ
+        target_row = None
+        if 'status_raw' in df.columns:
+            # Tìm chính xác chữ 'hiện tại'
+            current_rows = df[df['status_raw'].astype(str).str.strip().str.lower() == 'hiện tại']
+            if not current_rows.empty:
+                target_row = current_rows.iloc[0]
+            else:
+                 # Nếu không tìm thấy chính xác, dùng contains
+                 current_rows = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
+                 if not current_rows.empty:
+                    target_row = current_rows.iloc[0]
+        
+        # Nếu vẫn không thấy, lấy dòng đầu tiên của display_df
+        if target_row is None and not display_df.empty:
+            target_row = display_df.iloc[0]
+
+        # Lấy giá trị giờ
+        if target_row is not None:
+            # Ưu tiên lấy từ cột 'thời gian (giờ)' (đã map thành hour_explicit)
+            if 'hour_explicit' in target_row.index and pd.notna(target_row['hour_explicit']):
+                h = int(target_row['hour_explicit'])
+                subtitle = f"Tin phát lúc {h} giờ"
+            # Fallback: Nếu không có cột đó, lấy từ datetime object
+            elif 'dt' in target_row.index and pd.notna(target_row['dt']):
+                subtitle = f"Tin phát lúc {target_row['dt'].hour} giờ"
+            else:
+                 subtitle = "(Đang cập nhật)"
+        else:
+             subtitle = "(Đang cập nhật)"
+    except:
+        subtitle = "(Dữ liệu cập nhật từ Besttrack)"
+    
+    # 3. Tạo HTML cho các dòng
     rows = ""
     for _, r in display_df.iterrows():
         t = r.get('datetime_str', r.get('dt'))
@@ -340,7 +363,6 @@ def main():
         show_widgets = False
         active_mode = ""
         
-        # Khởi tạo mặc định để tránh lỗi Syntax
         obs_mode = ""
 
         if topic == "Dữ liệu quan trắc":
@@ -372,7 +394,7 @@ def main():
                                 df['name'] = 'Cơn bão'
                                 df['storm_no'] = 'Current Storm'
 
-                            for c in ['wind_km/h', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
+                            for c in ['wind_km/h', 'bf', 'r6', 'r10', 'rc', 'pressure', 'hour_explicit']: 
                                 if c not in df.columns: df[c] = 0
                             if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
                             elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
@@ -390,7 +412,6 @@ def main():
                             final_df = df
                     else: st.warning("Vui lòng tải file.")
             else: 
-                # (Phần lịch sử giữ nguyên)
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
