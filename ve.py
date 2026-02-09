@@ -125,7 +125,7 @@ st.markdown(f"""
     /* BẢNG CHÚ THÍCH (LEGEND) */
     .legend-box {{
         /* Không fix vị trí nữa vì nằm trong container */
-        width: 280px; 
+        width: 300px; 
         pointer-events: none;
         margin-bottom: 5px; /* Khoảng cách ngắn với bảng dưới */
     }}
@@ -525,4 +525,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
