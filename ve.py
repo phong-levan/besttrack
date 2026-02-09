@@ -511,7 +511,7 @@ def main():
                         
                         if icon_base64:
                             if 'vungthap' in icon_key:
-                                i_size = (22, 22)
+                                i_size = (20, 20)
                                 i_anchor = (10, 10)
                             else:
                                 i_size = (40, 40)
@@ -552,3 +552,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
