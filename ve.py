@@ -457,7 +457,7 @@ def main():
                         width: 100%; 
                         height: 1000px; 
                         position: absolute; 
-                        top: -50px;     /* Kéo lên để ẩn Header màu đen */
+                        top: -65px;     /* Kéo lên để ẩn Header màu đen */
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -476,7 +476,7 @@ def main():
                         width: 100%; 
                         height: 1200px; /* Tăng chiều cao nội bộ */
                         position: absolute; 
-                        top: -70px;    /* Kéo lên để ẩn Header màu xanh đậm */
+                        top: -100px;    /* Kéo lên để ẩn Header màu xanh đậm */
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -486,16 +486,16 @@ def main():
              st.markdown(html_kttv, unsafe_allow_html=True)
 
     elif topic == "Dự báo điểm (KMA)":
-        # KMA: Cắt Header (top: -140px)
+        # KMA: Kéo sát lên (-215px), cắt chân trang (height: 700px), bỏ scrollbar (width +19px)
         html_kma = f"""
-        <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
+        <div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;">
             <iframe 
                 src="{LINK_KMA_FORECAST}" 
                 style="
-                    width: 100%; 
+                    width: calc(100% + 19px); /* Đẩy thanh cuộn sang phải khuất đi */
                     height: 1200px; 
                     position: absolute; 
-                    top: -140px; 
+                    top: -215px;    /* Kéo sát lên để che Header/Menu */
                     left: 0px; 
                     border: none;"
                 allow="fullscreen"
@@ -577,10 +577,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
