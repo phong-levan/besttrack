@@ -479,8 +479,8 @@ def main():
                             # --- ĐÃ SỬA: ĐIỀU CHỈNH KÍCH THƯỚC ICON ---
                             if 'vungthap' in icon_key:
                                 # Vùng thấp nhỏ hơn (28x28)
-                                i_size = (20, 20)
-                                i_anchor = (14, 14)
+                                i_size = (22, 22)
+                                i_anchor = (20, 20)
                             else:
                                 # Bão giữ nguyên kích thước lớn (40x40)
                                 i_size = (40, 40)
@@ -513,6 +513,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
