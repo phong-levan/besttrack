@@ -446,13 +446,28 @@ def main():
     if topic == "Ảnh mây vệ tinh":
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
     elif topic == "Dữ liệu quan trắc":
-        # ĐÃ SỬA: Xóa logic "Bản đồ gió (Vận hành)"
-
+        
         if "WeatherObs" in obs_mode:
-            components.iframe(LINK_WEATHEROBS, scrolling=True)
+            # WeatherObs: Cắt Header đen (top: -65px)
+            html_weather = f"""
+            <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
+                <iframe 
+                    src="{LINK_WEATHEROBS}" 
+                    style="
+                        width: 100%; 
+                        height: 1000px; 
+                        position: absolute; 
+                        top: -65px;     /* Kéo lên để ẩn Header màu đen */
+                        left: 0px; 
+                        border: none;"
+                    allow="fullscreen"
+                ></iframe>
+            </div>
+            """
+            st.markdown(html_weather, unsafe_allow_html=True)
+
         elif "Gió tự động" in obs_mode:
-             # ĐÃ SỬA: Cắt giao diện (Crop Header) cho KTTV
-             # Kéo trang web lên 150px để ẩn header màu xanh
+             # KTTV: Cắt Header xanh đậm (top: -100px)
              html_kttv = f"""
             <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
                 <iframe 
@@ -461,7 +476,7 @@ def main():
                         width: 100%; 
                         height: 1200px; /* Tăng chiều cao nội bộ */
                         position: absolute; 
-                        top: -150px;    /* Kéo lên để ẩn Header màu xanh */
+                        top: -100px;    /* Kéo lên để ẩn Header màu xanh đậm */
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -471,6 +486,7 @@ def main():
              st.markdown(html_kttv, unsafe_allow_html=True)
 
     elif topic == "Dự báo điểm (KMA)":
+        # KMA: Cắt Header (top: -140px)
         html_kma = f"""
         <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
             <iframe 
