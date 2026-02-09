@@ -483,7 +483,7 @@ def main():
                                 i_anchor = (14, 14)
                             else:
                                 # Bão giữ nguyên kích thước lớn (40x40)
-                                i_size = (30, 30)
+                                i_size = (40, 40)
                                 i_anchor = (20, 20)
                             
                             icon = folium.CustomIcon(icon_image=icon_base64, icon_size=i_size, icon_anchor=i_anchor)
@@ -513,4 +513,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
