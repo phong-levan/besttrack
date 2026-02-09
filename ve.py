@@ -371,8 +371,9 @@ def main():
         obs_mode = ""
 
         if topic == "Dữ liệu quan trắc":
+            # ĐÃ SỬA: Bỏ "Bản đồ gió (Vận hành)"
             obs_mode = st.radio("Chọn nguồn dữ liệu:", 
-                              ["Bản đồ gió (Vận hành)", "Thời tiết (WeatherObs)", "Gió tự động (KTTV)"])
+                              ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)"])
 
         if topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
@@ -445,49 +446,40 @@ def main():
     if topic == "Ảnh mây vệ tinh":
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
     elif topic == "Dữ liệu quan trắc":
-        if "Bản đồ gió (Vận hành)" in obs_mode:
-            # --- XỬ LÝ ẨN MẬT KHẨU & TỰ ĐỘNG LOGIN ---
-            LINK_AUTH = "http://admin:ttdl%402021@222.255.11.82/Modules/Gio/MapWind.aspx"
-            
-            st.caption("⚠️ Nếu bản đồ bên dưới bị trắng (do trình duyệt chặn HTTP), vui lòng bấm nút dưới đây để mở:")
-            st.link_button("🌐 Mở bản đồ Full màn hình", LINK_AUTH)
-            
-            # Mã HTML Iframe cắt Header
-            html_code = f"""
-            <div style="overflow: hidden; width: 100%; height: 90vh; position: relative; border: 1px solid #ddd; margin-top: 5px;">
+        # ĐÃ SỬA: Xóa logic "Bản đồ gió (Vận hành)"
+
+        if "WeatherObs" in obs_mode:
+            components.iframe(LINK_WEATHEROBS, scrolling=True)
+        elif "Gió tự động" in obs_mode:
+             # ĐÃ SỬA: Cắt giao diện (Crop Header) cho KTTV
+             # Kéo trang web lên 150px để ẩn header màu xanh
+             html_kttv = f"""
+            <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
                 <iframe 
-                    src="{LINK_AUTH}" 
+                    src="{LINK_WIND_AUTO}" 
                     style="
                         width: 100%; 
-                        height: 115vh; 
+                        height: 1200px; /* Tăng chiều cao nội bộ */
                         position: absolute; 
-                        top: -110px; 
+                        top: -150px;    /* Kéo lên để ẩn Header màu xanh */
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
                 ></iframe>
             </div>
             """
-            st.markdown(html_code, unsafe_allow_html=True)
-
-        elif "WeatherObs" in obs_mode:
-            components.iframe(LINK_WEATHEROBS, scrolling=True)
-        elif "Gió tự động" in obs_mode:
-             components.iframe(LINK_WIND_AUTO, scrolling=True)
+             st.markdown(html_kttv, unsafe_allow_html=True)
 
     elif topic == "Dự báo điểm (KMA)":
-        # --- CODE SỬA ĐỔI ĐỂ CẮT GIAO DIỆN KMA ---
-        # Sử dụng kỹ thuật CSS Masking để ẩn header "World Friend KOREA" và footer
-        # top: -140px (điều chỉnh để cắt phần Header màu xanh đậm bên trên)
         html_kma = f"""
         <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
             <iframe 
                 src="{LINK_KMA_FORECAST}" 
                 style="
                     width: 100%; 
-                    height: 1200px; /* Tăng chiều cao nội bộ để load đủ trang */
+                    height: 1200px; 
                     position: absolute; 
-                    top: -140px;    /* Kéo trang web lên trên để giấu Header */
+                    top: -140px; 
                     left: 0px; 
                     border: none;"
                 allow="fullscreen"
