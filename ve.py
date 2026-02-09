@@ -457,7 +457,7 @@ def main():
                         width: 100%; 
                         height: 1000px; 
                         position: absolute; 
-                        top: -58px;     /* Kéo lên để ẩn Header màu đen */
+                        top: -55px;     /* Kéo lên để ẩn Header màu đen */
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -577,5 +577,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
