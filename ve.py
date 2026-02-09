@@ -262,7 +262,7 @@ def create_info_table(df, title):
         display_df = df.sort_values('dt', ascending=False).groupby('name').head(1)
         cur = display_df 
 
-    # 2. Xử lý Subtitle: "Tin phát lúc ... giờ"
+    # 2. Xử lý Subtitle: "Tin phát lúc ...h30"
     subtitle = ""
     try:
         # Tìm dòng 'hiện tại' để lấy giờ
@@ -287,10 +287,10 @@ def create_info_table(df, title):
             # Ưu tiên lấy từ cột 'thời gian (giờ)' (đã map thành hour_explicit)
             if 'hour_explicit' in target_row.index and pd.notna(target_row['hour_explicit']):
                 h = int(target_row['hour_explicit'])
-                subtitle = f"Tin phát lúc {h} giờ"
+                subtitle = f"Tin phát lúc {h}h30"
             # Fallback: Nếu không có cột đó, lấy từ datetime object
             elif 'dt' in target_row.index and pd.notna(target_row['dt']):
-                subtitle = f"Tin phát lúc {target_row['dt'].hour} giờ"
+                subtitle = f"Tin phát lúc {target_row['dt'].hour}h30"
             else:
                  subtitle = "(Đang cập nhật)"
         else:
@@ -503,3 +503,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
