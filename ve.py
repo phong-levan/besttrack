@@ -53,26 +53,35 @@ SIDEBAR_WIDTH = "320px"
 
 # Cấu hình trang
 st.set_page_config(
-    page_title="Hệ thống gián sát",
+    page_title="Hệ thống giám sát",
     layout="wide",
     initial_sidebar_state="expanded" 
 )
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG SIDEBAR & ĐẨY NỘI DUNG)
+# 2. CSS CHUNG (LOẠI BỎ THANH CUỘN & CĂN CHỈNH GIAO DIỆN)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. THIẾT LẬP CHUNG */
+    /* 1. TRIỆT TIÊU THANH CUỘN VÀ KHOẢNG TRẮNG TOÀN TRANG */
+    html, body, [data-testid="stAppViewContainer"] {{
+        overflow: hidden !important;
+        height: 100vh !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }}
+
     .block-container {{
         padding: 0 !important;
         margin: 0 !important;
         max-width: 100% !important;
+        height: 100vh !important;
     }}
+    
     header, footer {{
         display: none !important;
     }}
 
-    /* 2. ÉP SIDEBAR LUÔN HIỆN CỐ ĐỊNH BÊN TRÁI */
+    /* 2. ÉP SIDEBAR CỐ ĐỊNH VÀ BỎ THANH CUỘN SIDEBAR */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -83,31 +92,37 @@ st.markdown(f"""
         left: 0 !important;
         top: 0 !important;
         height: 100vh !important;
-        transform: none !important; /* Chặn hiệu ứng trượt mất sidebar */
+        transform: none !important;
         z-index: 100000 !important;
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid #ddd;
+        overflow-x: hidden !important;
+        overflow-y: hidden !important;
     }}
 
-    /* ẨN NÚT ĐÓNG/MỞ SIDEBAR ĐỂ KHÔNG BỊ NHẢY */
+    /* Loại bỏ padding mặc định của nội dung sidebar để sát mép */
+    section[data-testid="stSidebar"] > div {{
+        padding-top: 2rem !important;
+    }}
+
     [data-testid="stSidebarCollapseBtn"],
     [data-testid="stSidebarCollapsedControl"] {{
         display: none !important;
     }}
 
-    /* 3. ĐẨY NỘI DUNG CHÍNH SANG PHẢI (BẮT ĐẦU TỪ 320PX) */
-    /* Target vào AppViewContainer để đẩy toàn bộ nội dung bên phải sidebar */
+    /* 3. ĐẨY NỘI DUNG CHÍNH SANG PHẢI */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
     }}
 
-    /* Đảm bảo khung Main không có lề trái thừa */
     [data-testid="stMainViewContainer"] {{
         margin-left: 0 !important;
         width: 100% !important;
+        height: 100vh !important;
+        overflow: hidden !important;
     }}
 
-    /* 4. TỐI ƯU CHO IFRAME (KMA, WINDY) */
+    /* 4. TỐI ƯU CHO IFRAME */
     iframe {{
         width: 100% !important;
         height: 100vh !important;
@@ -115,19 +130,47 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 5. WIDGET NỔI (BẢNG TIN & CHÚ THÍCH) */
+    /* 5. WIDGET NỔI VÀ CĂN GIỮA BẢNG */
     .legend-box {{
         position: fixed; top: 10px; right: 20px; z-index: 9999;
         width: 280px; pointer-events: none;
     }}
     .info-box {{
         position: fixed; top: 220px; right: 20px; z-index: 9999;
-        width: fit-content; background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #ccc; border-radius: 6px;
-        padding: 8px !important; color: #000;
+        width: 320px !important; 
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #ccc; 
+        border-radius: 8px;
+        padding: 10px !important; 
+        color: #000;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }}
+    .info-title {{
+        text-align: center; 
+        font-weight: bold; 
+        font-size: 16px; 
+        margin-bottom: 5px;
+    }}
+    .info-subtitle {{
+        text-align: center; 
+        font-size: 11px; 
+        margin-bottom: 10px; 
+        font-style: italic;
+    }}
+    .info-box table {{
+        margin-left: auto;
+        margin-right: auto;
+        border-collapse: collapse;
+        width: 100%;
+    }}
+    .info-box th, .info-box td {{
+        text-align: center !important;
+        padding: 5px 2px;
+        border-bottom: 1px solid #eee;
     }}
     </style>
 """, unsafe_allow_html=True)
+
 # ==============================================================================
 # 3. HÀM XỬ LÝ LOGIC
 # ==============================================================================
@@ -241,10 +284,8 @@ def create_info_table(df, title):
         t = r.get('datetime_str', r.get('dt'))
         if not isinstance(t, str): t = t.strftime('%d/%m %Hh')
         w = r.get('wind_km/h', 0)
-        
         lon = f"{r.get('lon', 0):.1f}E"
         lat = f"{r.get('lat', 0):.1f}N"
-        
         bf = r.get('bf', 0)
         if (pd.isna(bf) or bf == 0) and w > 0:
              if w < 34: bf = 6
@@ -252,10 +293,8 @@ def create_info_table(df, title):
              elif w < 100: bf = 10
              else: bf = 12
         cap_gio = f"Cấp {int(bf)}" if bf > 0 else "-"
-        
         p = r.get('pressure', 0)
         pmin = f"{int(p)}" if (pd.notna(p) and p > 0) else "-"
-
         rows += f"<tr><td>{t}</td><td>{lon}</td><td>{lat}</td><td>{cap_gio}</td><td>{pmin}</td></tr>"
     
     return textwrap.dedent(f"""
@@ -280,7 +319,7 @@ def create_legend(img_b64):
     if not img_b64: return ""
     return textwrap.dedent(f"""
     <div class="legend-box">
-        <img src="data:image/png;base64,{img_b64}">
+        <img src="data:image/png;base64,{img_b64}" style="width:100%">
     </div>""")
 
 # ==============================================================================
@@ -299,8 +338,6 @@ def main():
         dashboard_title = ""
         show_widgets = False
         active_mode = ""
-        
-        # Khởi tạo mặc định để tránh lỗi Syntax
         obs_mode = ""
 
         if topic == "Dữ liệu quan trắc":
@@ -350,7 +387,6 @@ def main():
                             final_df = df
                     else: st.warning("Vui lòng tải file.")
             else: 
-                # (Phần lịch sử giữ nguyên)
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
@@ -405,7 +441,6 @@ def main():
                         if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
                     
-                    # --- VẼ ICON BÃO ---
                     for _, r in sub.iterrows():
                         icon_key = get_icon_name(r)
                         icon_path = ICON_PATHS.get(icon_key)
@@ -441,8 +476,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
