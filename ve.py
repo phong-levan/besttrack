@@ -300,7 +300,7 @@ def create_info_table(df, title):
     return textwrap.dedent(f"""
     <div class="info-box">
         <div class="info-title">{title}</div>
-        <div class="info-subtitle">(Dữ liệu cập nhật từ Besttrack)</div>
+        <div class="info-subtitle">Dữ liệu cập nhật từ Besttrack</div>
         <table>
             <thead>
                 <tr>
@@ -476,3 +476,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
