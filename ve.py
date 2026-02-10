@@ -31,8 +31,6 @@ warnings.filterwarnings("ignore")
 # 1. CẤU HÌNH & DỮ LIỆU
 # ==============================================================================
 ICON_DIR = "icon"
-FILE_OPT1 = "besttrack.csv"
-FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
 # --- CẤU HÌNH ĐƯỜNG DẪN SHAPEFILE CỐ ĐỊNH ---
@@ -452,7 +450,7 @@ def main():
             # NẾU ĐÃ ĐĂNG NHẬP MỚI HIỆN MENU CON
             if st.session_state['logged_in']:
                 obs_mode = st.radio("Chọn nguồn dữ liệu:", 
-                                  ["Thời tiết", "Gió tự động", "Nội suy nhiệt độ", "Nội suy lượng mưa"])
+                                  ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ", "Nội suy lượng mưa"])
                 
                 if obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
                     st.markdown("---")
@@ -473,7 +471,7 @@ def main():
                     st.session_state['logged_in'] = False
                     st.rerun()
 
-        if topic == "Dự báo điểm":
+        if topic == "Dự báo điểm (KMA)":
             if st.session_state['logged_in']:
                 st.markdown("---")
                 if st.button("🔒 Đăng xuất", key="logout_kma_sidebar"):
@@ -489,11 +487,10 @@ def main():
                     show_widgets = True
                     # Hỗ trợ cả csv và xlsx
                     f = st.file_uploader("Upload besttrack (.csv / .xlsx)", type=["csv", "xlsx"], key="o1")
-                    path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
-                    if path:
+                    if f:
                         try:
                             # Tự động đọc đúng định dạng
-                            df = pd.read_csv(path) if (isinstance(path, str) and path.endswith('.csv')) or (not isinstance(path, str) and path.name.endswith('.csv')) else pd.read_excel(path)
+                            df = pd.read_csv(f) if f.name.endswith('.csv') else pd.read_excel(f)
                             df = normalize_columns(df)
                             if 'name' not in df: df['name'], df['storm_no'] = 'Storm', 'Current'
                             for c in ['wind_km/h','bf','r6','r10','rc','pressure','hour_explicit']: 
@@ -503,15 +500,16 @@ def main():
                             sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s) if len(all_s)>0 else []
                             final_df = df[df['storm_no'].isin(sel)] if len(sel)>0 else df
                         except: pass
+                    else:
+                        st.info("Vui lòng upload file dữ liệu để xem thông tin bão.")
             else:
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
                     f = st.file_uploader("Upload besttrack_capgio.xlsx", type="xlsx", key="o2")
-                    path = f if f else (FILE_OPT2 if os.path.exists(FILE_OPT2) else None)
-                    if path:
+                    if f:
                         try:
-                            df = pd.read_excel(path)
+                            df = pd.read_excel(f)
                             df = normalize_columns(df)
                             df = df.dropna(subset=['lat','lon'])
                             years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
@@ -519,6 +517,8 @@ def main():
                             names = st.multiselect("Tên bão:", temp['name'].unique(), default=temp['name'].unique())
                             final_df = temp[temp['name'].isin(names)]
                         except: pass
+                    else:
+                        st.info("Vui lòng upload file dữ liệu lịch sử bão.")
 
     # --- MAIN CONTENT ---
     if topic == "Ảnh mây vệ tinh":
@@ -528,7 +528,7 @@ def main():
         # --- KIỂM TRA ĐĂNG NHẬP (Dùng chung session) ---
         if not st.session_state['logged_in']:
             st.title("🔐 Đăng nhập Hệ thống")
-            st.info("Vui lòng đăng nhập để truy cập Dữ liệu")
+            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
             
             with st.form("login_form_common"):
                 user_input = st.text_input("Tên đăng nhập")
@@ -722,4 +722,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
