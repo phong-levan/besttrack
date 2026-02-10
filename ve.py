@@ -70,36 +70,39 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 # ==============================================================================
-# 2. CSS CHUNG (ĐÃ SỬA ĐỂ HIỆN SIDEBAR + SÁT LỀ)
+# 2. CSS CHUNG (HEADER TRONG SUỐT & FULL MÀN HÌNH)
 # ==============================================================================
 st.markdown(f"""
     <style>
     /* 1. XÓA PADDING CONTAINER CHÍNH */
     .block-container {{
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 0rem !important;
-        padding-right: 0rem !important;
-        margin-top: 0rem !important;
+        padding: 0 !important;
+        margin: 0 !important;
         max-width: 100% !important;
     }}
     
-    /* 2. ẨN CÁC PHẦN TRANG TRÍ THỪA CỦA STREAMLIT (Toolbar, Decoration) */
-    div[data-testid="stDecoration"], 
-    div[data-testid="stStatusWidget"],
-    div[data-testid="stToolbar"] {{
-        visibility: hidden !important;
-        display: none !important;
-        height: 0px !important;
-    }}
-
-    /* 3. LÀM TRONG SUỐT HEADER ĐỂ NỘI DUNG ĐẨY LÊN, NHƯNG KHÔNG ẨN (DISPLAY: NONE) ĐỂ GIỮ NÚT SIDEBAR */
+    footer {{ display: none !important; }}
+    
+    /* 2. XỬ LÝ HEADER (QUAN TRỌNG: LÀM TRONG SUỐT ĐỂ KHÔNG ĐẨY MAP) */
     header[data-testid="stHeader"] {{
-        background-color: transparent !important;
-        z-index: 1 !important; /* Thấp hơn sidebar */
+        background-color: transparent !important; /* Trong suốt */
+        z-index: 9999 !important; /* Nổi lên trên map */
+        height: auto !important; /* Chiều cao tự động */
+        pointer-events: none; /* Để chuột bấm xuyên qua phần trống xuống bản đồ */
+    }}
+    
+    /* Cho phép bấm vào các nút trong Header (như nút 3 gạch, setting) */
+    header[data-testid="stHeader"] > div {{
+        pointer-events: auto !important;
+        color: #333 !important; /* Màu icon */
     }}
 
-    /* 4. CỐ ĐỊNH SIDEBAR (GIỮ NGUYÊN) */
+    /* Ẩn thanh trang trí cầu vồng nếu có */
+    div[data-testid="stDecoration"] {{
+        display: none !important;
+    }}
+
+    /* 3. CỐ ĐỊNH SIDEBAR */
     section[data-testid="stSidebar"] {{
         display: block !important;
         width: {SIDEBAR_WIDTH} !important;
@@ -109,12 +112,14 @@ st.markdown(f"""
         left: 0 !important;
         top: 0 !important;
         height: 100vh !important;
-        z-index: 1000000 !important; /* Z-index cao nhất để đè lên mọi thứ */
+        z-index: 1000000 !important;
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid #ddd;
     }}
 
-    /* 5. ĐẨY NỘI DUNG CHÍNH (SỬA LẠI ĐỂ TRÁNH BỊ HEADER CHE) */
+    [data-testid="stSidebarCollapseBtn"], [data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
+
+    /* 4. ĐẨY NỘI DUNG CHÍNH LÊN SÁT MÉP TRÊN (PADDING-TOP: 0) */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
         padding-top: 0 !important;
@@ -125,7 +130,7 @@ st.markdown(f"""
         padding-top: 0 !important;
     }}
 
-    /* 6. IFRAME FULL MÀN HÌNH */
+    /* 5. IFRAME FULL MÀN HÌNH */
     iframe {{
         width: 100% !important;
         height: 100vh !important;
@@ -133,24 +138,26 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 7. WIDGET NỔI */
+    /* 6. WIDGET NỔI */
     .floating-container {{
         position: fixed; top: 20px; right: 60px; z-index: 9999;
         display: flex; flex-direction: column; align-items: center;    
     }}
 
     .legend-box {{ width: 340px; pointer-events: none; margin-bottom: 5px; }}
+    
     .info-box {{
         width: fit-content; background: rgba(255, 255, 255, 0.9);
         border: 1px solid #ccc; border-radius: 6px;
         padding: 10px !important; color: #000; text-align: center;
     }}
+    
     .info-box table {{ width: 100%; margin: 0 auto; border-collapse: collapse; }}
     .info-box th, .info-box td {{ text-align: center !important; padding: 4px 8px; }}
     .info-title {{ font-weight: bold; margin-bottom: 2px; }}
     .info-subtitle {{ font-size: 0.9em; margin-bottom: 8px; font-style: italic; }}
     
-    /* 8. ẨN THANH CUỘN */
+    /* ẨN THANH CUỘN */
     ::-webkit-scrollbar {{ width: 0px; background: transparent; }}
     </style>
 """, unsafe_allow_html=True)
@@ -313,16 +320,19 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
 
     # Cấu hình riêng cho từng loại dữ liệu
     if data_type == 'rain':
-        # CẤU HÌNH THANG MÀU MƯA
+        # --- CẤU HÌNH MƯA MỚI THEO YÊU CẦU ---
         vmin, vmax = 0, 1400
-        levels_for_ticks = np.arange(0, 1450, 100)
-        colors = ['#FFFFFF', '#A0E6FF', '#00FF00', '#FFFF00', '#FFA500', '#FF0000', '#800080', '#4B0082']
-        POS = np.linspace(0.0, 1.0, len(colors))
-        # Tạo Colormap mịn từ danh sách màu
-        cmap = LinearSegmentedColormap.from_list('rain_smooth', list(zip(POS, colors)), N=512)
-        cmap.set_under(colors[0])
-        cmap.set_over(colors[-1])
+        levels_for_ticks = np.arange(0, 1450, 100) # 0, 50, ..., 1400 (bước 100)
+        
+        COLORS = ['#FFFFFF', '#A0E6FF', '#00FF00', '#FFFF00', '#FFA500', '#FF0000', '#800080', '#4B0082']
+        POS = np.linspace(0.0, 1.0, len(COLORS))
+        cmap = LinearSegmentedColormap.from_list('rain_smooth', list(zip(POS, COLORS)), N=512)
+        cmap.set_under(COLORS[0])
+        cmap.set_over(COLORS[-1])
+        
         unit_label = "Lượng mưa (mm)"
+        extend_opt = 'max' # Mưa chỉ mở rộng phía trên
+        
     else: # temp
         vmin, vmax = 0.0, 40.0
         levels_for_ticks = list(range(0, 42, 4))
@@ -330,6 +340,7 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
                   (0.6, '#FFFF00'), (0.75, '#FFA500'), (0.9, '#FF0000'), (1.0, '#8B0000')]
         cmap = LinearSegmentedColormap.from_list("custom_smooth_temp", colors, N=256)
         unit_label = "Nhiệt độ (°C)"
+        extend_opt = 'both'
 
     norm = Normalize(vmin=vmin, vmax=vmax)
 
@@ -413,10 +424,10 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
         origin='lower'
     )
 
-    cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.7, pad=0.02, extend='both')
+    cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.7, pad=0.02, extend=extend_opt)
     cbar.set_label(unit_label, fontsize=12)
     cbar.set_ticks(levels_for_ticks)
-    cbar.set_ticklabels([str(l) for l in levels_for_ticks])
+    cbar.set_ticklabels([str(int(l) if l.is_integer() else l) for l in levels_for_ticks])
 
     ax.set_xlim(minx, maxx)
     ax.set_ylim(miny, maxy)
