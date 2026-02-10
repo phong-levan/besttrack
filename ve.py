@@ -70,31 +70,49 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 # ==============================================================================
-# 2. CSS CHUNG (ẨN HOÀN TOÀN HEADER/FOOTER)
+# 2. CSS CHUNG (HEADER TRONG SUỐT & FULL MÀN HÌNH)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. XÓA PADDING CƠ BẢN */
+    /* 1. XÓA PADDING CONTAINER CHÍNH */
     .block-container {{
         padding: 0 !important;
         margin: 0 !important;
         max-width: 100% !important;
     }}
     
-    /* 2. ẨN HEADER, FOOTER, TOOLBAR (ẨN NÚT 3 GẠCH) */
-    header, footer {{
-        display: none !important;
+    footer {{ display: none !important; }}
+    
+    /* 2. HEADER TRONG SUỐT ĐỂ HIỆN NÚT MENU NHƯNG KHÔNG CHE MAP */
+    header[data-testid="stHeader"] {{
+        background-color: transparent !important;
+        z-index: 99999 !important; /* Nổi lên trên bản đồ */
+        height: auto !important;
+        pointer-events: none; /* Cho phép chuột bấm xuyên qua phần nền trống */
     }}
-    div[data-testid="stHeader"],
-    div[data-testid="stToolbar"], 
-    div[data-testid="stDecoration"], 
-    div[data-testid="stStatusWidget"] {{
-        visibility: hidden !important;
-        display: none !important;
-        height: 0px !important;
+    
+    /* CHỈ CHO PHÉP BẤM VÀO CÁC NÚT TRONG HEADER */
+    header[data-testid="stHeader"] > div {{
+        pointer-events: auto !important;
     }}
 
-    /* 3. CỐ ĐỊNH SIDEBAR */
+    /* TÙY CHỈNH NÚT MENU CHO DỄ NHÌN HƠN TRÊN NỀN BẢN ĐỒ */
+    header[data-testid="stHeader"] button {{
+        background-color: rgba(255, 255, 255, 0.5) !important; /* Nền trắng mờ */
+        border-radius: 4px;
+        color: black !important;
+    }}
+
+    /* ẨN THANH TRANG TRÍ MÀU SẮC */
+    div[data-testid="stDecoration"] {{
+        display: none !important;
+    }}
+    
+    div[data-testid="stStatusWidget"] {{
+        display: none !important;
+    }}
+
+    /* 3. SIDEBAR CỐ ĐỊNH */
     section[data-testid="stSidebar"] {{
         display: block !important;
         width: {SIDEBAR_WIDTH} !important;
@@ -109,12 +127,13 @@ st.markdown(f"""
         border-right: 1px solid #ddd;
     }}
 
-    /* 4. ĐẨY NỘI DUNG CHÍNH (SÁT LỀ TRÊN CÙNG) */
+    [data-testid="stSidebarCollapseBtn"], [data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
+
+    /* 4. CONTENT FULL */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
         padding-top: 0 !important;
-        padding-right: 0 !important;
-        overflow: hidden !important; /* Ẩn thanh cuộn container */
+        overflow: hidden !important;
     }}
     [data-testid="stMainViewContainer"] {{
         margin-left: 0 !important;
@@ -122,7 +141,7 @@ st.markdown(f"""
         padding-top: 0 !important;
     }}
 
-    /* 5. IFRAME & PLOT FULL MÀN HÌNH */
+    /* 5. IFRAME & MAP CLASS */
     iframe {{
         width: 100% !important;
         height: 100vh !important;
@@ -141,6 +160,7 @@ st.markdown(f"""
         border: none !important;
     }}
     
+    /* Điều chỉnh khi mở sidebar trên desktop */
     @media (min-width: 992px) {{
         section[data-testid="stSidebar"][aria-expanded="true"] ~ .main .fullscreen-map {{
             margin-left: {SIDEBAR_WIDTH};
@@ -151,7 +171,7 @@ st.markdown(f"""
     /* 6. WIDGET NỔI */
     .floating-container {{
         position: fixed; 
-        top: 20px; 
+        top: 60px; /* Hạ thấp xuống để tránh đè nút menu */
         right: 60px; 
         z-index: 9999;
         display: flex; flex-direction: column; align-items: center;    
@@ -168,7 +188,7 @@ st.markdown(f"""
     .info-title {{ font-weight: bold; margin-bottom: 2px; }}
     .info-subtitle {{ font-size: 0.9em; margin-bottom: 8px; font-style: italic; }}
     
-    /* Ẩn thanh cuộn trình duyệt */
+    /* Ẩn thanh cuộn */
     ::-webkit-scrollbar {{ width: 0px; background: transparent; }}
     </style>
 """, unsafe_allow_html=True)
@@ -330,7 +350,6 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     KNN = 12
 
     if data_type == 'rain':
-        # --- CẤU HÌNH MƯA (0 - 1400) ---
         vmin, vmax = 0, 1400
         levels_for_ticks = np.arange(0, 1450, 100) 
         COLORS = ['#FFFFFF', '#A0E6FF', '#00FF00', '#FFFF00', '#FFA500', '#FF0000', '#800080', '#4B0082']
@@ -341,7 +360,6 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
         unit_label = "Lượng mưa (mm)"
         extend_opt = 'max' 
     else: 
-        # --- CẤU HÌNH NHIỆT ĐỘ (0 - 40) ---
         vmin, vmax = 0.0, 40.0
         levels_for_ticks = list(range(0, 42, 4))
         colors = [(0.0, '#FFFFFF'), (0.1, '#D0F0FF'), (0.2, '#00A0FF'), (0.4, '#00FF00'),
@@ -407,7 +425,6 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     else:
         gv_masked = gv
 
-    # Vẽ
     fig, ax = plt.subplots(figsize=(16, 12)) 
     ax.set_title(title_text if title_text else f'Bản đồ {unit_label}', fontsize=20, pad=20)
 
