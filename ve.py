@@ -57,14 +57,22 @@ LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
 
 # --- HÀM TẠO LINK KMA DYNAMIC ---
 def get_kma_url():
+    # Lấy giờ UTC hiện tại
     now_utc = datetime.utcnow()
+    # KMA thường cập nhật chậm khoảng 4-5 tiếng so với giờ quan trắc (00Z và 12Z)
     check_time = now_utc - timedelta(hours=5)
+    
+    # Xác định ca mô hình gần nhất (00 hoặc 12)
     if check_time.hour < 12:
         run_hour = 0
     else:
         run_hour = 12
+    
+    # Format chuỗi thời gian: YYYY.MM.DD.HH
     date_str = check_time.strftime("%Y.%m.%d")
     tm_str = f"{date_str}.{run_hour:02d}"
+    
+    # Tạo URL
     url = f"https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm={tm_str}&delta=000&ftm={tm_str}"
     return url
 
@@ -421,7 +429,7 @@ def main():
     if 'interpol_fig' not in st.session_state:
         st.session_state['interpol_fig'] = None
     
-    # --- KHỞI TẠO TRẠNG THÁI ĐĂNG NHẬP ---
+    # --- KHỞI TẠO TRẠNG THÁI ĐĂNG NHẬP (BIẾN TOÀN CỤC CHO CẢ APP) ---
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
 
@@ -446,7 +454,6 @@ def main():
                 obs_mode = st.radio("Chọn nguồn dữ liệu:", 
                                   ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ", "Nội suy lượng mưa"])
                 
-                # --- MENU CHO NỘI SUY (NHIỆT ĐỘ HOẶC MƯA) ---
                 if obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
                     st.markdown("---")
                     st.markdown(f"### 🛠️ CÔNG CỤ {obs_mode.upper()}")
@@ -462,15 +469,14 @@ def main():
                     btn_run_interpol = st.button("🚀 VẼ BẢN ĐỒ", type="primary", use_container_width=True)
                 
                 st.markdown("---")
-                if st.button("🔒 Đăng xuất"):
+                if st.button("🔒 Đăng xuất", key="logout_obs_sidebar"):
                     st.session_state['logged_in'] = False
                     st.rerun()
 
         if topic == "Dự báo điểm (KMA)":
-            # NẾU ĐÃ ĐĂNG NHẬP THÌ HIỆN NÚT ĐĂNG XUẤT (HOẶC CHỈ CẦN HIỂN THỊ Ở 1 CHỖ)
             if st.session_state['logged_in']:
                 st.markdown("---")
-                if st.button("🔒 Đăng xuất", key="logout_kma"):
+                if st.button("🔒 Đăng xuất", key="logout_kma_sidebar"):
                     st.session_state['logged_in'] = False
                     st.rerun()
 
@@ -481,10 +487,12 @@ def main():
                 dashboard_title = "TIN BÃO KHẨN CẤP"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
+                    # Hỗ trợ cả csv và xlsx
                     f = st.file_uploader("Upload besttrack (.csv / .xlsx)", type=["csv", "xlsx"], key="o1")
                     path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
                     if path:
                         try:
+                            # Tự động đọc đúng định dạng
                             df = pd.read_csv(path) if (isinstance(path, str) and path.endswith('.csv')) or (not isinstance(path, str) and path.name.endswith('.csv')) else pd.read_excel(path)
                             df = normalize_columns(df)
                             if 'name' not in df: df['name'], df['storm_no'] = 'Storm', 'Current'
@@ -517,12 +525,12 @@ def main():
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
     
     elif topic == "Dữ liệu quan trắc":
-        # --- KIỂM TRA ĐĂNG NHẬP TẠI ĐÂY ---
+        # --- KIỂM TRA ĐĂNG NHẬP (Dùng chung session) ---
         if not st.session_state['logged_in']:
-            st.title("🔐 Đăng nhập Hệ thống Quan trắc")
-            st.write("Vui lòng đăng nhập để truy cập dữ liệu quan trắc chuyên sâu.")
+            st.title("🔐 Đăng nhập Hệ thống")
+            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
             
-            with st.form("login_form_obs"):
+            with st.form("login_form_common"):
                 user_input = st.text_input("Tên đăng nhập")
                 pass_input = st.text_input("Mật khẩu", type="password")
                 submitted = st.form_submit_button("Đăng nhập")
@@ -602,12 +610,12 @@ def main():
                     st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
 
     elif topic == "Dự báo điểm (KMA)":
-        # --- KIỂM TRA ĐĂNG NHẬP TẠI ĐÂY ---
+        # --- KIỂM TRA ĐĂNG NHẬP (Dùng chung session) ---
         if not st.session_state['logged_in']:
-            st.title("🔐 Đăng nhập Dự báo Điểm KMA")
-            st.write("Vui lòng đăng nhập để xem dữ liệu dự báo điểm.")
+            st.title("🔐 Đăng nhập Hệ thống")
+            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
             
-            with st.form("login_form_kma"):
+            with st.form("login_form_common_kma"):
                 user_input = st.text_input("Tên đăng nhập")
                 pass_input = st.text_input("Mật khẩu", type="password")
                 submitted = st.form_submit_button("Đăng nhập")
