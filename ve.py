@@ -22,6 +22,7 @@ from scipy.spatial import cKDTree
 import zipfile
 import tempfile
 import shutil
+import io
 
 warnings.filterwarnings("ignore")
 
@@ -442,16 +443,19 @@ def run_interpolation_and_plot(input_df, title_text, uploaded_shp=None):
     mask_shape = None
     disp_shape = None
     
+    # Mặc định dùng BBox
     bbox_poly = box(minx, miny, maxx, maxy)
     mask_shape = gpd.GeoDataFrame({'geometry': [bbox_poly]}, crs='EPSG:4326')
     disp_shape = gpd.GeoDataFrame({'geometry': [bbox_poly]}, crs='EPSG:4326')
 
+    # Nếu có upload shapefile -> dùng nó
     if uploaded_shp:
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 with zipfile.ZipFile(uploaded_shp, 'r') as zip_ref:
                     zip_ref.extractall(tmpdir)
                 
+                # Tìm file shp
                 shp_files = [f for f in os.listdir(tmpdir) if f.endswith('.shp')]
                 if shp_files:
                     shp_path = os.path.join(tmpdir, shp_files[0])
@@ -515,6 +519,9 @@ def run_interpolation_and_plot(input_df, title_text, uploaded_shp=None):
 # ==============================================================================
 def main():
     
+    if 'interpol_fig' not in st.session_state:
+        st.session_state['interpol_fig'] = None
+
     with st.sidebar:
         st.title("Dữ liệu thời tiết")
         
@@ -544,6 +551,7 @@ def main():
                 st.markdown("---")
                 st.markdown("### 🛠️ CÔNG CỤ NỘI SUY")
                 
+                # *** PHẦN NHẬP TIÊU ĐỀ ***
                 title_interpol = st.text_input("Tiêu đề bản đồ:", value="Bản đồ nhiệt độ nội suy")
                 
                 st.markdown("**1. Upload dữ liệu (.xlsx/.csv)**")
@@ -668,7 +676,8 @@ def main():
         
         elif "Nội suy nhiệt độ" in obs_mode:
             # === PHẦN HIỂN THỊ KẾT QUẢ NỘI SUY (MAIN AREA) ===
-            # Kiểm tra nếu người dùng đã nhấn nút Vẽ
+            
+            # Xử lý khi nhấn nút Vẽ
             if btn_run_interpol:
                 if data_file_interpol:
                     try:
@@ -677,21 +686,45 @@ def main():
                         else:
                             df_in = pd.read_excel(data_file_interpol)
                         
-                        # Vẽ bản đồ
                         with st.spinner("Đang tính toán nội suy và tạo bản đồ..."):
                             fig, err = run_interpolation_and_plot(df_in, title_interpol, shape_file_interpol)
                             
                             if err:
                                 st.error(f"❌ {err}")
                             else:
-                                st.pyplot(fig, use_container_width=True)
+                                st.session_state['interpol_fig'] = fig
                                 
                     except Exception as e:
                         st.error(f"❌ Lỗi khi xử lý file: {e}")
                 else:
-                    st.info("👈 Vui lòng upload file dữ liệu ở thanh menu bên trái để vẽ bản đồ.")
+                    st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
+
+            # Hiển thị biểu đồ nếu đã có trong session state
+            if st.session_state['interpol_fig']:
+                st.pyplot(st.session_state['interpol_fig'], use_container_width=True)
+                
+                # --- Nút Download ---
+                st.markdown("### 📥 Tải xuống")
+                col_dl1, col_dl2 = st.columns([1, 3])
+                with col_dl1:
+                    fmt = st.selectbox("Định dạng:", ["png", "pdf"])
+                
+                # Lưu vào buffer để download
+                buf = io.BytesIO()
+                st.session_state['interpol_fig'].savefig(buf, format=fmt, dpi=300, bbox_inches='tight')
+                buf.seek(0)
+                
+                with col_dl2:
+                    st.write("") # Spacer
+                    st.write("") # Spacer
+                    st.download_button(
+                        label=f"⬇️ Tải ảnh về ({fmt.upper()})",
+                        data=buf,
+                        file_name=f"ban_do_nhiet.{fmt}",
+                        mime=f"image/{fmt}"
+                    )
             else:
-                # Màn hình chờ khi chưa nhấn nút
+                # Màn hình chờ
                 st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
 
     elif topic == "Dự báo điểm (KMA)":
