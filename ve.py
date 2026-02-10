@@ -19,9 +19,6 @@ from shapely.ops import unary_union
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from scipy.ndimage import gaussian_filter
 from scipy.spatial import cKDTree
-import zipfile
-import tempfile
-import shutil
 import io
 
 warnings.filterwarnings("ignore")
@@ -33,6 +30,11 @@ ICON_DIR = "icon"
 FILE_OPT1 = "besttrack.csv"
 FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
+
+# --- CẤU HÌNH ĐƯỜNG DẪN SHAPEFILE CỐ ĐỊNH (TỪ GIT/THƯ MỤC LOCAL) ---
+# Dùng đường dẫn tương đối. Streamlit sẽ tìm trong thư mục 'shp' nằm cùng cấp với file code.
+SHP_MASK_PATH = os.path.join("shp", "vn34tinh.shp") 
+SHP_DISP_PATH = os.path.join("shp", "vungmoi.shp")
 
 # --- ĐỊNH NGHĨA ICON PATHS ---
 ICON_PATHS = {
@@ -80,7 +82,6 @@ st.markdown(f"""
         display: none !important;
     }}
     
-    /* Ẩn các thành phần mặc định của Streamlit */
     div[data-testid="stToolbar"], 
     div[data-testid="stDecoration"], 
     div[data-testid="stStatusWidget"] {{
@@ -368,10 +369,8 @@ def create_legend(img_b64):
 
 # === LOGIC NỘI SUY NHIỆT ĐỘ ===
 def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
-    """IDW nhanh bằng cKDTree + k láng giềng gần nhất."""
     tree = cKDTree(np.column_stack([xi, yi]))
     dists, idxs = tree.query(query_xy, k=min(k, xi.size))
-    # Đảm bảo shape (N, k)
     if dists.ndim == 1:
         dists = dists[:, None]
         idxs = idxs[:, None]
@@ -395,7 +394,7 @@ def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
 
     return out
 
-def run_interpolation_and_plot(input_df, title_text, uploaded_shp=None):
+def run_interpolation_and_plot(input_df, title_text):
     # Cấu hình nội suy
     minx, maxx = 101.8, 115.0
     miny, maxy = 8.0, 23.9
@@ -443,30 +442,39 @@ def run_interpolation_and_plot(input_df, title_text, uploaded_shp=None):
     mask_shape = None
     disp_shape = None
     
-    # Mặc định dùng BBox
-    bbox_poly = box(minx, miny, maxx, maxy)
-    mask_shape = gpd.GeoDataFrame({'geometry': [bbox_poly]}, crs='EPSG:4326')
-    disp_shape = gpd.GeoDataFrame({'geometry': [bbox_poly]}, crs='EPSG:4326')
-
-    # Nếu có upload shapefile -> dùng nó
-    if uploaded_shp:
+    # 1. Đọc Shapefile cố định từ thư mục 'shp' trên Git/Local
+    # Kiểm tra sự tồn tại của file trước
+    if os.path.exists(SHP_MASK_PATH):
         try:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                with zipfile.ZipFile(uploaded_shp, 'r') as zip_ref:
-                    zip_ref.extractall(tmpdir)
-                
-                # Tìm file shp
-                shp_files = [f for f in os.listdir(tmpdir) if f.endswith('.shp')]
-                if shp_files:
-                    shp_path = os.path.join(tmpdir, shp_files[0])
-                    gdf = gpd.read_file(shp_path)
-                    if gdf.crs and gdf.crs.to_epsg() != 4326:
-                        gdf.to_crs(epsg=4326, inplace=True)
-                    mask_shape = gdf
-                    disp_shape = gdf
+            # Đọc trực tiếp file .shp
+            mask_shape = gpd.read_file(SHP_MASK_PATH)
+            
+            # Chuẩn hóa hệ tọa độ về WGS84 (EPSG:4326)
+            if mask_shape.crs and mask_shape.crs.to_epsg() != 4326:
+                mask_shape.to_crs(epsg=4326, inplace=True)
         except Exception as e:
-            return None, f"Lỗi đọc Shapefile: {e}"
+            return None, f"Lỗi đọc file Mask Shapefile ({SHP_MASK_PATH}): {e}"
+    else:
+        # Nếu không thấy file, dùng khung chữ nhật mặc định và thông báo (nếu cần)
+        # st.warning(f"Không tìm thấy file: {SHP_MASK_PATH}. Đang dùng khung mặc định.")
+        bbox_poly = box(minx, miny, maxx, maxy)
+        mask_shape = gpd.GeoDataFrame({'geometry': [bbox_poly]}, crs='EPSG:4326')
 
+    if os.path.exists(SHP_DISP_PATH):
+        try:
+            disp_shape = gpd.read_file(SHP_DISP_PATH)
+            if disp_shape.crs and disp_shape.crs.to_epsg() != 4326:
+                disp_shape.to_crs(epsg=4326, inplace=True)
+        except Exception as e:
+            return None, f"Lỗi đọc file Display Shapefile ({SHP_DISP_PATH}): {e}"
+    else:
+        if mask_shape is not None:
+             disp_shape = mask_shape # Dùng mask làm display nếu thiếu file display
+        else:
+             bbox_poly = box(minx, miny, maxx, maxy)
+             disp_shape = gpd.GeoDataFrame({'geometry': [bbox_poly]}, crs='EPSG:4326')
+
+    # 2. Cắt Mask
     if mask_shape is not None:
         shape_union = mask_shape.unary_union
         prep_shape = prep(shape_union)
@@ -479,10 +487,11 @@ def run_interpolation_and_plot(input_df, title_text, uploaded_shp=None):
     else:
         gv_masked = gv
 
-    # VẼ BIỂU ĐỒ (Kích thước lớn để full màn hình)
+    # 3. Vẽ biểu đồ
     fig, ax = plt.subplots(figsize=(14, 10)) 
     ax.set_title(title_text if title_text else 'Bản đồ nhiệt độ', fontsize=16)
 
+    # Vẽ đường viền
     if disp_shape is not None:
         disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
 
@@ -539,7 +548,6 @@ def main():
         # --- CÁC BIẾN CHO NỘI SUY (KHỞI TẠO) ---
         title_interpol = ""
         data_file_interpol = None
-        shape_file_interpol = None
         btn_run_interpol = False
 
         if topic == "Dữ liệu quan trắc":
@@ -558,9 +566,7 @@ def main():
                 st.caption("Cột: `stations`, `lon`, `lat`, `value`")
                 data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv'], key="data_up")
                 
-                st.markdown("**2. Upload Shapefile (.zip)**")
-                st.caption("Zip toàn bộ (.shp, .shx, .dbf...)")
-                shape_file_interpol = st.file_uploader("Chọn file shapefile:", type=['zip'], key="shp_up")
+                # BỎ PHẦN UPLOAD SHAPEFILE, CODE TỰ TÌM TRONG THƯ MỤC 'shp'
                 
                 st.markdown("---")
                 btn_run_interpol = st.button("🚀 VẼ BẢN ĐỒ", type="primary", use_container_width=True)
@@ -687,7 +693,8 @@ def main():
                             df_in = pd.read_excel(data_file_interpol)
                         
                         with st.spinner("Đang tính toán nội suy và tạo bản đồ..."):
-                            fig, err = run_interpolation_and_plot(df_in, title_interpol, shape_file_interpol)
+                            # Gọi hàm không cần uploaded_shp nữa
+                            fig, err = run_interpolation_and_plot(df_in, title_interpol)
                             
                             if err:
                                 st.error(f"❌ {err}")
