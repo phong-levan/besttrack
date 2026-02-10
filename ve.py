@@ -517,7 +517,7 @@ def main():
                 st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
 
     elif topic == "Dự báo điểm (KMA)":
-        st.markdown(f'<div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_KMA_FORECAST}" style="width: calc(100% + 19px); height: 1200px; position: absolute; top: -215px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_KMA_FORECAST}" style="width: calc(100% + 19px); height: 1200px; position: absolute; top: -200px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
 
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
@@ -564,6 +564,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
