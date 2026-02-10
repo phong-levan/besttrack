@@ -476,9 +476,24 @@ def main():
                         except: pass
 
     # --- MAIN CONTENT ---
-    if topic == "Ảnh mây vệ tinh":
-        components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
-    
+if topic == "Ảnh mây vệ tinh":
+        # Thay thế components.iframe bằng HTML để full màn hình và sát lề
+        windy_html = """
+        <div style="overflow: hidden; width: 100%; height: 100vh; position: relative; border: none; margin: 0; padding: 0;">
+            <iframe 
+                src="https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1" 
+                style="
+                    width: 100%; 
+                    height: 100vh; 
+                    position: absolute; 
+                    top: 0px; 
+                    left: 0px; 
+                    border: none;"
+                allow="fullscreen"
+            ></iframe>
+        </div>
+        """
+        st.markdown(windy_html, unsafe_allow_html=True)
     elif topic == "Dữ liệu quan trắc":
         
         if "WeatherObs" in obs_mode:
@@ -564,6 +579,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
