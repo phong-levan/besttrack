@@ -70,94 +70,80 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 # ==============================================================================
-# 2. CSS CHUNG (HEADER TRONG SUỐT & FULL MÀN HÌNH)
+# 2. CSS CHUNG (FIXED POSITION ĐỂ FULL MÀN HÌNH TUYỆT ĐỐI)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. XÓA PADDING CONTAINER CHÍNH */
+    /* Xóa padding mặc định */
     .block-container {{
         padding: 0 !important;
         margin: 0 !important;
         max-width: 100% !important;
     }}
     
-    footer {{ display: none !important; }}
-    
-    /* 2. XỬ LÝ HEADER (QUAN TRỌNG: LÀM TRONG SUỐT ĐỂ KHÔNG ĐẨY MAP) */
-    header[data-testid="stHeader"] {{
-        background-color: transparent !important; /* Trong suốt */
-        z-index: 9999 !important; /* Nổi lên trên map */
-        height: auto !important; /* Chiều cao tự động */
-        pointer-events: none; /* Để chuột bấm xuyên qua phần trống xuống bản đồ */
-    }}
-    
-    /* Cho phép bấm vào các nút trong Header (như nút 3 gạch, setting) */
-    header[data-testid="stHeader"] > div {{
-        pointer-events: auto !important;
-        color: #333 !important; /* Màu icon */
-    }}
-
-    /* Ẩn thanh trang trí cầu vồng nếu có */
-    div[data-testid="stDecoration"] {{
+    /* Ẩn Header/Footer */
+    header, footer {{ display: none !important; }}
+    div[data-testid="stToolbar"], div[data-testid="stDecoration"], div[data-testid="stStatusWidget"] {{
+        visibility: hidden !important;
         display: none !important;
+        height: 0px !important;
     }}
 
-    /* 3. CỐ ĐỊNH SIDEBAR */
+    /* Header trong suốt để nút menu hoạt động */
+    header[data-testid="stHeader"] {{
+        background: transparent !important;
+        z-index: 999999 !important;
+        height: auto !important;
+        pointer-events: none; 
+    }}
+    header[data-testid="stHeader"] > div {{ pointer-events: auto !important; color: #333 !important; }}
+
+    /* Sidebar */
     section[data-testid="stSidebar"] {{
-        display: block !important;
-        width: {SIDEBAR_WIDTH} !important;
-        min-width: {SIDEBAR_WIDTH} !important;
-        max-width: {SIDEBAR_WIDTH} !important;
-        position: fixed !important;
-        left: 0 !important;
-        top: 0 !important;
-        height: 100vh !important;
         z-index: 1000000 !important;
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid #ddd;
     }}
 
-    [data-testid="stSidebarCollapseBtn"], [data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
-
-    /* 4. ĐẨY NỘI DUNG CHÍNH LÊN SÁT MÉP TRÊN (PADDING-TOP: 0) */
-    [data-testid="stAppViewContainer"] {{
-        padding-left: {SIDEBAR_WIDTH} !important;
-        padding-top: 0 !important;
-    }}
-    [data-testid="stMainViewContainer"] {{
-        margin-left: 0 !important;
-        width: 100% !important;
-        padding-top: 0 !important;
-    }}
-
-    /* 5. IFRAME FULL MÀN HÌNH */
-    iframe {{
-        width: 100% !important;
-        height: 100vh !important;
-        border: none !important;
-        display: block !important;
+    /* CSS cho Iframe Full Màn Hình (Fixed Position) */
+    .full-screen-iframe {{
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        border: none;
+        z-index: 0; /* Nằm dưới cùng */
+        margin-left: 0;
+        transition: margin-left 0.3s; /* Hiệu ứng trượt khi mở sidebar */
     }}
 
-    /* 6. WIDGET NỔI */
+    /* Điều chỉnh lề trái khi sidebar mở (trên màn hình lớn) */
+    @media (min-width: 992px) {{
+        section[data-testid="stSidebar"][aria-expanded="true"] ~ .main .full-screen-iframe {{
+            margin-left: {SIDEBAR_WIDTH};
+            width: calc(100vw - {SIDEBAR_WIDTH});
+        }}
+    }}
+
+    /* Widget nổi */
     .floating-container {{
         position: fixed; top: 20px; right: 60px; z-index: 9999;
         display: flex; flex-direction: column; align-items: center;    
     }}
 
     .legend-box {{ width: 340px; pointer-events: none; margin-bottom: 5px; }}
-    
     .info-box {{
         width: fit-content; background: rgba(255, 255, 255, 0.9);
         border: 1px solid #ccc; border-radius: 6px;
         padding: 10px !important; color: #000; text-align: center;
     }}
-    
     .info-box table {{ width: 100%; margin: 0 auto; border-collapse: collapse; }}
     .info-box th, .info-box td {{ text-align: center !important; padding: 4px 8px; }}
     .info-title {{ font-weight: bold; margin-bottom: 2px; }}
     .info-subtitle {{ font-size: 0.9em; margin-bottom: 8px; font-style: italic; }}
     
-    /* ẨN THANH CUỘN */
+    /* Ẩn thanh cuộn */
     ::-webkit-scrollbar {{ width: 0px; background: transparent; }}
     </style>
 """, unsafe_allow_html=True)
@@ -318,22 +304,17 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     IDW_POWER = 3.0
     KNN = 12
 
-    # Cấu hình riêng cho từng loại dữ liệu
     if data_type == 'rain':
-        # --- CẤU HÌNH MƯA MỚI THEO YÊU CẦU ---
         vmin, vmax = 0, 1400
-        levels_for_ticks = np.arange(0, 1450, 100) # 0, 50, ..., 1400 (bước 100)
-        
+        levels_for_ticks = np.arange(0, 1450, 100) 
         COLORS = ['#FFFFFF', '#A0E6FF', '#00FF00', '#FFFF00', '#FFA500', '#FF0000', '#800080', '#4B0082']
         POS = np.linspace(0.0, 1.0, len(COLORS))
         cmap = LinearSegmentedColormap.from_list('rain_smooth', list(zip(POS, COLORS)), N=512)
         cmap.set_under(COLORS[0])
         cmap.set_over(COLORS[-1])
-        
         unit_label = "Lượng mưa (mm)"
-        extend_opt = 'max' # Mưa chỉ mở rộng phía trên
-        
-    else: # temp
+        extend_opt = 'max' 
+    else: 
         vmin, vmax = 0.0, 40.0
         levels_for_ticks = list(range(0, 42, 4))
         colors = [(0.0, '#FFFFFF'), (0.1, '#D0F0FF'), (0.2, '#00A0FF'), (0.4, '#00FF00'),
@@ -344,21 +325,18 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
 
     norm = Normalize(vmin=vmin, vmax=vmax)
 
-    # Xử lý dữ liệu đầu vào
     input_df.columns = input_df.columns.str.lower().str.strip()
     cols_check = ['lon', 'lat', 'value']
     if not all(c in input_df.columns for c in cols_check):
         return None, f"File thiếu cột bắt buộc: {cols_check}"
 
     valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
-    if valid.empty:
-        return None, "Dữ liệu trống sau khi lọc bỏ NaN."
+    if valid.empty: return None, "Dữ liệu trống sau khi lọc bỏ NaN."
 
     x_pts = valid['lon'].to_numpy()
     y_pts = valid['lat'].to_numpy()
     z_pts = valid['value'].to_numpy()
 
-    # Điểm biên
     edge_points = pd.DataFrame({
         'lon': [minx, minx, maxx, maxx, (minx + maxx)/2],
         'lat': [miny, maxy, miny, maxy, (miny + maxy)/2],
@@ -366,19 +344,14 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     })
     
     aug = pd.concat([valid[['lon', 'lat', 'value']], edge_points], ignore_index=True)
-    xi = aug['lon'].to_numpy()
-    yi = aug['lat'].to_numpy()
-    zi = aug['value'].to_numpy()
+    xi, yi, zi = aug['lon'].to_numpy(), aug['lat'].to_numpy(), aug['value'].to_numpy()
 
-    # Lưới
     gx, gy = np.meshgrid(np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N))
     grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
 
-    # IDW & Smooth
     gv = idw_knn(xi, yi, zi, grid_xy, k=KNN, power=IDW_POWER).reshape(gx.shape)
     if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
 
-    # Đọc Shapefile cố định
     mask_shape = None
     disp_shape = None
     
@@ -399,7 +372,6 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     else:
         disp_shape = mask_shape
 
-    # Masking
     if mask_shape is not None:
         shape_union = mask_shape.unary_union
         prep_shape = prep(shape_union)
@@ -408,7 +380,6 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     else:
         gv_masked = gv
 
-    # Vẽ
     fig, ax = plt.subplots(figsize=(14, 10)) 
     ax.set_title(title_text if title_text else f'Bản đồ {unit_label}', fontsize=16)
 
@@ -462,7 +433,6 @@ def main():
             obs_mode = st.radio("Chọn nguồn dữ liệu:", 
                               ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ", "Nội suy lượng mưa"])
             
-            # --- MENU CHO NỘI SUY (NHIỆT ĐỘ HOẶC MƯA) ---
             if obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
                 st.markdown("---")
                 st.markdown(f"### 🛠️ CÔNG CỤ {obs_mode.upper()}")
@@ -517,18 +487,25 @@ def main():
 
     # --- MAIN CONTENT ---
     if topic == "Ảnh mây vệ tinh":
-        components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
+        # Sử dụng class full-screen-iframe đã định nghĩa trong CSS
+        st.markdown("""
+            <iframe 
+                src="https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1" 
+                class="full-screen-iframe"
+                allow="fullscreen"
+            ></iframe>
+        """, unsafe_allow_html=True)
     
     elif topic == "Dữ liệu quan trắc":
         
         if "WeatherObs" in obs_mode:
             html_weather = f"""
-            <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
+            <div style="overflow: hidden; width: 100%; height: 100vh; position: fixed; top: 0; left: 0; z-index: 0;" class="full-screen-iframe">
                 <iframe 
                     src="{LINK_WEATHEROBS}" 
                     style="
                         width: calc(100% + 20px); 
-                        height: 1000px; 
+                        height: 100vh; 
                         position: absolute; 
                         top: -50px; 
                         left: 0px; 
@@ -541,7 +518,7 @@ def main():
 
         elif "Gió tự động" in obs_mode:
              html_kttv = f"""
-            <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
+            <div style="overflow: hidden; width: 100%; height: 100vh; position: fixed; top: 0; left: 0; z-index: 0;" class="full-screen-iframe">
                 <iframe 
                     src="{LINK_WIND_AUTO}" 
                     style="
@@ -562,9 +539,7 @@ def main():
                 if data_file_interpol:
                     try:
                         df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
-                        
                         data_type = 'rain' if obs_mode == "Nội suy lượng mưa" else 'temp'
-                        
                         with st.spinner("Đang tính toán nội suy và tạo bản đồ..."):
                             fig, err = run_interpolation_and_plot(df_in, title_interpol, data_type)
                             if err: st.error(f"❌ {err}")
@@ -588,7 +563,7 @@ def main():
 
     elif topic == "Dự báo điểm (KMA)":
         html_kma = f"""
-        <div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;">
+        <div style="overflow: hidden; width: 100%; height: 700px; position: fixed; top: 0; left: 0; z-index: 0;" class="full-screen-iframe">
             <iframe 
                 src="{LINK_KMA_FORECAST}" 
                 style="
@@ -626,22 +601,15 @@ def main():
                             folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
                     
-                    # --- VẼ ICON BÃO ---
                     for _, r in sub.iterrows():
                         icon_key = get_icon_name(r)
                         icon_path = ICON_PATHS.get(icon_key)
                         icon_base64 = None
-                        if icon_path:
-                            icon_base64 = image_to_base64(icon_path)
+                        if icon_path: icon_base64 = image_to_base64(icon_path)
                         
                         if icon_base64:
-                            if 'vungthap' in icon_key:
-                                i_size = (20, 20)
-                                i_anchor = (10, 10)
-                            else:
-                                i_size = (40, 40)
-                                i_anchor = (20, 20)
-                            
+                            i_size = (20, 20) if 'vungthap' in icon_key else (40, 40)
+                            i_anchor = (10, 10) if 'vungthap' in icon_key else (20, 20)
                             icon = folium.CustomIcon(icon_image=icon_base64, icon_size=i_size, icon_anchor=i_anchor)
                             folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
             else: 
@@ -655,24 +623,20 @@ def main():
         fg_storm.add_to(m)
         folium.LayerControl(position='topleft', collapsed=False).add_to(m)
         
-        # --- HIỂN THỊ WIDGET TRONG CONTAINER CHUNG ---
         if show_widgets:
             html_to_render = '<div class="floating-container">'
-            
-            # 1. Thêm Chú thích (Nếu có)
             if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
                 with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
                 html_to_render += create_legend(b64)
-            
-            # 2. Thêm Bảng thông tin
-            if not final_df.empty: 
-                html_to_render += create_info_table(final_df, dashboard_title)
-            else: 
-                html_to_render += create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU...")
-            
+            if not final_df.empty: html_to_render += create_info_table(final_df, dashboard_title)
+            else: html_to_render += create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU...")
             html_to_render += '</div>'
             st.markdown(html_to_render, unsafe_allow_html=True)
         
+        # Nhúng bản đồ Folium Full Màn Hình bằng CSS
+        # Lưu ý: st_folium sẽ render ra 1 iframe, ta cần target iframe đó để fixed nó
+        # Tuy nhiên st_folium khó chỉnh style trực tiếp.
+        # Giải pháp: Dùng st_folium bình thường, CSS ở trên (class .full-screen-iframe) sẽ xử lý phần còn lại.
         st_folium(m, width=None, height=1000, use_container_width=True)
 
 if __name__ == "__main__":
