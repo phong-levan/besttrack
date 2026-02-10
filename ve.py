@@ -70,38 +70,38 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 # ==============================================================================
-# 2. CSS CHUNG (ĐÃ CHỈNH SỬA ĐỂ SÁT LỀ & BỎ THANH CUỘN)
+# 2. CSS CHUNG (ĐÃ SỬA ĐỂ HIỆN SIDEBAR + SÁT LỀ)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. XÓA PADDING/MARGIN CỦA CONTAINER CHÍNH */
+    /* 1. XÓA PADDING CONTAINER CHÍNH */
     .block-container {{
-        padding: 0rem !important;
-        margin: 0rem !important;
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 0rem !important;
+        padding-right: 0rem !important;
+        margin-top: 0rem !important;
         max-width: 100% !important;
     }}
     
-    /* 2. ẨN HEADER MẶC ĐỊNH CỦA STREAMLIT */
-    header, footer {{ display: none !important; }}
-    div[data-testid="stToolbar"], 
+    /* 2. ẨN CÁC PHẦN TRANG TRÍ THỪA CỦA STREAMLIT (Toolbar, Decoration) */
     div[data-testid="stDecoration"], 
     div[data-testid="stStatusWidget"],
-    div[data-testid="stHeader"] {{
+    div[data-testid="stToolbar"] {{
         visibility: hidden !important;
         display: none !important;
         height: 0px !important;
     }}
 
-    /* 3. XÓA KHOẢNG CÁCH GIỮA CÁC ELEMENT (GAP) */
-    div[data-testid="stVerticalBlock"] {{
-        gap: 0rem !important;
-        padding: 0rem !important;
+    /* 3. LÀM TRONG SUỐT HEADER ĐỂ NỘI DUNG ĐẨY LÊN, NHƯNG KHÔNG ẨN (DISPLAY: NONE) ĐỂ GIỮ NÚT SIDEBAR */
+    header[data-testid="stHeader"] {{
+        background-color: transparent !important;
+        z-index: 1 !important; /* Thấp hơn sidebar */
     }}
 
-    /* 4. ÉP SIDEBAR FULL CHIỀU CAO & CỐ ĐỊNH */
+    /* 4. CỐ ĐỊNH SIDEBAR (GIỮ NGUYÊN) */
     section[data-testid="stSidebar"] {{
         display: block !important;
-        visibility: visible !important;
         width: {SIDEBAR_WIDTH} !important;
         min-width: {SIDEBAR_WIDTH} !important;
         max-width: {SIDEBAR_WIDTH} !important;
@@ -109,25 +109,23 @@ st.markdown(f"""
         left: 0 !important;
         top: 0 !important;
         height: 100vh !important;
-        z-index: 100000 !important;
+        z-index: 1000000 !important; /* Z-index cao nhất để đè lên mọi thứ */
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid #ddd;
     }}
 
-    /* 5. ĐẨY NỘI DUNG CHÍNH SANG PHẢI & LÊN TRÊN CÙNG */
+    /* 5. ĐẨY NỘI DUNG CHÍNH (SỬA LẠI ĐỂ TRÁNH BỊ HEADER CHE) */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
         padding-top: 0 !important;
-        padding-right: 0 !important;
-        overflow: hidden !important; /* Ẩn thanh cuộn của container chính */
     }}
     [data-testid="stMainViewContainer"] {{
         margin-left: 0 !important;
         width: 100% !important;
-        padding: 0 !important;
+        padding-top: 0 !important;
     }}
 
-    /* 6. TỐI ƯU IFRAME */
+    /* 6. IFRAME FULL MÀN HÌNH */
     iframe {{
         width: 100% !important;
         height: 100vh !important;
@@ -141,7 +139,6 @@ st.markdown(f"""
         display: flex; flex-direction: column; align-items: center;    
     }}
 
-    /* CÁC STYLE KHÁC */
     .legend-box {{ width: 340px; pointer-events: none; margin-bottom: 5px; }}
     .info-box {{
         width: fit-content; background: rgba(255, 255, 255, 0.9);
@@ -153,11 +150,8 @@ st.markdown(f"""
     .info-title {{ font-weight: bold; margin-bottom: 2px; }}
     .info-subtitle {{ font-size: 0.9em; margin-bottom: 8px; font-style: italic; }}
     
-    /* 8. ẨN THANH CUỘN TRÌNH DUYỆT (CHROME/SAFARI) */
-    ::-webkit-scrollbar {{
-        width: 0px;
-        background: transparent;
-    }}
+    /* 8. ẨN THANH CUỘN */
+    ::-webkit-scrollbar {{ width: 0px; background: transparent; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -174,10 +168,8 @@ def get_rainviewer_ts():
     except: return None
 
 def image_to_base64(image_path):
-    if not os.path.exists(image_path):
-        return None
-    with open(image_path, "rb") as f:
-        encoded = base64.b64encode(f.read()).decode()
+    if not os.path.exists(image_path): return None
+    with open(image_path, "rb") as f: encoded = base64.b64encode(f.read()).decode()
     ext = image_path.split('.')[-1].lower()
     mime_type = f"image/{ext}" if ext != 'jpg' else "image/jpeg"
     return f"data:{mime_type};base64,{encoded}"
@@ -241,20 +233,13 @@ def create_storm_swaths(dense_df):
 def get_icon_name(row):
     wind_speed = row.get('bf', 0) 
     w = row.get('wind_km/h', 0)
-    
     if pd.isna(wind_speed) or wind_speed == 0:
         if w > 0:
             if w < 34: wind_speed = 5
             elif w < 64: wind_speed = 7
             elif w < 100: wind_speed = 10
-            elif w < 134: wind_speed = 12
-    
-    status_raw = str(row.get('status_raw','')).lower()
-    
-    status = 'dubao' 
-    if 'quá khứ' in status_raw or 'past' in status_raw:
-        status = 'daqua'
-    
+            else: wind_speed = 12
+    status = 'daqua' if 'quá khứ' in str(row.get('status_raw','')).lower() or 'past' in str(row.get('status_raw','')).lower() else 'dubao'
     if pd.isna(wind_speed): return f"vungthap_{status}"
     if wind_speed < 6:      return f"vungthap_{status}"
     if wind_speed < 8:      return f"atnd_{status}"
@@ -263,8 +248,6 @@ def get_icon_name(row):
 
 def create_info_table(df, title):
     if df.empty: return ""
-    
-    # 1. Lọc bảng hiển thị (Hiện tại -> Tương lai)
     if 'status_raw' in df.columns:
         cur = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
         fut = df[df['status_raw'].astype(str).str.contains("dự báo|forecast", case=False, na=False)]
@@ -273,82 +256,32 @@ def create_info_table(df, title):
         display_df = df.sort_values('dt', ascending=False).groupby('name').head(1)
         cur = display_df 
 
-    # 2. Xử lý Subtitle
-    subtitle = ""
+    subtitle = "(Đang cập nhật)"
     try:
-        target_row = None
-        if 'status_raw' in df.columns:
-            current_rows = df[df['status_raw'].astype(str).str.strip().str.lower() == 'hiện tại']
-            if not current_rows.empty:
-                target_row = current_rows.iloc[0]
-            else:
-                 current_rows = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
-                 if not current_rows.empty:
-                    target_row = current_rows.iloc[0]
-        
-        if target_row is None and not display_df.empty:
-            target_row = display_df.iloc[0]
-
+        target_row = cur.iloc[0] if not cur.empty else (display_df.iloc[0] if not display_df.empty else None)
         if target_row is not None:
-            if 'hour_explicit' in target_row.index and pd.notna(target_row['hour_explicit']):
-                h = int(target_row['hour_explicit'])
-                subtitle = f"Tin phát lúc {h}h30"
-            elif 'dt' in target_row.index and pd.notna(target_row['dt']):
-                subtitle = f"Tin phát lúc {target_row['dt'].hour}h30"
-            else:
-                 subtitle = "(Đang cập nhật)"
-        else:
-             subtitle = "(Đang cập nhật)"
-    except:
-        subtitle = "(Dữ liệu cập nhật từ Besttrack)"
+            if 'hour_explicit' in target_row and pd.notna(target_row['hour_explicit']): subtitle = f"Tin phát lúc {int(target_row['hour_explicit'])}h30"
+            elif 'dt' in target_row and pd.notna(target_row['dt']): subtitle = f"Tin phát lúc {target_row['dt'].hour}h30"
+    except: subtitle = "(Dữ liệu cập nhật từ Besttrack)"
     
-    # 3. Tạo HTML
     rows = ""
     for _, r in display_df.iterrows():
         t = r.get('datetime_str', r.get('dt'))
         if not isinstance(t, str): t = t.strftime('%d/%m %Hh')
         w = r.get('wind_km/h', 0)
-        
-        lon = f"{r.get('lon', 0):.1f}E"
-        lat = f"{r.get('lat', 0):.1f}N"
-        
         bf = r.get('bf', 0)
         if (pd.isna(bf) or bf == 0) and w > 0:
              if w < 34: bf = 6
              elif w < 64: bf = 8
              elif w < 100: bf = 10
              else: bf = 12
-        cap_gio = f"Cấp {int(bf)}" if bf > 0 else "-"
-        
-        p = r.get('pressure', 0)
-        pmin = f"{int(p)}" if (pd.notna(p) and p > 0) else "-"
-
-        rows += f"<tr><td>{t}</td><td>{lon}</td><td>{lat}</td><td>{cap_gio}</td><td>{pmin}</td></tr>"
+        rows += f"<tr><td>{t}</td><td>{r.get('lon',0):.1f}E</td><td>{r.get('lat',0):.1f}N</td><td>{f'Cấp {int(bf)}' if bf>0 else '-'}</td><td>{f'{int(r.get('pressure',0))}' if r.get('pressure',0)>0 else '-'}</td></tr>"
     
-    return textwrap.dedent(f"""
-    <div class="info-box">
-        <div class="info-title">{title}</div>
-        <div class="info-subtitle">{subtitle}</div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Ngày-Giờ</th>
-                    <th>Kinh độ</th>
-                    <th>Vĩ độ</th>
-                    <th>Cấp gió</th>
-                    <th>Pmin</th>
-                </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-        </table>
-    </div>""")
+    return textwrap.dedent(f"""<div class="info-box"><div class="info-title">{title}</div><div class="info-subtitle">{subtitle}</div><table><thead><tr><th>Ngày-Giờ</th><th>Kinh độ</th><th>Vĩ độ</th><th>Cấp gió</th><th>Pmin</th></tr></thead><tbody>{rows}</tbody></table></div>""")
 
 def create_legend(img_b64):
     if not img_b64: return ""
-    return textwrap.dedent(f"""
-    <div class="legend-box">
-        <img src="data:image/png;base64,{img_b64}">
-    </div>""")
+    return f'<div class="legend-box"><img src="data:image/png;base64,{img_b64}"></div>'
 
 # === LOGIC NỘI SUY (NHIỆT ĐỘ & MƯA) ===
 def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
@@ -380,10 +313,13 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
 
     # Cấu hình riêng cho từng loại dữ liệu
     if data_type == 'rain':
+        # CẤU HÌNH THANG MÀU MƯA
         vmin, vmax = 0, 1400
         levels_for_ticks = np.arange(0, 1450, 100)
         colors = ['#FFFFFF', '#A0E6FF', '#00FF00', '#FFFF00', '#FFA500', '#FF0000', '#800080', '#4B0082']
-        cmap = LinearSegmentedColormap.from_list('rain_smooth', colors, N=512)
+        POS = np.linspace(0.0, 1.0, len(colors))
+        # Tạo Colormap mịn từ danh sách màu
+        cmap = LinearSegmentedColormap.from_list('rain_smooth', list(zip(POS, colors)), N=512)
         cmap.set_under(colors[0])
         cmap.set_over(colors[-1])
         unit_label = "Lượng mưa (mm)"
@@ -498,19 +434,15 @@ def main():
 
     with st.sidebar:
         st.title("Dữ liệu thời tiết")
-        
-        topic = st.radio("CHỌN CHẾ ĐỘ:", 
-                        ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
+        topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
         st.markdown("---")
         
         final_df = pd.DataFrame()
         dashboard_title = ""
         show_widgets = False
         active_mode = ""
-        
         obs_mode = ""
         
-        # --- CÁC BIẾN CHO NỘI SUY (KHỞI TẠO) ---
         title_interpol = ""
         data_file_interpol = None
         btn_run_interpol = False
@@ -537,47 +469,25 @@ def main():
         if topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
             active_mode = storm_opt
-            
             if "Hiện trạng" in storm_opt:
                 dashboard_title = "TIN BÃO KHẨN CẤP"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
                     f = st.file_uploader("Upload besttrack.csv", type="csv", key="o1")
                     path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
-                    
-                    def process_file(f_path):
-                        if not f_path: return pd.DataFrame()
+                    if path:
                         try:
-                            if isinstance(f_path, str):
-                                if f_path.endswith('.csv'): df = pd.read_csv(f_path)
-                                else: df = pd.read_excel(f_path)
-                            else: 
-                                if f_path.name.endswith('.csv'): df = pd.read_csv(f_path)
-                                else: df = pd.read_excel(f_path)
-                                
+                            df = pd.read_csv(path) if (isinstance(path, str) and path.endswith('.csv')) or (not isinstance(path, str) and path.name.endswith('.csv')) else pd.read_excel(path)
                             df = normalize_columns(df)
-                            if 'name' not in df.columns and 'storm_no' not in df.columns:
-                                df['name'] = 'Cơn bão'
-                                df['storm_no'] = 'Current Storm'
-
-                            for c in ['wind_km/h', 'bf', 'r6', 'r10', 'rc', 'pressure', 'hour_explicit']: 
-                                if c not in df.columns: df[c] = 0
-                            if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
-                            elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
-                            for c in ['lat','lon','wind_km/h', 'pressure', 'bf']: df[c] = pd.to_numeric(df[c], errors='coerce')
-                            return df.dropna(subset=['lat','lon'])
-                        except: return pd.DataFrame()
-
-                    df = process_file(path)
-                    if not df.empty:
-                        if 'storm_no' in df.columns:
-                            all_s = df['storm_no'].unique()
-                            sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s)
-                            final_df = df[df['storm_no'].isin(sel)]
-                        else:
-                            final_df = df
-                    else: st.warning("Vui lòng tải file.")
-            else: 
+                            if 'name' not in df: df['name'], df['storm_no'] = 'Storm', 'Current'
+                            for c in ['wind_km/h','bf','r6','r10','rc','pressure','hour_explicit']: 
+                                if c not in df: df[c]=0
+                            df = df.dropna(subset=['lat','lon'])
+                            all_s = df['storm_no'].unique() if 'storm_no' in df else []
+                            sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s) if len(all_s)>0 else []
+                            final_df = df[df['storm_no'].isin(sel)] if len(sel)>0 else df
+                        except: pass
+            else:
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
@@ -587,19 +497,12 @@ def main():
                         try:
                             df = pd.read_excel(path)
                             df = normalize_columns(df)
-                            for c in ['wind_km/h', 'bf', 'r6', 'r10', 'rc', 'pressure']: 
-                                if c not in df.columns: df[c] = 0
-                            if 'datetime_str' in df.columns: df['dt'] = pd.to_datetime(df['datetime_str'], dayfirst=True, errors='coerce')
-                            elif all(c in df.columns for c in ['year','mon','day','hour']): df['dt'] = pd.to_datetime(dict(year=df.year, month=df.mon, day=df.day, hour=df.hour), errors='coerce')
-                            for c in ['lat','lon','wind_km/h', 'pressure']: df[c] = pd.to_numeric(df[c], errors='coerce')
                             df = df.dropna(subset=['lat','lon'])
-
                             years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
                             temp = df[df['year'].isin(years)]
                             names = st.multiselect("Tên bão:", temp['name'].unique(), default=temp['name'].unique())
                             final_df = temp[temp['name'].isin(names)]
                         except: pass
-                    else: st.warning("Vui lòng tải file.")
 
     # --- MAIN CONTENT ---
     if topic == "Ảnh mây vệ tinh":
@@ -613,10 +516,10 @@ def main():
                 <iframe 
                     src="{LINK_WEATHEROBS}" 
                     style="
-                        width: calc(100% + 20px); /* Mở rộng thêm để đẩy thanh cuộn ra ngoài */
+                        width: calc(100% + 20px); 
                         height: 1000px; 
                         position: absolute; 
-                        top: -50px;     
+                        top: -50px; 
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -631,7 +534,7 @@ def main():
                 <iframe 
                     src="{LINK_WIND_AUTO}" 
                     style="
-                        width: calc(100% + 20px); /* Mở rộng thêm để đẩy thanh cuộn ra ngoài */
+                        width: calc(100% + 20px); 
                         height: 1200px; 
                         position: absolute; 
                         top: -80px;    
@@ -678,7 +581,7 @@ def main():
             <iframe 
                 src="{LINK_KMA_FORECAST}" 
                 style="
-                    width: calc(100% + 20px); /* Mở rộng thêm để đẩy thanh cuộn ra ngoài */
+                    width: calc(100% + 20px); 
                     height: 1200px; 
                     position: absolute; 
                     top: -130px; 
