@@ -11,10 +11,17 @@ import streamlit.components.v1 as components
 from math import radians, sin, cos, asin, sqrt, pi
 import warnings
 import textwrap
-
-# Thư viện hình học
-from shapely.geometry import Polygon, mapping
+import matplotlib.pyplot as plt
+import geopandas as gpd
+from shapely.geometry import Point, box, Polygon, mapping
+from shapely.prepared import prep
 from shapely.ops import unary_union
+from matplotlib.colors import LinearSegmentedColormap, Normalize
+from scipy.ndimage import gaussian_filter
+from scipy.spatial import cKDTree
+import zipfile
+import tempfile
+import shutil
 
 warnings.filterwarnings("ignore")
 
@@ -351,6 +358,172 @@ def create_legend(img_b64):
         <img src="data:image/png;base64,{img_b64}">
     </div>""")
 
+# === HÀM XỬ LÝ NỘI SUY (VENHIET.PY) ===
+def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
+    """IDW nhanh bằng cKDTree + k láng giềng gần nhất."""
+    tree = cKDTree(np.column_stack([xi, yi]))
+    dists, idxs = tree.query(query_xy, k=min(k, xi.size))
+    # Đảm bảo shape (N, k)
+    if dists.ndim == 1:
+        dists = dists[:, None]
+        idxs = idxs[:, None]
+
+    # Nếu trùng vị trí điểm trạm → gán trực tiếp
+    exact = dists <= eps
+    out = np.empty(dists.shape[0], dtype=float)
+
+    if np.any(exact):
+        # chỗ nào có exact match, lấy zi của điểm đó
+        ex_idx_rows = np.where(exact.any(axis=1))[0]
+        for r in ex_idx_rows:
+            c = np.where(exact[r])[0][0]
+            out[r] = zi[idxs[r, c]]
+
+    # Với các điểm còn lại dùng IDW
+    rest = ~exact.any(axis=1)
+    if np.any(rest):
+        d = dists[rest]
+        nn = idxs[rest]
+        w = 1.0 / np.maximum(d, eps)**power
+        z_sel = zi[nn]              # (nrest, k)
+        out[rest] = (w * z_sel).sum(axis=1) / w.sum(axis=1)
+
+    return out
+
+def run_interpolation_and_plot(input_df, title_text, uploaded_shp=None):
+    # Cấu hình nội suy (tương tự venhiet.py)
+    minx, maxx = 101.8, 115.0
+    miny, maxy = 8.0, 23.9
+    GRID_N = 1000 # Giảm xuống 1 chút so với 2000 để chạy trên web nhanh hơn
+    SIGMA = 1.5
+    IDW_POWER = 3.0
+    KNN = 12
+    vmin, vmax = 0.0, 40.0 # Thang màu nhiệt độ
+
+    required_cols = ['stations', 'lon', 'lat', 'value']
+    # Chuẩn hóa tên cột input (chấp nhận chữ hoa/thường)
+    input_df.columns = input_df.columns.str.lower().str.strip()
+    # Mapping lại tên cột nếu cần (ví dụ input là Station, Longitude...)
+    # Ở đây giả sử file excel đúng chuẩn: stations, lon, lat, value
+    
+    # Kiểm tra cột
+    cols_check = ['lon', 'lat', 'value']
+    if not all(c in input_df.columns for c in cols_check):
+        return None, f"File thiếu cột bắt buộc: {cols_check}"
+
+    valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
+    if valid.empty:
+        return None, "Dữ liệu trống sau khi lọc bỏ NaN."
+
+    x_pts = valid['lon'].to_numpy()
+    y_pts = valid['lat'].to_numpy()
+    z_pts = valid['value'].to_numpy()
+
+    # Thêm điểm biên (để tránh lỗi biên)
+    edge_points = pd.DataFrame({
+        'lon': [minx, minx, maxx, maxx, (minx + maxx)/2],
+        'lat': [miny, maxy, miny, maxy, (miny + maxy)/2],
+        'value': [float(np.nanmean(z_pts))] * 5
+    })
+    
+    # Chỉ lấy 3 cột cần thiết để concat
+    aug = pd.concat([valid[['lon', 'lat', 'value']], edge_points], ignore_index=True)
+    xi = aug['lon'].to_numpy()
+    yi = aug['lat'].to_numpy()
+    zi = aug['value'].to_numpy()
+
+    # Tạo lưới
+    gx, gy = np.meshgrid(
+        np.linspace(minx, maxx, GRID_N),
+        np.linspace(miny, maxy, GRID_N)
+    )
+    grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
+
+    # Chạy IDW
+    gv = idw_knn(xi, yi, zi, grid_xy, k=KNN, power=IDW_POWER).reshape(gx.shape)
+
+    # Làm mịn
+    if SIGMA > 0:
+        gv = gaussian_filter(gv, sigma=SIGMA)
+
+    # Xử lý Shapefile (Mask)
+    mask_shape = None
+    disp_shape = None
+    
+    # Tạm thời dùng BBox nếu không có shapefile upload
+    bbox_poly = box(minx, miny, maxx, maxy)
+    mask_shape = gpd.GeoDataFrame({'geometry': [bbox_poly]}, crs='EPSG:4326')
+    disp_shape = gpd.GeoDataFrame({'geometry': [bbox_poly]}, crs='EPSG:4326')
+
+    if uploaded_shp:
+        # Nếu người dùng up shapefile (dạng zip), giải nén và đọc
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                with zipfile.ZipFile(uploaded_shp, 'r') as zip_ref:
+                    zip_ref.extractall(tmpdir)
+                
+                # Tìm file .shp trong thư mục giải nén
+                shp_files = [f for f in os.listdir(tmpdir) if f.endswith('.shp')]
+                if shp_files:
+                    shp_path = os.path.join(tmpdir, shp_files[0])
+                    gdf = gpd.read_file(shp_path)
+                    if gdf.crs and gdf.crs.to_epsg() != 4326:
+                        gdf.to_crs(epsg=4326, inplace=True)
+                    mask_shape = gdf
+                    disp_shape = gdf
+        except Exception as e:
+            return None, f"Lỗi đọc Shapefile: {e}"
+
+    # Mask theo biên
+    if mask_shape is not None:
+        shape_union = mask_shape.unary_union
+        prep_shape = prep(shape_union)
+        mask_flat = np.fromiter(
+            (prep_shape.contains(Point(px, py)) for px, py in grid_xy),
+            count=grid_xy.shape[0],
+            dtype=bool
+        ).reshape(gx.shape)
+        gv_masked = np.where(mask_flat, gv, np.nan)
+    else:
+        gv_masked = gv
+
+    # Vẽ biểu đồ
+    fig, ax = plt.subplots(figsize=(10, 8)) # Kích thước vừa phải cho web
+    ax.set_title(title_text if title_text else 'Bản đồ nội suy nhiệt độ', fontsize=14)
+
+    # Vẽ biên
+    if disp_shape is not None:
+        disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
+
+    # Thang màu
+    colors = [
+        (0.0, '#FFFFFF'), (0.1, '#D0F0FF'), (0.2, '#00A0FF'), (0.4, '#00FF00'),
+        (0.6, '#FFFF00'), (0.75, '#FFA500'), (0.9, '#FF0000'), (1.0, '#8B0000')
+    ]
+    cmap = LinearSegmentedColormap.from_list("custom_smooth_temp", colors, N=256)
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    levels_for_ticks = list(range(0, 42, 4))
+
+    im = ax.imshow(
+        gv_masked,
+        extent=[minx, maxx, miny, maxy],
+        cmap=cmap,
+        norm=norm,
+        interpolation='bilinear',
+        origin='lower'
+    )
+
+    cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.7, pad=0.02, extend='both')
+    cbar.set_label('Nhiệt độ (°C)', fontsize=12)
+    cbar.set_ticks(levels_for_ticks)
+    cbar.set_ticklabels([str(l) for l in levels_for_ticks])
+
+    ax.set_xlim(minx, maxx)
+    ax.set_ylim(miny, maxy)
+    ax.ticklabel_format(useOffset=False, style='plain')
+    
+    return fig, None
+
 # ==============================================================================
 # 4. MAIN APP
 # ==============================================================================
@@ -371,9 +544,10 @@ def main():
         obs_mode = ""
 
         if topic == "Dữ liệu quan trắc":
-            # ĐÃ SỬA: Bỏ "Bản đồ gió (Vận hành)"
+            # Đã Bỏ "Bản đồ gió (Vận hành)"
+            # ĐÃ THÊM: "Nội suy nhiệt độ"
             obs_mode = st.radio("Chọn nguồn dữ liệu:", 
-                              ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)"])
+                              ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ"])
 
         if topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
@@ -450,14 +624,14 @@ def main():
         if "WeatherObs" in obs_mode:
             # WeatherObs: Cắt Header đen (top: -65px)
             html_weather = f"""
-            <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
+            <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
                 <iframe 
                     src="{LINK_WEATHEROBS}" 
                     style="
-                        width: 100%; 
+                        width: calc(100% + 19px); /* Đẩy thanh cuộn phải ra ngoài */
                         height: 1000px; 
                         position: absolute; 
-                        top: -50px;     /* Kéo lên để ẩn Header màu đen */
+                        top: -65px;     /* Kéo lên để ẩn Header màu đen */
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -469,14 +643,14 @@ def main():
         elif "Gió tự động" in obs_mode:
              # KTTV: Cắt Header xanh đậm (top: -100px)
              html_kttv = f"""
-            <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
+            <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
                 <iframe 
                     src="{LINK_WIND_AUTO}" 
                     style="
-                        width: 100%; 
+                        width: calc(100% + 19px); /* Đẩy thanh cuộn phải ra ngoài */
                         height: 1200px; /* Tăng chiều cao nội bộ */
                         position: absolute; 
-                        top: -70px;    /* Kéo lên để ẩn Header màu xanh đậm */
+                        top: -100px;    /* Kéo lên để ẩn Header màu xanh đậm */
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -484,18 +658,65 @@ def main():
             </div>
             """
              st.markdown(html_kttv, unsafe_allow_html=True)
+        
+        elif "Nội suy nhiệt độ" in obs_mode:
+            # --- GIAO DIỆN NỘI SUY ---
+            st.subheader("CÔNG CỤ NỘI SUY NHIỆT ĐỘ")
+            
+            # Khung nhập tiêu đề
+            title_input = st.text_input("Nhập tiêu đề bản đồ:", value="Bản đồ nhiệt độ nội suy")
+            
+            col_up1, col_up2 = st.columns(2)
+            
+            with col_up1:
+                st.markdown("**(1) Upload File Dữ liệu (.xlsx / .csv)**")
+                st.caption("Cấu trúc file: Cột `stations`, `lon`, `lat`, `value`")
+                data_file = st.file_uploader("Chọn file dữ liệu:", type=['xlsx', 'csv'], key="data_up")
+            
+            with col_up2:
+                st.markdown("**(2) Upload File Shapefile (.zip) [Tùy chọn]**")
+                st.caption("Zip toàn bộ các file .shp, .shx, .dbf... lại thành 1 file .zip")
+                st.markdown("[Tải shapefile mẫu tại đây](https://github.com/phong-levan/besttrack/tree/main/shp)")
+                shape_file = st.file_uploader("Chọn file shapefile:", type=['zip'], key="shp_up")
+            
+            if data_file:
+                # Đọc dữ liệu
+                try:
+                    if data_file.name.endswith('.csv'):
+                        df_input = pd.read_csv(data_file)
+                    else:
+                        df_input = pd.read_excel(data_file)
+                    
+                    st.success(f"Đã tải {len(df_input)} dòng dữ liệu.")
+                    
+                    if st.button("VẼ BẢN ĐỒ", type="primary"):
+                        with st.spinner("Đang xử lý nội suy và vẽ bản đồ..."):
+                            fig, err = run_interpolation_and_plot(df_input, title_input, shape_file)
+                            
+                            if err:
+                                st.error(err)
+                            else:
+                                st.pyplot(fig)
+                                # Tùy chọn tải ảnh về
+                                # (Code thêm nút download nếu cần)
+                                
+                except Exception as e:
+                    st.error(f"Lỗi đọc file: {e}")
+            else:
+                st.info("Vui lòng upload file dữ liệu đầu vào để bắt đầu.")
+
 
     elif topic == "Dự báo điểm (KMA)":
-        # KMA: Cắt Header (top: -140px)
+        # KMA: Kéo sát lên (-215px), cắt chân trang (height: 700px), bỏ scrollbar (width +19px)
         html_kma = f"""
-        <div style="overflow: hidden; width: 100%; height: 850px; position: relative; border: 1px solid #ddd;">
+        <div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;">
             <iframe 
                 src="{LINK_KMA_FORECAST}" 
                 style="
-                    width: 100%; 
+                    width: calc(100% + 19px); /* Đẩy thanh cuộn sang phải khuất đi */
                     height: 1200px; 
                     position: absolute; 
-                    top: -140px; 
+                    top: -215px;    /* Kéo sát lên để che Header/Menu */
                     left: 0px; 
                     border: none;"
                 allow="fullscreen"
@@ -577,9 +798,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
