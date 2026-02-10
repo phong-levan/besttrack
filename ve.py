@@ -70,11 +70,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 # ==============================================================================
-# 2. CSS CHUNG (FULL MÀN HÌNH - HEADER TRONG SUỐT)
+# 2. CSS CHUNG (HEADER TRONG SUỐT & FULL MÀN HÌNH)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. XÓA PADDING MẶC ĐỊNH */
+    /* 1. XÓA PADDING CONTAINER CHÍNH */
     .block-container {{
         padding: 0 !important;
         margin: 0 !important;
@@ -83,7 +83,7 @@ st.markdown(f"""
     
     footer {{ display: none !important; }}
     
-    /* 2. HEADER TRONG SUỐT (ĐỂ HIỆN NÚT MENU NHƯNG KHÔNG CHE MAP) */
+    /* 2. HEADER TRONG SUỐT ĐỂ HIỆN NÚT MENU NHƯNG KHÔNG CHE MAP */
     header[data-testid="stHeader"] {{
         background-color: transparent !important;
         z-index: 99999 !important; /* Nổi lên trên bản đồ */
@@ -95,17 +95,19 @@ st.markdown(f"""
     header[data-testid="stHeader"] > div {{
         pointer-events: auto !important;
     }}
-    
-    /* TÙY CHỈNH NÚT MENU (3 GẠCH) CHO DỄ NHÌN */
+
+    /* TÙY CHỈNH NÚT MENU CHO DỄ NHÌN HƠN TRÊN NỀN BẢN ĐỒ */
     header[data-testid="stHeader"] button {{
-        color: #000000 !important; /* Màu icon đen */
-        background-color: rgba(255, 255, 255, 0.6) !important; /* Nền trắng mờ */
+        background-color: rgba(255, 255, 255, 0.5) !important; /* Nền trắng mờ */
         border-radius: 4px;
-        margin-top: 4px;
+        color: black !important;
     }}
 
-    /* ẨN CÁC THÀNH PHẦN KHÔNG CẦN THIẾT */
-    div[data-testid="stDecoration"], 
+    /* ẨN THANH TRANG TRÍ MÀU SẮC */
+    div[data-testid="stDecoration"] {{
+        display: none !important;
+    }}
+    
     div[data-testid="stStatusWidget"] {{
         display: none !important;
     }}
@@ -387,7 +389,7 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     })
     
     aug = pd.concat([valid[['lon', 'lat', 'value']], edge_points], ignore_index=True)
-    xi, yi, zi = aug['lon'].to_numpy(), aug['lat'].to_numpy(), aug['value'].to_numpy()
+    xi = aug['lon'].to_numpy(), aug['lat'].to_numpy(), aug['value'].to_numpy()
 
     gx, gy = np.meshgrid(np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N))
     grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
@@ -426,17 +428,20 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     fig, ax = plt.subplots(figsize=(16, 12)) 
     ax.set_title(title_text if title_text else f'Bản đồ {unit_label}', fontsize=20, pad=20)
 
-    if disp_shape is not None:
-        disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
-
+    # VẼ MÀU (INTERPOLATION) TRƯỚC (Layer dưới)
     im = ax.imshow(
         gv_masked,
         extent=[minx, maxx, miny, maxy],
         cmap=cmap,
         norm=norm,
         interpolation='bilinear',
-        origin='lower'
+        origin='lower',
+        zorder=1
     )
+
+    # VẼ BIÊN GIỚI (DISP_SHAPE) SAU (Layer trên)
+    if disp_shape is not None:
+        disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5, zorder=2)
 
     cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.7, pad=0.02, extend=extend_opt)
     cbar.set_label(unit_label, fontsize=14)
@@ -553,7 +558,7 @@ def main():
                         width: calc(100% + 20px); 
                         height: 100vh; 
                         position: absolute; 
-                        top: -50px; 
+                        top: -50px; /* Cắt header đen */
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -571,7 +576,7 @@ def main():
                         width: calc(100% + 20px); 
                         height: 100vh; 
                         position: absolute; 
-                        top: -80px;    
+                        top: -80px; /* Cắt header xanh */
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -594,7 +599,9 @@ def main():
                 else: st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
 
             if st.session_state['interpol_fig']:
+                # Hiển thị ảnh Full Width
                 st.pyplot(st.session_state['interpol_fig'], use_container_width=True)
+                
                 st.markdown("### 📥 Tải xuống")
                 col_dl1, col_dl2 = st.columns([1, 3])
                 with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"])
@@ -616,7 +623,7 @@ def main():
                     width: calc(100% + 20px); 
                     height: 1200px; 
                     position: absolute; 
-                    top: -130px; 
+                    top: -130px; /* Cắt header KMA */
                     left: 0px; 
                     border: none;"
                 allow="fullscreen"
