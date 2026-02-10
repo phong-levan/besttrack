@@ -493,7 +493,7 @@ def main():
                         width: calc(100% + 19px); 
                         height: 1000px; 
                         position: absolute; 
-                        top: -60px; 
+                        top: -55px; 
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -511,7 +511,7 @@ def main():
                         width: calc(100% + 19px); 
                         height: 1200px; 
                         position: absolute; 
-                        top: -120px;    
+                        top: -80px;    
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -558,7 +558,7 @@ def main():
                     width: calc(100% + 19px); 
                     height: 1200px; 
                     position: absolute; 
-                    top: -200px; 
+                    top: -100px; 
                     left: 0px; 
                     border: none;"
                 allow="fullscreen"
@@ -640,4 +640,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
