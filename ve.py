@@ -452,7 +452,7 @@ def main():
             # NẾU ĐÃ ĐĂNG NHẬP MỚI HIỆN MENU CON
             if st.session_state['logged_in']:
                 obs_mode = st.radio("Chọn nguồn dữ liệu:", 
-                                  ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ", "Nội suy lượng mưa"])
+                                  ["Thời tiết", "Gió tự động", "Nội suy nhiệt độ", "Nội suy lượng mưa"])
                 
                 if obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
                     st.markdown("---")
@@ -473,7 +473,7 @@ def main():
                     st.session_state['logged_in'] = False
                     st.rerun()
 
-        if topic == "Dự báo điểm (KMA)":
+        if topic == "Dự báo điểm":
             if st.session_state['logged_in']:
                 st.markdown("---")
                 if st.button("🔒 Đăng xuất", key="logout_kma_sidebar"):
@@ -528,7 +528,7 @@ def main():
         # --- KIỂM TRA ĐĂNG NHẬP (Dùng chung session) ---
         if not st.session_state['logged_in']:
             st.title("🔐 Đăng nhập Hệ thống")
-            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
+            st.info("Vui lòng đăng nhập để truy cập Dữ liệu")
             
             with st.form("login_form_common"):
                 user_input = st.text_input("Tên đăng nhập")
@@ -722,3 +722,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
