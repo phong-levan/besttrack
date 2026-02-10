@@ -301,7 +301,7 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
         vmin, vmax = 0.0, 40.0
         levels_for_ticks = list(range(0, 42, 4))
         colors = [(0.0, '#FFFFFF'), (0.1, '#D0F0FF'), (0.2, '#00A0FF'), (0.4, '#00FF00'),
-                  (0.6, '#FFFF00'), (0.75, '#FFA500'), (0.9, '#FF0000'), (1.0, '#8B0000')]
+                 (0.6, '#FFFF00'), (0.75, '#FFA500'), (0.9, '#FF0000'), (1.0, '#8B0000')]
         cmap = LinearSegmentedColormap.from_list("custom_smooth_temp", colors, N=256)
         unit_label = "Nhiệt độ (°C)"
 
@@ -447,10 +447,12 @@ def main():
                 dashboard_title = "TIN BÃO KHẨN CẤP"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
-                    f = st.file_uploader("Upload besttrack.csv", type="csv", key="o1")
+                    # --- SỬA Ở ĐÂY: CHO PHÉP CẢ CSV VÀ XLSX ---
+                    f = st.file_uploader("Upload besttrack (.csv / .xlsx)", type=["csv", "xlsx"], key="o1")
                     path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
                     if path:
                         try:
+                            # Logic đọc file tự động nhận diện csv hoặc excel
                             df = pd.read_csv(path) if (isinstance(path, str) and path.endswith('.csv')) or (not isinstance(path, str) and path.name.endswith('.csv')) else pd.read_excel(path)
                             df = normalize_columns(df)
                             if 'name' not in df: df['name'], df['storm_no'] = 'Storm', 'Current'
@@ -511,13 +513,13 @@ def main():
                         width: calc(100% + 19px); 
                         height: 1200px; 
                         position: absolute; 
-                        top: -75px;    
+                        top: -75px; 
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
                 ></iframe>
             </div>
-            """
+             """
              st.markdown(html_kttv, unsafe_allow_html=True)
         
         elif obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
@@ -640,6 +642,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
