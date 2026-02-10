@@ -70,29 +70,35 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 # ==============================================================================
-# 2. CSS CHUNG (FIX CỨNG SIDEBAR & ĐẨY NỘI DUNG)
+# 2. CSS CHUNG (ĐÃ CHỈNH SỬA ĐỂ SÁT LỀ & BỎ THANH CUỘN)
 # ==============================================================================
 st.markdown(f"""
     <style>
-    /* 1. THIẾT LẬP CHUNG - XÓA PADDING/MARGIN */
+    /* 1. XÓA PADDING/MARGIN CỦA CONTAINER CHÍNH */
     .block-container {{
-        padding: 0 !important;
-        margin: 0 !important;
+        padding: 0rem !important;
+        margin: 0rem !important;
         max-width: 100% !important;
     }}
-    header, footer {{
-        display: none !important;
-    }}
     
+    /* 2. ẨN HEADER MẶC ĐỊNH CỦA STREAMLIT */
+    header, footer {{ display: none !important; }}
     div[data-testid="stToolbar"], 
     div[data-testid="stDecoration"], 
-    div[data-testid="stStatusWidget"] {{
+    div[data-testid="stStatusWidget"],
+    div[data-testid="stHeader"] {{
         visibility: hidden !important;
         display: none !important;
         height: 0px !important;
     }}
 
-    /* 2. ÉP SIDEBAR LUÔN HIỆN CỐ ĐỊNH BÊN TRÁI */
+    /* 3. XÓA KHOẢNG CÁCH GIỮA CÁC ELEMENT (GAP) */
+    div[data-testid="stVerticalBlock"] {{
+        gap: 0rem !important;
+        padding: 0rem !important;
+    }}
+
+    /* 4. ÉP SIDEBAR FULL CHIỀU CAO & CỐ ĐỊNH */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -103,29 +109,25 @@ st.markdown(f"""
         left: 0 !important;
         top: 0 !important;
         height: 100vh !important;
-        transform: none !important;
         z-index: 100000 !important;
         background-color: {COLOR_SIDEBAR} !important;
         border-right: 1px solid #ddd;
     }}
 
-    [data-testid="stSidebarCollapseBtn"],
-    [data-testid="stSidebarCollapsedControl"] {{
-        display: none !important;
-    }}
-
-    /* 3. ĐẨY NỘI DUNG CHÍNH SANG PHẢI */
+    /* 5. ĐẨY NỘI DUNG CHÍNH SANG PHẢI & LÊN TRÊN CÙNG */
     [data-testid="stAppViewContainer"] {{
         padding-left: {SIDEBAR_WIDTH} !important;
         padding-top: 0 !important;
+        padding-right: 0 !important;
+        overflow: hidden !important; /* Ẩn thanh cuộn của container chính */
     }}
     [data-testid="stMainViewContainer"] {{
         margin-left: 0 !important;
         width: 100% !important;
-        padding-top: 0 !important;
+        padding: 0 !important;
     }}
 
-    /* 4. TỐI ƯU CHO IFRAME */
+    /* 6. TỐI ƯU IFRAME */
     iframe {{
         width: 100% !important;
         height: 100vh !important;
@@ -133,52 +135,28 @@ st.markdown(f"""
         display: block !important;
     }}
 
-    /* 5. WIDGET NỔI (CONTAINER CHỨA CẢ 2) */
+    /* 7. WIDGET NỔI */
     .floating-container {{
-        position: fixed; 
-        top: 20px; 
-        right: 60px; 
-        z-index: 9999;
-        display: flex;
-        flex-direction: column; 
-        align-items: center;    
+        position: fixed; top: 20px; right: 60px; z-index: 9999;
+        display: flex; flex-direction: column; align-items: center;    
     }}
 
-    /* BẢNG CHÚ THÍCH (LEGEND) */
-    .legend-box {{
-        width: 340px; 
-        pointer-events: none;
-        margin-bottom: 5px;
-    }}
-    
-    /* BẢNG THÔNG TIN */
+    /* CÁC STYLE KHÁC */
+    .legend-box {{ width: 340px; pointer-events: none; margin-bottom: 5px; }}
     .info-box {{
-        width: fit-content; 
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #ccc; 
-        border-radius: 6px;
-        padding: 10px !important; 
-        color: #000;
-        text-align: center;
+        width: fit-content; background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #ccc; border-radius: 6px;
+        padding: 10px !important; color: #000; text-align: center;
     }}
+    .info-box table {{ width: 100%; margin: 0 auto; border-collapse: collapse; }}
+    .info-box th, .info-box td {{ text-align: center !important; padding: 4px 8px; }}
+    .info-title {{ font-weight: bold; margin-bottom: 2px; }}
+    .info-subtitle {{ font-size: 0.9em; margin-bottom: 8px; font-style: italic; }}
     
-    .info-box table {{
-        width: 100%;
-        margin: 0 auto;
-        border-collapse: collapse;
-    }}
-    .info-box th, .info-box td {{
-        text-align: center !important; 
-        padding: 4px 8px;
-    }}
-    .info-title {{
-        font-weight: bold;
-        margin-bottom: 2px;
-    }}
-    .info-subtitle {{
-        font-size: 0.9em;
-        margin-bottom: 8px;
-        font-style: italic;
+    /* 8. ẨN THANH CUỘN TRÌNH DUYỆT (CHROME/SAFARI) */
+    ::-webkit-scrollbar {{
+        width: 0px;
+        background: transparent;
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -286,6 +264,7 @@ def get_icon_name(row):
 def create_info_table(df, title):
     if df.empty: return ""
     
+    # 1. Lọc bảng hiển thị (Hiện tại -> Tương lai)
     if 'status_raw' in df.columns:
         cur = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
         fut = df[df['status_raw'].astype(str).str.contains("dự báo|forecast", case=False, na=False)]
@@ -294,6 +273,7 @@ def create_info_table(df, title):
         display_df = df.sort_values('dt', ascending=False).groupby('name').head(1)
         cur = display_df 
 
+    # 2. Xử lý Subtitle
     subtitle = ""
     try:
         target_row = None
@@ -322,6 +302,7 @@ def create_info_table(df, title):
     except:
         subtitle = "(Dữ liệu cập nhật từ Besttrack)"
     
+    # 3. Tạo HTML
     rows = ""
     for _, r in display_df.iterrows():
         t = r.get('datetime_str', r.get('dt'))
@@ -373,27 +354,19 @@ def create_legend(img_b64):
 def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
     tree = cKDTree(np.column_stack([xi, yi]))
     dists, idxs = tree.query(query_xy, k=min(k, xi.size))
-    if dists.ndim == 1:
-        dists = dists[:, None]
-        idxs = idxs[:, None]
-
+    if dists.ndim == 1: dists, idxs = dists[:, None], idxs[:, None]
+    
     exact = dists <= eps
     out = np.empty(dists.shape[0], dtype=float)
-
     if np.any(exact):
-        ex_idx_rows = np.where(exact.any(axis=1))[0]
-        for r in ex_idx_rows:
-            c = np.where(exact[r])[0][0]
-            out[r] = zi[idxs[r, c]]
-
+        for r in np.where(exact.any(axis=1))[0]:
+            out[r] = zi[idxs[r, np.where(exact[r])[0][0]]]
+            
     rest = ~exact.any(axis=1)
     if np.any(rest):
-        d = dists[rest]
-        nn = idxs[rest]
+        d, nn = dists[rest], idxs[rest]
         w = 1.0 / np.maximum(d, eps)**power
-        z_sel = zi[nn]              
-        out[rest] = (w * z_sel).sum(axis=1) / w.sum(axis=1)
-
+        out[rest] = (w * zi[nn]).sum(axis=1) / w.sum(axis=1)
     return out
 
 def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
@@ -640,10 +613,10 @@ def main():
                 <iframe 
                     src="{LINK_WEATHEROBS}" 
                     style="
-                        width: calc(100% + 19px); 
+                        width: calc(100% + 20px); /* Mở rộng thêm để đẩy thanh cuộn ra ngoài */
                         height: 1000px; 
                         position: absolute; 
-                        top: -65px; 
+                        top: -50px;     
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -658,10 +631,10 @@ def main():
                 <iframe 
                     src="{LINK_WIND_AUTO}" 
                     style="
-                        width: calc(100% + 19px); 
+                        width: calc(100% + 20px); /* Mở rộng thêm để đẩy thanh cuộn ra ngoài */
                         height: 1200px; 
                         position: absolute; 
-                        top: -100px;    
+                        top: -80px;    
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
@@ -705,7 +678,7 @@ def main():
             <iframe 
                 src="{LINK_KMA_FORECAST}" 
                 style="
-                    width: calc(100% + 19px); 
+                    width: calc(100% + 20px); /* Mở rộng thêm để đẩy thanh cuộn ra ngoài */
                     height: 1200px; 
                     position: absolute; 
                     top: -130px; 
