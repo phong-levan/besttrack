@@ -408,7 +408,7 @@ def main():
 
     with st.sidebar:
         st.title("Dữ liệu thời tiết")
-        topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
+        topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm"])
         st.markdown("---")
         
         final_df = pd.DataFrame()
@@ -551,7 +551,7 @@ def main():
             else:
                 st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
 
-    elif topic == "Dự báo điểm (KMA)":
+    elif topic == "Dự báo điểm":
         html_kma = f"""
         <div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;">
             <iframe 
@@ -642,3 +642,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
