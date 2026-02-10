@@ -485,7 +485,7 @@ def main():
             st.markdown(f'<div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_WEATHEROBS}" style="width: calc(100% + 19px); height: 1000px; position: absolute; top: -50px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
 
         elif "Gió tự động" in obs_mode:
-             st.markdown(f'<div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_WIND_AUTO}" style="width: calc(100% + 19px); height: 1200px; position: absolute; top: -100px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
+             st.markdown(f'<div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_WIND_AUTO}" style="width: calc(100% + 19px); height: 1200px; position: absolute; top: -80px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
         
         elif obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
             if btn_run_interpol:
@@ -564,5 +564,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
