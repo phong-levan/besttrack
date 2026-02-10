@@ -19,6 +19,9 @@ from shapely.ops import unary_union
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from scipy.ndimage import gaussian_filter
 from scipy.spatial import cKDTree
+import zipfile
+import tempfile
+import shutil
 import io
 
 warnings.filterwarnings("ignore")
@@ -32,7 +35,7 @@ FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
 # --- CẤU HÌNH ĐƯỜNG DẪN SHAPEFILE CỐ ĐỊNH ---
-SHP_MASK_PATH = os.path.join("shp", "vn34tinh.shp") 
+SHP_MASK_PATH = os.path.join("shp", "vn34tinh.shp")
 SHP_DISP_PATH = os.path.join("shp", "vungmoi.shp")
 
 # --- ĐỊNH NGHĨA ICON PATHS ---
@@ -478,13 +481,44 @@ def main():
     # --- MAIN CONTENT ---
     if topic == "Ảnh mây vệ tinh":
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
+    
     elif topic == "Dữ liệu quan trắc":
         
         if "WeatherObs" in obs_mode:
-            st.markdown(f'<div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_WEATHEROBS}" style="width: calc(100% + 19px); height: 1000px; position: absolute; top: -50px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
+            html_weather = f"""
+            <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
+                <iframe 
+                    src="{LINK_WEATHEROBS}" 
+                    style="
+                        width: calc(100% + 19px); 
+                        height: 1000px; 
+                        position: absolute; 
+                        top: -65px; 
+                        left: 0px; 
+                        border: none;"
+                    allow="fullscreen"
+                ></iframe>
+            </div>
+            """
+            st.markdown(html_weather, unsafe_allow_html=True)
 
         elif "Gió tự động" in obs_mode:
-             st.markdown(f'<div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_WIND_AUTO}" style="width: calc(100% + 19px); height: 1200px; position: absolute; top: -80px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
+             html_kttv = f"""
+            <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
+                <iframe 
+                    src="{LINK_WIND_AUTO}" 
+                    style="
+                        width: calc(100% + 19px); 
+                        height: 1200px; 
+                        position: absolute; 
+                        top: -100px;    
+                        left: 0px; 
+                        border: none;"
+                    allow="fullscreen"
+                ></iframe>
+            </div>
+            """
+             st.markdown(html_kttv, unsafe_allow_html=True)
         
         elif obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
             if btn_run_interpol:
@@ -516,18 +550,33 @@ def main():
                 st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
 
     elif topic == "Dự báo điểm (KMA)":
-        st.markdown(f'<div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_KMA_FORECAST}" style="width: calc(100% + 19px); height: 1200px; position: absolute; top: -130px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
+        html_kma = f"""
+        <div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;">
+            <iframe 
+                src="{LINK_KMA_FORECAST}" 
+                style="
+                    width: calc(100% + 19px); 
+                    height: 1200px; 
+                    position: absolute; 
+                    top: -215px; 
+                    left: 0px; 
+                    border: none;"
+                allow="fullscreen"
+            ></iframe>
+        </div>
+        """
+        st.markdown(html_kma, unsafe_allow_html=True)
 
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
-        folium.TileLayer('CartoDB positron', name='Bản đồ Sáng', overlay=False, control=True).add_to(m)
+        folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
         folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
-        folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh', overlay=False, control=True).add_to(m)
+        folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
         
         ts = get_rainviewer_ts()
         if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
 
-        fg = folium.FeatureGroup(name="🌀 Đường đi Bão")
+        fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
         if not final_df.empty and show_widgets:
             if "Hiện trạng" in str(active_mode):
                 groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
@@ -536,39 +585,58 @@ def main():
                     dense = densify_track(sub)
                     f6, f10, fc = create_storm_swaths(dense)
                     for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#90EE90',0.6)]:
-                         if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg)
-                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg)
+                         if geom and not geom.is_empty:
+                            folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
+                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
+                    
+                    # --- VẼ ICON BÃO ---
                     for _, r in sub.iterrows():
-                        icon = folium.CustomIcon(image_to_base64(ICON_PATHS.get(get_icon_name(r))), icon_size=(40,40) if 'vungthap' not in get_icon_name(r) else (20,20)) if image_to_base64(ICON_PATHS.get(get_icon_name(r))) else None
-                        if icon: folium.Marker([r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h',0)} km/h").add_to(fg)
-            else:
+                        icon_key = get_icon_name(r)
+                        icon_path = ICON_PATHS.get(icon_key)
+                        icon_base64 = None
+                        if icon_path:
+                            icon_base64 = image_to_base64(icon_path)
+                        
+                        if icon_base64:
+                            if 'vungthap' in icon_key:
+                                i_size = (20, 20)
+                                i_anchor = (10, 10)
+                            else:
+                                i_size = (40, 40)
+                                i_anchor = (20, 20)
+                            
+                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=i_size, icon_anchor=i_anchor)
+                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
+            else: 
                 for n in final_df['name'].unique():
                     sub = final_df[final_df['name']==n].sort_values('dt')
-                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg)
+                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
                     for _, r in sub.iterrows():
-                        folium.CircleMarker([r['lat'],r['lon']], radius=3, color='#00f2ff' if r.get('wind_km/h',0)<64 else '#ff0055', fill=True, popup=n).add_to(fg)
+                        c = '#00f2ff' if r.get('wind_km/h',0)<64 else '#ff0055'
+                        folium.CircleMarker([r['lat'],r['lon']], radius=3, color=c, fill=True, popup=f"{n}").add_to(fg_storm)
         
-        fg.add_to(m)
-        folium.LayerControl(collapsed=False).add_to(m)
+        fg_storm.add_to(m)
+        folium.LayerControl(position='topleft', collapsed=False).add_to(m)
         
+        # --- HIỂN THỊ WIDGET TRONG CONTAINER CHUNG ---
         if show_widgets:
-            html = '<div class="floating-container">'
+            html_to_render = '<div class="floating-container">'
+            
+            # 1. Thêm Chú thích (Nếu có)
             if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
-                with open(CHUTHICH_IMG, "rb") as f: html += create_legend(base64.b64encode(f.read()).decode())
-            html += create_info_table(final_df if not final_df.empty else pd.DataFrame(), dashboard_title if not final_df.empty else "ĐANG TẢI DỮ LIỆU...")
-            html += '</div>'
-            st.markdown(html, unsafe_allow_html=True)
+                with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
+                html_to_render += create_legend(b64)
+            
+            # 2. Thêm Bảng thông tin
+            if not final_df.empty: 
+                html_to_render += create_info_table(final_df, dashboard_title)
+            else: 
+                html_to_render += create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU...")
+            
+            html_to_render += '</div>'
+            st.markdown(html_to_render, unsafe_allow_html=True)
         
         st_folium(m, width=None, height=1000, use_container_width=True)
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
