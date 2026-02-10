@@ -482,7 +482,7 @@ def main():
     elif topic == "Dữ liệu quan trắc":
         
         if "WeatherObs" in obs_mode:
-            st.markdown(f'<div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_WEATHEROBS}" style="width: calc(100% + 19px); height: 1000px; position: absolute; top: -60px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_WEATHEROBS}" style="width: calc(100% + 19px); height: 1000px; position: absolute; top: -50px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
 
         elif "Gió tự động" in obs_mode:
              st.markdown(f'<div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_WIND_AUTO}" style="width: calc(100% + 19px); height: 1200px; position: absolute; top: -100px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
@@ -564,4 +564,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
