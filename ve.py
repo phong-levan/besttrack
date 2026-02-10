@@ -23,6 +23,7 @@ import zipfile
 import tempfile
 import shutil
 import io
+from datetime import datetime, timedelta
 
 warnings.filterwarnings("ignore")
 
@@ -30,8 +31,6 @@ warnings.filterwarnings("ignore")
 # 1. CẤU HÌNH & DỮ LIỆU
 # ==============================================================================
 ICON_DIR = "icon"
-FILE_OPT1 = "besttrack.csv"
-FILE_OPT2 = "besttrack_capgio.xlsx"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
 # --- CẤU HÌNH ĐƯỜNG DẪN SHAPEFILE CỐ ĐỊNH ---
@@ -53,7 +52,27 @@ ICON_PATHS = {
 # --- DANH SÁCH LINK WEB ---
 LINK_WEATHEROBS = "https://weatherobs.com/"
 LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
-LINK_KMA_FORECAST = "https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm=2026.02.06.12&delta=000&ftm=2026.02.06.12"
+
+# --- HÀM TẠO LINK KMA DYNAMIC ---
+def get_kma_url():
+    # Lấy giờ UTC hiện tại
+    now_utc = datetime.utcnow()
+    # KMA thường cập nhật chậm khoảng 4-5 tiếng so với giờ quan trắc (00Z và 12Z)
+    check_time = now_utc - timedelta(hours=5)
+    
+    # Xác định ca mô hình gần nhất (00 hoặc 12)
+    if check_time.hour < 12:
+        run_hour = 0
+    else:
+        run_hour = 12
+    
+    # Format chuỗi thời gian: YYYY.MM.DD.HH
+    date_str = check_time.strftime("%Y.%m.%d")
+    tm_str = f"{date_str}.{run_hour:02d}"
+    
+    # Tạo URL
+    url = f"https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm={tm_str}&delta=000&ftm={tm_str}"
+    return url
 
 # Màu sắc
 COLOR_BG = "#ffffff"
@@ -69,6 +88,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 # ==============================================================================
 # 2. CSS CHUNG
 # ==============================================================================
@@ -105,7 +125,8 @@ st.markdown(f"""
         border-right: 1px solid #ddd;
     }}
 
-    [data-testid="stSidebarCollapseBtn"], [data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
+    [data-testid="stSidebarCollapseBtn"],
+    [data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
 
     [data-testid="stAppViewContainer"] {{ padding-left: {SIDEBAR_WIDTH} !important; padding-top: 0 !important; }}
     [data-testid="stMainViewContainer"] {{ margin-left: 0 !important; width: 100% !important; padding-top: 0 !important; }}
@@ -405,10 +426,14 @@ def main():
     
     if 'interpol_fig' not in st.session_state:
         st.session_state['interpol_fig'] = None
+    
+    # --- KHỞI TẠO TRẠNG THÁI ĐĂNG NHẬP (BIẾN TOÀN CỤC CHO CẢ APP) ---
+    if 'logged_in' not in st.session_state:
+        st.session_state['logged_in'] = False
 
     with st.sidebar:
         st.title("Dữ liệu thời tiết")
-        topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm"])
+        topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
         st.markdown("---")
         
         final_df = pd.DataFrame()
@@ -422,23 +447,36 @@ def main():
         btn_run_interpol = False
 
         if topic == "Dữ liệu quan trắc":
-            obs_mode = st.radio("Chọn nguồn dữ liệu:", 
-                              ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ", "Nội suy lượng mưa"])
-            
-            # --- MENU CHO NỘI SUY (NHIỆT ĐỘ HOẶC MƯA) ---
-            if obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
+            # NẾU ĐÃ ĐĂNG NHẬP MỚI HIỆN MENU CON
+            if st.session_state['logged_in']:
+                obs_mode = st.radio("Chọn nguồn dữ liệu:", 
+                                  ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ", "Nội suy lượng mưa"])
+                
+                if obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
+                    st.markdown("---")
+                    st.markdown(f"### 🛠️ CÔNG CỤ {obs_mode.upper()}")
+                    
+                    default_title = "Bản đồ nhiệt độ nội suy" if obs_mode == "Nội suy nhiệt độ" else "Bản đồ lượng mưa nội suy"
+                    title_interpol = st.text_input("Tiêu đề bản đồ:", value=default_title)
+                    
+                    st.markdown("**1. Upload dữ liệu (.xlsx/.csv)**")
+                    st.caption("Cột: `stations`, `lon`, `lat`, `value`")
+                    data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv'], key="data_up")
+                    
+                    st.markdown("---")
+                    btn_run_interpol = st.button("🚀 VẼ BẢN ĐỒ", type="primary", use_container_width=True)
+                
                 st.markdown("---")
-                st.markdown(f"### 🛠️ CÔNG CỤ {obs_mode.upper()}")
-                
-                default_title = "Bản đồ nhiệt độ nội suy" if obs_mode == "Nội suy nhiệt độ" else "Bản đồ lượng mưa nội suy"
-                title_interpol = st.text_input("Tiêu đề bản đồ:", value=default_title)
-                
-                st.markdown("**1. Upload dữ liệu (.xlsx/.csv)**")
-                st.caption("Cột: `stations`, `lon`, `lat`, `value`")
-                data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv'], key="data_up")
-                
+                if st.button("🔒 Đăng xuất", key="logout_obs_sidebar"):
+                    st.session_state['logged_in'] = False
+                    st.rerun()
+
+        if topic == "Dự báo điểm (KMA)":
+            if st.session_state['logged_in']:
                 st.markdown("---")
-                btn_run_interpol = st.button("🚀 VẼ BẢN ĐỒ", type="primary", use_container_width=True)
+                if st.button("🔒 Đăng xuất", key="logout_kma_sidebar"):
+                    st.session_state['logged_in'] = False
+                    st.rerun()
 
         if topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
@@ -447,13 +485,12 @@ def main():
                 dashboard_title = "TIN BÃO KHẨN CẤP"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
-                    # --- SỬA Ở ĐÂY: CHO PHÉP CẢ CSV VÀ XLSX ---
+                    # Hỗ trợ cả csv và xlsx
                     f = st.file_uploader("Upload besttrack (.csv / .xlsx)", type=["csv", "xlsx"], key="o1")
-                    path = f if f else (FILE_OPT1 if os.path.exists(FILE_OPT1) else None)
-                    if path:
+                    if f:
                         try:
-                            # Logic đọc file tự động nhận diện csv hoặc excel
-                            df = pd.read_csv(path) if (isinstance(path, str) and path.endswith('.csv')) or (not isinstance(path, str) and path.name.endswith('.csv')) else pd.read_excel(path)
+                            # Tự động đọc đúng định dạng
+                            df = pd.read_csv(f) if f.name.endswith('.csv') else pd.read_excel(f)
                             df = normalize_columns(df)
                             if 'name' not in df: df['name'], df['storm_no'] = 'Storm', 'Current'
                             for c in ['wind_km/h','bf','r6','r10','rc','pressure','hour_explicit']: 
@@ -463,15 +500,16 @@ def main():
                             sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s) if len(all_s)>0 else []
                             final_df = df[df['storm_no'].isin(sel)] if len(sel)>0 else df
                         except: pass
+                    else:
+                        st.info("Vui lòng upload file dữ liệu để xem thông tin bão.")
             else:
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
                     f = st.file_uploader("Upload besttrack_capgio.xlsx", type="xlsx", key="o2")
-                    path = f if f else (FILE_OPT2 if os.path.exists(FILE_OPT2) else None)
-                    if path:
+                    if f:
                         try:
-                            df = pd.read_excel(path)
+                            df = pd.read_excel(f)
                             df = normalize_columns(df)
                             df = df.dropna(subset=['lat','lon'])
                             years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
@@ -479,95 +517,137 @@ def main():
                             names = st.multiselect("Tên bão:", temp['name'].unique(), default=temp['name'].unique())
                             final_df = temp[temp['name'].isin(names)]
                         except: pass
+                    else:
+                        st.info("Vui lòng upload file dữ liệu lịch sử bão.")
 
     # --- MAIN CONTENT ---
     if topic == "Ảnh mây vệ tinh":
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
     
     elif topic == "Dữ liệu quan trắc":
-        
-        if "WeatherObs" in obs_mode:
-            html_weather = f"""
-            <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
-                <iframe 
-                    src="{LINK_WEATHEROBS}" 
+        # --- KIỂM TRA ĐĂNG NHẬP (Dùng chung session) ---
+        if not st.session_state['logged_in']:
+            st.title("🔐 Đăng nhập Hệ thống")
+            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
+            
+            with st.form("login_form_common"):
+                user_input = st.text_input("Tên đăng nhập")
+                pass_input = st.text_input("Mật khẩu", type="password")
+                submitted = st.form_submit_button("Đăng nhập")
+                
+                if submitted:
+                    if user_input == "admin" and pass_input == "kttv@2026":
+                        st.session_state['logged_in'] = True
+                        st.success("Đăng nhập thành công!")
+                        st.rerun()
+                    else:
+                        st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
+        else:
+            # --- NỘI DUNG SAU KHI ĐĂNG NHẬP THÀNH CÔNG ---
+            if "WeatherObs" in obs_mode:
+                html_weather = f"""
+                <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
+                    <iframe 
+                        src="{LINK_WEATHEROBS}" 
+                        style="
+                            width: calc(100% + 19px); 
+                            height: 1000px; 
+                            position: absolute; 
+                            top: -50px; 
+                            left: 0px; 
+                            border: none;"
+                        allow="fullscreen"
+                    ></iframe>
+                </div>
+                """
+                st.markdown(html_weather, unsafe_allow_html=True)
+
+            elif "Gió tự động" in obs_mode:
+                 html_kttv = f"""
+                <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
+                    <iframe 
+                        src="{LINK_WIND_AUTO}" 
+                        style="
+                            width: calc(100% + 19px); 
+                            height: 1200px; 
+                            position: absolute; 
+                            top: -75px; 
+                            left: 0px; 
+                            border: none;"
+                        allow="fullscreen"
+                    ></iframe>
+                </div>
+                 """
+                 st.markdown(html_kttv, unsafe_allow_html=True)
+            
+            elif obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
+                if btn_run_interpol:
+                    if data_file_interpol:
+                        try:
+                            df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
+                            
+                            data_type = 'rain' if obs_mode == "Nội suy lượng mưa" else 'temp'
+                            
+                            with st.spinner("Đang tính toán nội suy và tạo bản đồ..."):
+                                fig, err = run_interpolation_and_plot(df_in, title_interpol, data_type)
+                                if err: st.error(f"❌ {err}")
+                                else: st.session_state['interpol_fig'] = fig
+                        except Exception as e: st.error(f"❌ Lỗi: {e}")
+                    else: st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
+
+                if st.session_state['interpol_fig']:
+                    st.pyplot(st.session_state['interpol_fig'], use_container_width=True)
+                    st.markdown("### 📥 Tải xuống")
+                    col_dl1, col_dl2 = st.columns([1, 3])
+                    with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"])
+                    buf = io.BytesIO()
+                    st.session_state['interpol_fig'].savefig(buf, format=fmt, dpi=300, bbox_inches='tight')
+                    buf.seek(0)
+                    with col_dl2:
+                        st.write(""); st.write("")
+                        st.download_button(label=f"⬇️ Tải ảnh về ({fmt.upper()})", data=buf, file_name=f"ban_do.{fmt}", mime=f"image/{fmt}")
+                else:
+                    st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
+
+    elif topic == "Dự báo điểm (KMA)":
+        # --- KIỂM TRA ĐĂNG NHẬP (Dùng chung session) ---
+        if not st.session_state['logged_in']:
+            st.title("🔐 Đăng nhập Hệ thống")
+            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
+            
+            with st.form("login_form_common_kma"):
+                user_input = st.text_input("Tên đăng nhập")
+                pass_input = st.text_input("Mật khẩu", type="password")
+                submitted = st.form_submit_button("Đăng nhập")
+                
+                if submitted:
+                    if user_input == "admin" and pass_input == "kttv@2026":
+                        st.session_state['logged_in'] = True
+                        st.success("Đăng nhập thành công!")
+                        st.rerun()
+                    else:
+                        st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
+        else:
+            # === CẬP NHẬT TỰ ĐỘNG THỜI GIAN ===
+            realtime_kma_url = get_kma_url()
+            
+            html_kma = f"""
+            <div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;">
+                <iframe
+                    src="{realtime_kma_url}" 
                     style="
                         width: calc(100% + 19px); 
-                        height: 1000px; 
+                        height: 1200px; 
                         position: absolute; 
-                        top: -50px; 
+                        top: -130px; 
                         left: 0px; 
                         border: none;"
                     allow="fullscreen"
                 ></iframe>
             </div>
             """
-            st.markdown(html_weather, unsafe_allow_html=True)
-
-        elif "Gió tự động" in obs_mode:
-             html_kttv = f"""
-            <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
-                <iframe 
-                    src="{LINK_WIND_AUTO}" 
-                    style="
-                        width: calc(100% + 19px); 
-                        height: 1200px; 
-                        position: absolute; 
-                        top: -75px; 
-                        left: 0px; 
-                        border: none;"
-                    allow="fullscreen"
-                ></iframe>
-            </div>
-             """
-             st.markdown(html_kttv, unsafe_allow_html=True)
-        
-        elif obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
-            if btn_run_interpol:
-                if data_file_interpol:
-                    try:
-                        df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
-                        
-                        data_type = 'rain' if obs_mode == "Nội suy lượng mưa" else 'temp'
-                        
-                        with st.spinner("Đang tính toán nội suy và tạo bản đồ..."):
-                            fig, err = run_interpolation_and_plot(df_in, title_interpol, data_type)
-                            if err: st.error(f"❌ {err}")
-                            else: st.session_state['interpol_fig'] = fig
-                    except Exception as e: st.error(f"❌ Lỗi: {e}")
-                else: st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
-
-            if st.session_state['interpol_fig']:
-                st.pyplot(st.session_state['interpol_fig'], use_container_width=True)
-                st.markdown("### 📥 Tải xuống")
-                col_dl1, col_dl2 = st.columns([1, 3])
-                with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"])
-                buf = io.BytesIO()
-                st.session_state['interpol_fig'].savefig(buf, format=fmt, dpi=300, bbox_inches='tight')
-                buf.seek(0)
-                with col_dl2:
-                    st.write(""); st.write("")
-                    st.download_button(label=f"⬇️ Tải ảnh về ({fmt.upper()})", data=buf, file_name=f"ban_do.{fmt}", mime=f"image/{fmt}")
-            else:
-                st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
-
-    elif topic == "Dự báo điểm":
-        html_kma = f"""
-        <div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;">
-            <iframe 
-                src="{LINK_KMA_FORECAST}" 
-                style="
-                    width: calc(100% + 19px); 
-                    height: 1200px; 
-                    position: absolute; 
-                    top: -130px; 
-                    left: 0px; 
-                    border: none;"
-                allow="fullscreen"
-            ></iframe>
-        </div>
-        """
-        st.markdown(html_kma, unsafe_allow_html=True)
+            st.markdown(html_kma, unsafe_allow_html=True)
+            st.caption(f"Đang hiển thị dữ liệu từ nguồn KMA (Hàn Quốc). Link gốc: {realtime_kma_url}")
 
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
@@ -587,8 +667,8 @@ def main():
                     dense = densify_track(sub)
                     f6, f10, fc = create_storm_swaths(dense)
                     for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#90EE90',0.6)]:
-                         if geom and not geom.is_empty:
-                            folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
+                        if geom and not geom.is_empty:
+                           folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
                     
                     # --- VẼ ICON BÃO ---
@@ -642,4 +722,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
