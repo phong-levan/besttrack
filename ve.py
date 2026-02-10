@@ -466,6 +466,14 @@ def main():
                     st.session_state['logged_in'] = False
                     st.rerun()
 
+        if topic == "Dự báo điểm (KMA)":
+            # NẾU ĐÃ ĐĂNG NHẬP THÌ HIỆN NÚT ĐĂNG XUẤT (HOẶC CHỈ CẦN HIỂN THỊ Ở 1 CHỖ)
+            if st.session_state['logged_in']:
+                st.markdown("---")
+                if st.button("🔒 Đăng xuất", key="logout_kma"):
+                    st.session_state['logged_in'] = False
+                    st.rerun()
+
         if topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
             active_mode = storm_opt
@@ -514,7 +522,7 @@ def main():
             st.title("🔐 Đăng nhập Hệ thống Quan trắc")
             st.write("Vui lòng đăng nhập để truy cập dữ liệu quan trắc chuyên sâu.")
             
-            with st.form("login_form"):
+            with st.form("login_form_obs"):
                 user_input = st.text_input("Tên đăng nhập")
                 pass_input = st.text_input("Mật khẩu", type="password")
                 submitted = st.form_submit_button("Đăng nhập")
@@ -594,26 +602,44 @@ def main():
                     st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
 
     elif topic == "Dự báo điểm (KMA)":
-        # === CẬP NHẬT TỰ ĐỘNG THỜI GIAN ===
-        realtime_kma_url = get_kma_url()
-        
-        html_kma = f"""
-        <div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;">
-            <iframe
-                src="{realtime_kma_url}" 
-                style="
-                    width: calc(100% + 19px); 
-                    height: 1200px; 
-                    position: absolute; 
-                    top: -130px; 
-                    left: 0px; 
-                    border: none;"
-                allow="fullscreen"
-            ></iframe>
-        </div>
-        """
-        st.markdown(html_kma, unsafe_allow_html=True)
-        st.caption(f"Đang hiển thị dữ liệu từ nguồn KMA (Hàn Quốc). Link gốc: {realtime_kma_url}")
+        # --- KIỂM TRA ĐĂNG NHẬP TẠI ĐÂY ---
+        if not st.session_state['logged_in']:
+            st.title("🔐 Đăng nhập Dự báo Điểm KMA")
+            st.write("Vui lòng đăng nhập để xem dữ liệu dự báo điểm.")
+            
+            with st.form("login_form_kma"):
+                user_input = st.text_input("Tên đăng nhập")
+                pass_input = st.text_input("Mật khẩu", type="password")
+                submitted = st.form_submit_button("Đăng nhập")
+                
+                if submitted:
+                    if user_input == "admin" and pass_input == "kttv@2026":
+                        st.session_state['logged_in'] = True
+                        st.success("Đăng nhập thành công!")
+                        st.rerun()
+                    else:
+                        st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
+        else:
+            # === CẬP NHẬT TỰ ĐỘNG THỜI GIAN ===
+            realtime_kma_url = get_kma_url()
+            
+            html_kma = f"""
+            <div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;">
+                <iframe
+                    src="{realtime_kma_url}" 
+                    style="
+                        width: calc(100% + 19px); 
+                        height: 1200px; 
+                        position: absolute; 
+                        top: -130px; 
+                        left: 0px; 
+                        border: none;"
+                    allow="fullscreen"
+                ></iframe>
+            </div>
+            """
+            st.markdown(html_kma, unsafe_allow_html=True)
+            st.caption(f"Đang hiển thị dữ liệu từ nguồn KMA (Hàn Quốc). Link gốc: {realtime_kma_url}")
 
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
