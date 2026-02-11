@@ -19,9 +19,6 @@ from shapely.ops import unary_union
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from scipy.ndimage import gaussian_filter
 from scipy.spatial import cKDTree
-import zipfile
-import tempfile
-import shutil
 import io
 from datetime import datetime, timedelta
 
@@ -51,36 +48,19 @@ ICON_PATHS = {
 
 # --- DANH SÁCH LINK WEB ---
 LINK_WEATHEROBS = "https://weatherobs.com/"
+LINK_WIND_KTTV = "http://admin:ttdl%402021@222.255.11.82/Modules/Gio/MapWind.aspx" # Đã encode @ thành %40
 LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
 
 # --- HÀM TẠO LINK KMA DYNAMIC ---
 def get_kma_url():
-    # Lấy giờ UTC hiện tại
     now_utc = datetime.utcnow()
-    # KMA thường cập nhật chậm khoảng 4-5 tiếng so với giờ quan trắc (00Z và 12Z)
     check_time = now_utc - timedelta(hours=5)
-    
-    # Xác định ca mô hình gần nhất (00 hoặc 12)
-    if check_time.hour < 12:
-        run_hour = 0
-    else:
-        run_hour = 12
-    
-    # Format chuỗi thời gian: YYYY.MM.DD.HH
+    if check_time.hour < 12: run_hour = 0
+    else: run_hour = 12
     date_str = check_time.strftime("%Y.%m.%d")
     tm_str = f"{date_str}.{run_hour:02d}"
-    
-    # Tạo URL
     url = f"https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm={tm_str}&delta=000&ftm={tm_str}"
     return url
-
-# Màu sắc
-COLOR_BG = "#ffffff"
-COLOR_SIDEBAR = "#f8f9fa"
-COLOR_TEXT = "#333333"
-COLOR_ACCENT = "#007bff"
-COLOR_BORDER = "#dee2e6"
-SIDEBAR_WIDTH = "320px"
 
 # Cấu hình trang
 st.set_page_config(
@@ -92,69 +72,41 @@ st.set_page_config(
 # ==============================================================================
 # 2. CSS CHUNG
 # ==============================================================================
-st.markdown(f"""
+st.markdown("""
     <style>
-    .block-container {{
-        padding: 0 !important;
-        margin: 0 !important;
-        max-width: 100% !important;
-    }}
-    header, footer {{ display: none !important; }}
+    .block-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+    header, footer { display: none !important; }
     
-    div[data-testid="stToolbar"], 
-    div[data-testid="stDecoration"], 
-    div[data-testid="stStatusWidget"] {{
-        visibility: hidden !important;
-        display: none !important;
-        height: 0px !important;
-    }}
+    div[data-testid="stToolbar"], div[data-testid="stDecoration"], div[data-testid="stStatusWidget"] {
+        visibility: hidden !important; display: none !important; height: 0px !important;
+    }
 
-    section[data-testid="stSidebar"] {{
-        display: block !important;
-        visibility: visible !important;
-        width: {SIDEBAR_WIDTH} !important;
-        min-width: {SIDEBAR_WIDTH} !important;
-        max-width: {SIDEBAR_WIDTH} !important;
-        position: fixed !important;
-        left: 0 !important;
-        top: 0 !important;
-        height: 100vh !important;
-        transform: none !important;
-        z-index: 100000 !important;
-        background-color: {COLOR_SIDEBAR} !important;
-        border-right: 1px solid #ddd;
-    }}
+    section[data-testid="stSidebar"] {
+        width: 320px !important; min-width: 320px !important; max-width: 320px !important;
+    }
 
-    [data-testid="stSidebarCollapseBtn"],
-    [data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
+    /* CSS cho Iframe tràn màn hình */
+    iframe { width: 100% !important; height: 100vh !important; border: none !important; display: block !important; }
 
-    [data-testid="stAppViewContainer"] {{ padding-left: {SIDEBAR_WIDTH} !important; padding-top: 0 !important; }}
-    [data-testid="stMainViewContainer"] {{ margin-left: 0 !important; width: 100% !important; padding-top: 0 !important; }}
-
-    iframe {{ width: 100% !important; height: 100vh !important; border: none !important; display: block !important; }}
-
-    .floating-container {{
+    .floating-container {
         position: fixed; top: 20px; right: 60px; z-index: 9999;
-        display: flex; flex-direction: column; align-items: center;    
-    }}
-
-    .legend-box {{ width: 340px; pointer-events: none; margin-bottom: 5px; }}
-    
-    .info-box {{
+        display: flex; flex-direction: column; align-items: center;     
+    }
+    .legend-box { width: 340px; pointer-events: none; margin-bottom: 5px; }
+    .info-box {
         width: fit-content; background: rgba(255, 255, 255, 0.9);
         border: 1px solid #ccc; border-radius: 6px;
         padding: 10px !important; color: #000; text-align: center;
-    }}
-    
-    .info-box table {{ width: 100%; margin: 0 auto; border-collapse: collapse; }}
-    .info-box th, .info-box td {{ text-align: center !important; padding: 4px 8px; }}
-    .info-title {{ font-weight: bold; margin-bottom: 2px; }}
-    .info-subtitle {{ font-size: 0.9em; margin-bottom: 8px; font-style: italic; }}
+    }
+    .info-box table { width: 100%; margin: 0 auto; border-collapse: collapse; }
+    .info-box th, .info-box td { text-align: center !important; padding: 4px 8px; }
+    .info-title { font-weight: bold; margin-bottom: 2px; }
+    .info-subtitle { font-size: 0.9em; margin-bottom: 8px; font-style: italic; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. HÀM XỬ LÝ LOGIC
+# 3. HÀM XỬ LÝ LOGIC (GIỮ NGUYÊN)
 # ==============================================================================
 
 @st.cache_data(ttl=300) 
@@ -168,9 +120,7 @@ def get_rainviewer_ts():
 def image_to_base64(image_path):
     if not os.path.exists(image_path): return None
     with open(image_path, "rb") as f: encoded = base64.b64encode(f.read()).decode()
-    ext = image_path.split('.')[-1].lower()
-    mime_type = f"image/{ext}" if ext != 'jpg' else "image/jpeg"
-    return f"data:{mime_type};base64,{encoded}"
+    return f"data:image/png;base64,{encoded}"
 
 def normalize_columns(df):
     df.columns = df.columns.str.strip().str.lower()
@@ -181,10 +131,9 @@ def normalize_columns(df):
         "vĩ độ": "lat", "kinh độ": "lon", "vmax (km/h)": "wind_km/h",
         "cường độ (cấp bf)": "bf", "bán kính gió mạnh cấp 6 (km)": "r6", 
         "bán kính gió mạnh cấp 10 (km)": "r10", "bán kính tâm (km)": "rc",
-        "khí áp": "pressure", "khí áp (mb)": "pressure", "pmin": "pressure", "pmin (mb)": "pressure"
+        "khí áp": "pressure", "khí áp (mb)": "pressure", "pmin": "pressure"
     }
-    df = df.rename(columns={k:v for k,v in rename.items() if k in df.columns})
-    return df
+    return df.rename(columns={k:v for k,v in rename.items() if k in df.columns})
 
 def densify_track(df, step_km=10):
     new_rows = []
@@ -309,7 +258,6 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     IDW_POWER = 3.0
     KNN = 12
 
-    # Cấu hình riêng cho từng loại dữ liệu
     if data_type == 'rain':
         vmin, vmax = 0, 1400
         levels_for_ticks = np.arange(0, 1450, 100)
@@ -327,22 +275,14 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
         unit_label = "Nhiệt độ (°C)"
 
     norm = Normalize(vmin=vmin, vmax=vmax)
-
-    # Xử lý dữ liệu đầu vào
     input_df.columns = input_df.columns.str.lower().str.strip()
-    cols_check = ['lon', 'lat', 'value']
-    if not all(c in input_df.columns for c in cols_check):
-        return None, f"File thiếu cột bắt buộc: {cols_check}"
-
     valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
-    if valid.empty:
-        return None, "Dữ liệu trống sau khi lọc bỏ NaN."
+    if valid.empty: return None, "Dữ liệu trống sau khi lọc."
 
     x_pts = valid['lon'].to_numpy()
     y_pts = valid['lat'].to_numpy()
     z_pts = valid['value'].to_numpy()
 
-    # Điểm biên
     edge_points = pd.DataFrame({
         'lon': [minx, minx, maxx, maxx, (minx + maxx)/2],
         'lat': [miny, maxy, miny, maxy, (miny + maxy)/2],
@@ -354,15 +294,12 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     yi = aug['lat'].to_numpy()
     zi = aug['value'].to_numpy()
 
-    # Lưới
     gx, gy = np.meshgrid(np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N))
     grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
 
-    # IDW & Smooth
     gv = idw_knn(xi, yi, zi, grid_xy, k=KNN, power=IDW_POWER).reshape(gx.shape)
     if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
 
-    # Đọc Shapefile cố định
     mask_shape = None
     disp_shape = None
     
@@ -370,44 +307,30 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
         try:
             mask_shape = gpd.read_file(SHP_MASK_PATH)
             if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: mask_shape.to_crs(epsg=4326, inplace=True)
-        except Exception as e: return None, f"Lỗi đọc Mask Shapefile: {e}"
+        except Exception as e: return None, f"Lỗi đọc Mask: {e}"
     else:
-        bbox_poly = box(minx, miny, maxx, maxy)
-        mask_shape = gpd.GeoDataFrame({'geometry': [bbox_poly]}, crs='EPSG:4326')
+        mask_shape = gpd.GeoDataFrame({'geometry': [box(minx, miny, maxx, maxy)]}, crs='EPSG:4326')
 
     if os.path.exists(SHP_DISP_PATH):
         try:
             disp_shape = gpd.read_file(SHP_DISP_PATH)
             if disp_shape.crs and disp_shape.crs.to_epsg() != 4326: disp_shape.to_crs(epsg=4326, inplace=True)
-        except Exception as e: return None, f"Lỗi đọc Display Shapefile: {e}"
-    else:
-        disp_shape = mask_shape
+        except: disp_shape = mask_shape
+    else: disp_shape = mask_shape
 
-    # Masking
     if mask_shape is not None:
         shape_union = mask_shape.unary_union
         prep_shape = prep(shape_union)
         mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
         gv_masked = np.where(mask_flat, gv, np.nan)
-    else:
-        gv_masked = gv
+    else: gv_masked = gv
 
-    # Vẽ
     fig, ax = plt.subplots(figsize=(14, 10)) 
     ax.set_title(title_text if title_text else f'Bản đồ {unit_label}', fontsize=16)
 
-    if disp_shape is not None:
-        disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
+    if disp_shape is not None: disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
 
-    im = ax.imshow(
-        gv_masked,
-        extent=[minx, maxx, miny, maxy],
-        cmap=cmap,
-        norm=norm,
-        interpolation='bilinear',
-        origin='lower'
-    )
-
+    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower')
     cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.7, pad=0.02, extend='both')
     cbar.set_label(unit_label, fontsize=12)
     cbar.set_ticks(levels_for_ticks)
@@ -416,24 +339,18 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     ax.set_xlim(minx, maxx)
     ax.set_ylim(miny, maxy)
     ax.ticklabel_format(useOffset=False, style='plain')
-    
     return fig, None
 
 # ==============================================================================
 # 4. MAIN APP
 # ==============================================================================
 def main():
-    
-    if 'interpol_fig' not in st.session_state:
-        st.session_state['interpol_fig'] = None
-    
-    # --- KHỞI TẠO TRẠNG THÁI ĐĂNG NHẬP (BIẾN TOÀN CỤC CHO CẢ APP) ---
-    if 'logged_in' not in st.session_state:
-        st.session_state['logged_in'] = False
+    if 'interpol_fig' not in st.session_state: st.session_state['interpol_fig'] = None
+    if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
     with st.sidebar:
-        st.title("Dữ liệu thời tiết")
-        topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
+        st.title("Hệ Thống Giám Sát")
+        topic = st.radio("CHỨC NĂNG:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
         st.markdown("---")
         
         final_df = pd.DataFrame()
@@ -442,54 +359,53 @@ def main():
         active_mode = ""
         obs_mode = ""
         
-        title_interpol = ""
-        data_file_interpol = None
-        btn_run_interpol = False
-
+        # --- CẤU HÌNH MENU DỮ LIỆU QUAN TRẮC ---
         if topic == "Dữ liệu quan trắc":
-            # NẾU ĐÃ ĐĂNG NHẬP MỚI HIỆN MENU CON
             if st.session_state['logged_in']:
-                obs_mode = st.radio("Chọn nguồn dữ liệu:", 
-                                  ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ", "Nội suy lượng mưa"])
+                # DANH SÁCH MENU MỚI ĐƯỢC SẮP XẾP LẠI
+                obs_options = [
+                    "1. Thời tiết (WeatherObs)",
+                    "2. Gió trạm KTTV",
+                    "3. Gió tự động (kttvtudong)",
+                    "4. Nội suy Nhiệt độ",
+                    "5. Nội suy Lượng mưa"
+                ]
+                obs_mode = st.radio("Chọn loại dữ liệu:", obs_options)
                 
-                if obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
+                # HIỂN THỊ CÔNG CỤ NỘI SUY NẾU CHỌN MỤC 4 HOẶC 5
+                if "Nội suy" in obs_mode:
                     st.markdown("---")
-                    st.markdown(f"### 🛠️ CÔNG CỤ {obs_mode.upper()}")
-                    
-                    default_title = "Bản đồ nhiệt độ nội suy" if obs_mode == "Nội suy nhiệt độ" else "Bản đồ lượng mưa nội suy"
-                    title_interpol = st.text_input("Tiêu đề bản đồ:", value=default_title)
-                    
-                    st.markdown("**1. Upload dữ liệu (.xlsx/.csv)**")
-                    st.caption("Cột: `stations`, `lon`, `lat`, `value`")
-                    data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv'], key="data_up")
-                    
+                    st.markdown("### 🛠️ CÔNG CỤ VẼ BẢN ĐỒ")
+                    default_title = "Bản đồ Nhiệt độ" if "Nhiệt độ" in obs_mode else "Bản đồ Lượng mưa"
+                    title_interpol = st.text_input("Tiêu đề:", value=default_title)
+                    st.caption("File Excel/CSV: `stations`, `lon`, `lat`, `value`")
+                    data_file_interpol = st.file_uploader("Upload số liệu:", type=['xlsx', 'csv'], key="data_up")
                     st.markdown("---")
                     btn_run_interpol = st.button("🚀 VẼ BẢN ĐỒ", type="primary", use_container_width=True)
                 
                 st.markdown("---")
-                if st.button("🔒 Đăng xuất", key="logout_obs_sidebar"):
+                if st.button("🔒 Đăng xuất", key="logout_obs"):
                     st.session_state['logged_in'] = False
                     st.rerun()
 
-        if topic == "Dự báo điểm (KMA)":
+        elif topic == "Dự báo điểm (KMA)":
             if st.session_state['logged_in']:
                 st.markdown("---")
-                if st.button("🔒 Đăng xuất", key="logout_kma_sidebar"):
+                if st.button("🔒 Đăng xuất", key="logout_kma"):
                     st.session_state['logged_in'] = False
                     st.rerun()
 
-        if topic == "Bản đồ Bão":
+        # --- CẤU HÌNH SIDEBAR BÃO (GIỮ NGUYÊN) ---
+        elif topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
             active_mode = storm_opt
             if "Hiện trạng" in storm_opt:
                 dashboard_title = "TIN BÃO KHẨN CẤP"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
-                    # Hỗ trợ cả csv và xlsx
                     f = st.file_uploader("Upload besttrack (.csv / .xlsx)", type=["csv", "xlsx"], key="o1")
                     if f:
                         try:
-                            # Tự động đọc đúng định dạng
                             df = pd.read_csv(f) if f.name.endswith('.csv') else pd.read_excel(f)
                             df = normalize_columns(df)
                             if 'name' not in df: df['name'], df['storm_no'] = 'Storm', 'Current'
@@ -500,8 +416,7 @@ def main():
                             sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s) if len(all_s)>0 else []
                             final_df = df[df['storm_no'].isin(sel)] if len(sel)>0 else df
                         except: pass
-                    else:
-                        st.info("Vui lòng upload file dữ liệu để xem thông tin bão.")
+                    else: st.info("Vui lòng upload file dữ liệu.")
             else:
                 dashboard_title = "THỐNG KÊ LỊCH SỬ"
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
@@ -517,148 +432,100 @@ def main():
                             names = st.multiselect("Tên bão:", temp['name'].unique(), default=temp['name'].unique())
                             final_df = temp[temp['name'].isin(names)]
                         except: pass
-                    else:
-                        st.info("Vui lòng upload file dữ liệu lịch sử bão.")
 
-    # --- MAIN CONTENT ---
+    # ==============================================================================
+    # 5. MAIN CONTENT DISPLAY
+    # ==============================================================================
+    
+    # === ẢNH MÂY VỆ TINH ===
     if topic == "Ảnh mây vệ tinh":
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
     
+    # === DỮ LIỆU QUAN TRẮC (ĐÃ SẮP XẾP) ===
     elif topic == "Dữ liệu quan trắc":
-        # --- KIỂM TRA ĐĂNG NHẬP (Dùng chung session) ---
         if not st.session_state['logged_in']:
             st.title("🔐 Đăng nhập Hệ thống")
-            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
-            
-            with st.form("login_form_common"):
-                user_input = st.text_input("Tên đăng nhập")
-                pass_input = st.text_input("Mật khẩu", type="password")
-                submitted = st.form_submit_button("Đăng nhập")
-                
-                if submitted:
-                    if user_input == "admin" and pass_input == "kttv@2026":
+            with st.form("login_form"):
+                u = st.text_input("Tên đăng nhập")
+                p = st.text_input("Mật khẩu", type="password")
+                if st.form_submit_button("Đăng nhập"):
+                    if u == "admin" and p == "kttv@2026":
                         st.session_state['logged_in'] = True
-                        st.success("Đăng nhập thành công!")
                         st.rerun()
-                    else:
-                        st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
+                    else: st.error("Sai thông tin đăng nhập.")
         else:
-            # --- NỘI DUNG SAU KHI ĐĂNG NHẬP THÀNH CÔNG ---
-            if "WeatherObs" in obs_mode:
-                html_weather = f"""
+            # 1. THỜI TIẾT (WeatherObs)
+            if "Thời tiết" in obs_mode:
+                st.markdown(f'<div style="overflow:hidden;width:100%;height:95vh;position:relative;"><iframe src="{LINK_WEATHEROBS}" style="width:100%;height:1000px;border:none;"></iframe></div>', unsafe_allow_html=True)
+
+            # 2. GIÓ TRẠM KTTV (Link 222.255...)
+            elif "Gió trạm KTTV" in obs_mode:
+                # Fallback button
+                st.caption("Nếu bản đồ trắng, hãy click vào nút bên dưới để mở tab mới:")
+                st.link_button("↗️ Mở bản đồ trong Tab mới", LINK_WIND_KTTV)
+                
+                # Iframe với CSS cắt lề
+                html_wind = f"""
                 <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
                     <iframe 
-                        src="{LINK_WEATHEROBS}" 
+                        src="{LINK_WIND_KTTV}" 
                         style="
-                            width: calc(100% + 19px); 
-                            height: 1000px; 
+                            width: 120%; 
+                            height: 1200px; 
                             position: absolute; 
-                            top: -50px; 
-                            left: 0px; 
+                            top: -110px;  /* Che header */
+                            left: -200px; /* Che menu trái */
                             border: none;"
                         allow="fullscreen"
                     ></iframe>
                 </div>
                 """
-                st.markdown(html_weather, unsafe_allow_html=True)
+                st.markdown(html_wind, unsafe_allow_html=True)
 
+            # 3. GIÓ TỰ ĐỘNG
             elif "Gió tự động" in obs_mode:
-                 html_kttv = f"""
-                <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
-                    <iframe 
-                        src="{LINK_WIND_AUTO}" 
-                        style="
-                            width: calc(100% + 19px); 
-                            height: 1200px; 
-                            position: absolute; 
-                            top: -75px; 
-                            left: 0px; 
-                            border: none;"
-                        allow="fullscreen"
-                    ></iframe>
-                </div>
-                 """
-                 st.markdown(html_kttv, unsafe_allow_html=True)
+                st.markdown(f'<div style="overflow:hidden;width:100%;height:95vh;position:relative;"><iframe src="{LINK_WIND_AUTO}" style="width:100%;height:1200px;position:absolute;top:-75px;border:none;"></iframe></div>', unsafe_allow_html=True)
             
-            elif obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
-                if btn_run_interpol:
-                    if data_file_interpol:
-                        try:
-                            df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
-                            
-                            data_type = 'rain' if obs_mode == "Nội suy lượng mưa" else 'temp'
-                            
-                            with st.spinner("Đang tính toán nội suy và tạo bản đồ..."):
-                                fig, err = run_interpolation_and_plot(df_in, title_interpol, data_type)
-                                if err: st.error(f"❌ {err}")
-                                else: st.session_state['interpol_fig'] = fig
-                        except Exception as e: st.error(f"❌ Lỗi: {e}")
-                    else: st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
-
+            # 4 & 5. NỘI SUY NHIỆT ĐỘ / MƯA
+            elif "Nội suy" in obs_mode:
+                if btn_run_interpol and data_file_interpol:
+                    try:
+                        df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
+                        dtype = 'rain' if "Lượng mưa" in obs_mode else 'temp'
+                        with st.spinner("Đang tính toán..."):
+                            fig, err = run_interpolation_and_plot(df_in, title_interpol, dtype)
+                            if err: st.error(f"❌ {err}")
+                            else: st.session_state['interpol_fig'] = fig
+                    except Exception as e: st.error(f"❌ Lỗi file: {e}")
+                
                 if st.session_state['interpol_fig']:
                     st.pyplot(st.session_state['interpol_fig'], use_container_width=True)
-                    st.markdown("### 📥 Tải xuống")
-                    col_dl1, col_dl2 = st.columns([1, 3])
-                    with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"])
                     buf = io.BytesIO()
-                    st.session_state['interpol_fig'].savefig(buf, format=fmt, dpi=300, bbox_inches='tight')
+                    st.session_state['interpol_fig'].savefig(buf, format='png', dpi=300, bbox_inches='tight')
                     buf.seek(0)
-                    with col_dl2:
-                        st.write(""); st.write("")
-                        st.download_button(label=f"⬇️ Tải ảnh về ({fmt.upper()})", data=buf, file_name=f"ban_do.{fmt}", mime=f"image/{fmt}")
+                    st.download_button("⬇️ Tải ảnh (PNG)", buf, "bando.png", "image/png")
                 else:
-                    st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
+                    st.info("👈 Hãy chọn file số liệu từ menu bên trái và nhấn 'VẼ BẢN ĐỒ'")
 
+    # === DỰ BÁO KMA ===
     elif topic == "Dự báo điểm (KMA)":
-        # --- KIỂM TRA ĐĂNG NHẬP (Dùng chung session) ---
         if not st.session_state['logged_in']:
-            st.title("🔐 Đăng nhập Hệ thống")
-            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
-            
-            with st.form("login_form_common_kma"):
-                user_input = st.text_input("Tên đăng nhập")
-                pass_input = st.text_input("Mật khẩu", type="password")
-                submitted = st.form_submit_button("Đăng nhập")
-                
-                if submitted:
-                    if user_input == "admin" and pass_input == "kttv@2026":
-                        st.session_state['logged_in'] = True
-                        st.success("Đăng nhập thành công!")
-                        st.rerun()
-                    else:
-                        st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
+            st.warning("Vui lòng đăng nhập ở mục 'Dữ liệu quan trắc' trước.")
         else:
-            # === CẬP NHẬT TỰ ĐỘNG THỜI GIAN ===
-            realtime_kma_url = get_kma_url()
-            
-            html_kma = f"""
-            <div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;">
-                <iframe
-                    src="{realtime_kma_url}" 
-                    style="
-                        width: calc(100% + 19px); 
-                        height: 1200px; 
-                        position: absolute; 
-                        top: -130px; 
-                        left: 0px; 
-                        border: none;"
-                    allow="fullscreen"
-                ></iframe>
-            </div>
-            """
-            st.markdown(html_kma, unsafe_allow_html=True)
-            st.caption(f"Đang hiển thị dữ liệu từ nguồn KMA (Hàn Quốc). Link gốc: {realtime_kma_url}")
+            kma_url = get_kma_url()
+            st.markdown(f'<div style="overflow:hidden;width:100%;height:800px;position:relative;"><iframe src="{kma_url}" style="width:100%;height:1200px;position:absolute;top:-130px;border:none;"></iframe></div>', unsafe_allow_html=True)
 
+    # === BẢN ĐỒ BÃO ===
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
-        folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
-        folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
-        folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
+        folium.TileLayer('CartoDB positron', name='Nền sáng').add_to(m)
+        folium.TileLayer('OpenStreetMap', name='Chi tiết').add_to(m)
+        folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh').add_to(m)
         
         ts = get_rainviewer_ts()
-        if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
+        if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
 
-        fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
+        fg = folium.FeatureGroup(name="Bão")
         if not final_df.empty and show_widgets:
             if "Hiện trạng" in str(active_mode):
                 groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
@@ -667,57 +534,31 @@ def main():
                     dense = densify_track(sub)
                     f6, f10, fc = create_storm_swaths(dense)
                     for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#90EE90',0.6)]:
-                        if geom and not geom.is_empty:
-                           folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
-                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
-                    
-                    # --- VẼ ICON BÃO ---
+                        if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg)
+                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg)
                     for _, r in sub.iterrows():
-                        icon_key = get_icon_name(r)
-                        icon_path = ICON_PATHS.get(icon_key)
-                        icon_base64 = None
-                        if icon_path:
-                            icon_base64 = image_to_base64(icon_path)
-                        
-                        if icon_base64:
-                            if 'vungthap' in icon_key:
-                                i_size = (20, 20)
-                                i_anchor = (10, 10)
-                            else:
-                                i_size = (40, 40)
-                                i_anchor = (20, 20)
-                            
-                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=i_size, icon_anchor=i_anchor)
-                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
-            else: 
+                        ik = get_icon_name(r)
+                        ib64 = image_to_base64(ICON_PATHS.get(ik))
+                        if ib64:
+                            sz = (20,20) if 'vungthap' in ik else (40,40)
+                            folium.Marker([r['lat'], r['lon']], icon=folium.CustomIcon(ib64, icon_size=sz), tooltip=f"Gió: {r.get('wind_km/h',0)} km/h").add_to(fg)
+            else:
                 for n in final_df['name'].unique():
                     sub = final_df[final_df['name']==n].sort_values('dt')
-                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
+                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg)
                     for _, r in sub.iterrows():
-                        c = '#00f2ff' if r.get('wind_km/h',0)<64 else '#ff0055'
-                        folium.CircleMarker([r['lat'],r['lon']], radius=3, color=c, fill=True, popup=f"{n}").add_to(fg_storm)
+                        folium.CircleMarker([r['lat'],r['lon']], radius=3, color='#00f2ff' if r.get('wind_km/h',0)<64 else '#ff0055', fill=True, popup=n).add_to(fg)
         
-        fg_storm.add_to(m)
+        fg.add_to(m)
         folium.LayerControl(position='topleft', collapsed=False).add_to(m)
         
-        # --- HIỂN THỊ WIDGET TRONG CONTAINER CHUNG ---
         if show_widgets:
-            html_to_render = '<div class="floating-container">'
-            
-            # 1. Thêm Chú thích (Nếu có)
+            h = '<div class="floating-container">'
             if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
-                with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
-                html_to_render += create_legend(b64)
+                with open(CHUTHICH_IMG, "rb") as f: h += create_legend(base64.b64encode(f.read()).decode())
+            h += create_info_table(final_df if not final_df.empty else pd.DataFrame(), dashboard_title) + '</div>'
+            st.markdown(h, unsafe_allow_html=True)
             
-            # 2. Thêm Bảng thông tin
-            if not final_df.empty: 
-                html_to_render += create_info_table(final_df, dashboard_title)
-            else: 
-                html_to_render += create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU...")
-            
-            html_to_render += '</div>'
-            st.markdown(html_to_render, unsafe_allow_html=True)
-        
         st_folium(m, width=None, height=1000, use_container_width=True)
 
 if __name__ == "__main__":
