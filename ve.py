@@ -70,24 +70,53 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG
+# 2. CSS CHUNG (ĐÃ SỬA LỖI MENU TRẮNG)
 # ==============================================================================
 st.markdown("""
     <style>
-    .block-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
-    header, footer { display: none !important; }
+    /* 1. Cấu hình container chính tràn màn hình */
+    .block-container { 
+        padding: 0 !important; 
+        margin: 0 !important; 
+        max-width: 100% !important; 
+    }
     
-    div[data-testid="stToolbar"], div[data-testid="stDecoration"], div[data-testid="stStatusWidget"] {
-        visibility: hidden !important; display: none !important; height: 0px !important;
+    /* 2. Ẩn Header/Footer nhưng giữ layout an toàn */
+    header, footer { 
+        visibility: hidden !important;
+        height: 0px !important;
+    }
+    
+    /* Ẩn các thành phần trang trí thừa */
+    div[data-testid="stToolbar"], 
+    div[data-testid="stDecoration"], 
+    div[data-testid="stStatusWidget"] {
+        visibility: hidden !important; 
+        display: none !important;
     }
 
+    /* 3. CẤU HÌNH SIDEBAR (QUAN TRỌNG) */
     section[data-testid="stSidebar"] {
-        width: 320px !important; min-width: 320px !important; max-width: 320px !important;
+        width: 320px !important;
+        min-width: 320px !important;
+        background-color: #f8f9fa !important; /* Màu nền xám nhẹ */
+        z-index: 999999 !important; /* Luôn nổi lên trên bản đồ */
+        position: fixed !important; /* Cố định vị trí */
+        left: 0 !important;
+        top: 0 !important;
+        height: 100vh !important;
+        box-shadow: 2px 0 5px rgba(0,0,0,0.1); /* Tạo bóng đổ nhẹ ngăn cách */
     }
 
-    /* CSS cho Iframe tràn màn hình */
-    iframe { width: 100% !important; height: 100vh !important; border: none !important; display: block !important; }
+    /* 4. CSS cho Iframe tràn màn hình (Maps) */
+    iframe { 
+        width: 100% !important; 
+        height: 100vh !important; 
+        border: none !important; 
+        display: block !important; 
+    }
 
+    /* 5. CSS cho Widget nổi (Chú thích, Bảng tin) */
     .floating-container {
         position: fixed; top: 20px; right: 60px; z-index: 9999;
         display: flex; flex-direction: column; align-items: center;     
@@ -97,11 +126,12 @@ st.markdown("""
         width: fit-content; background: rgba(255, 255, 255, 0.9);
         border: 1px solid #ccc; border-radius: 6px;
         padding: 10px !important; color: #000; text-align: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
     .info-box table { width: 100%; margin: 0 auto; border-collapse: collapse; }
-    .info-box th, .info-box td { text-align: center !important; padding: 4px 8px; }
-    .info-title { font-weight: bold; margin-bottom: 2px; }
-    .info-subtitle { font-size: 0.9em; margin-bottom: 8px; font-style: italic; }
+    .info-box th, .info-box td { text-align: center !important; padding: 4px 8px; font-size: 14px; }
+    .info-title { font-weight: bold; margin-bottom: 2px; font-size: 16px; color: #d63031; }
+    .info-subtitle { font-size: 0.9em; margin-bottom: 8px; font-style: italic; color: #636e72; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -563,3 +593,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
