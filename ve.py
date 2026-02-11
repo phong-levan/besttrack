@@ -68,73 +68,74 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
 # ==============================================================================
-# 2. CSS CHUNG (ĐÃ SỬA LỖI MENU TRẮNG)
+# 2. CSS CHUNG (FIX LỖI MẤT NÚT MENU)
 # ==============================================================================
 st.markdown("""
     <style>
-    /* 1. Cấu hình container chính tràn màn hình */
+    /* 1. Đẩy nội dung lên sát mép trên */
     .block-container { 
-        padding: 0 !important; 
-        margin: 0 !important; 
-        max-width: 100% !important; 
+        padding-top: 0rem !important; 
+        padding-bottom: 0rem !important;
+        padding-left: 0rem !important;
+        padding-right: 0rem !important;
+        max-width: 100% !important;
     }
     
-    /* 2. Ẩn Header/Footer nhưng giữ layout an toàn */
-    header, footer { 
-        visibility: hidden !important;
-        height: 0px !important;
+    /* 2. Xử lý Header: KHÔNG ẨN, chỉ làm trong suốt để thấy nút Menu */
+    header { 
+        background-color: rgba(0,0,0,0) !important; /* Nền trong suốt */
+        visibility: visible !important; /* Hiện lại header để bấm nút menu */
+        z-index: 1000000 !important; /* Nổi lên trên cùng */
     }
     
-    /* Ẩn các thành phần trang trí thừa */
-    div[data-testid="stToolbar"], 
-    div[data-testid="stDecoration"], 
-    div[data-testid="stStatusWidget"] {
-        visibility: hidden !important; 
-        display: none !important;
-    }
+    /* Ẩn dải màu trang trí của Streamlit */
+    div[data-testid="stDecoration"] { display: none; }
 
-    /* 3. CẤU HÌNH SIDEBAR (QUAN TRỌNG) */
+    /* 3. CẤU HÌNH SIDEBAR (MENU) */
     section[data-testid="stSidebar"] {
         width: 320px !important;
-        min-width: 320px !important;
-        background-color: #f8f9fa !important; /* Màu nền xám nhẹ */
-        z-index: 999999 !important; /* Luôn nổi lên trên bản đồ */
-        position: fixed !important; /* Cố định vị trí */
-        left: 0 !important;
-        top: 0 !important;
-        height: 100vh !important;
-        box-shadow: 2px 0 5px rgba(0,0,0,0.1); /* Tạo bóng đổ nhẹ ngăn cách */
+        background-color: #ffffff !important; /* Nền màu trắng đục 100% */
+        box-shadow: 2px 0 5px rgba(0,0,0,0.2); /* Đổ bóng để tách biệt */
+        border-right: 1px solid #ddd;
+    }
+    
+    /* Chỉnh màu chữ trong sidebar cho dễ đọc */
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3, 
+    section[data-testid="stSidebar"] span, 
+    section[data-testid="stSidebar"] label, 
+    section[data-testid="stSidebar"] div {
+        color: #333333 !important;
     }
 
-    /* 4. CSS cho Iframe tràn màn hình (Maps) */
+    /* 4. Iframe Bản đồ Full màn hình */
     iframe { 
-        width: 100% !important; 
-        height: 100vh !important; 
-        border: none !important; 
-        display: block !important; 
+        width: 100vw !important; /* Chiều rộng 100% khung nhìn */
+        height: 100vh !important; /* Chiều cao 100% khung nhìn */
+        display: block !important;
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        z-index: 0;
     }
 
-    /* 5. CSS cho Widget nổi (Chú thích, Bảng tin) */
+    /* 5. CSS cho các Widget nổi (Chú thích, Bảng tin) */
     .floating-container {
-        position: fixed; top: 20px; right: 60px; z-index: 9999;
-        display: flex; flex-direction: column; align-items: center;     
+        position: fixed; top: 60px; right: 20px; z-index: 9999;
+        display: flex; flex-direction: column; align-items: flex-end;     
     }
-    .legend-box { width: 340px; pointer-events: none; margin-bottom: 5px; }
+    .legend-box { width: 300px; pointer-events: none; margin-bottom: 5px; }
     .info-box {
-        width: fit-content; background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #ccc; border-radius: 6px;
+        width: fit-content; background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #ccc; border-radius: 8px;
         padding: 10px !important; color: #000; text-align: center;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
-    .info-box table { width: 100%; margin: 0 auto; border-collapse: collapse; }
-    .info-box th, .info-box td { text-align: center !important; padding: 4px 8px; font-size: 14px; }
-    .info-title { font-weight: bold; margin-bottom: 2px; font-size: 16px; color: #d63031; }
-    .info-subtitle { font-size: 0.9em; margin-bottom: 8px; font-style: italic; color: #636e72; }
+    .info-box table { font-size: 13px; }
     </style>
 """, unsafe_allow_html=True)
-
 # ==============================================================================
 # 3. HÀM XỬ LÝ LOGIC (GIỮ NGUYÊN)
 # ==============================================================================
@@ -593,4 +594,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
