@@ -153,7 +153,7 @@ st.markdown(f"""
     .info-box th, .info-box td {{ 
         text-align: center !important; 
         padding: 2px 5px !important; /* Giảm padding ô */
-        font-size: 11px !important; /* Cỡ chữ bảng nhỏ lại */
+        font-size: 12px !important; /* Cỡ chữ bảng nhỏ lại */
     }}
     
     .info-title {{ 
@@ -747,4 +747,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
