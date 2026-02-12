@@ -713,7 +713,7 @@ def main():
                                 i_anchor = (20, 20)
                             
                             icon = folium.CustomIcon(icon_image=icon_base64, icon_size=i_size, icon_anchor=i_anchor)
-                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Gió: {r.get('wind_km/h', 0)} km/h").add_to(fg_storm)
+                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Vmax {int(r.get('wind_km/h', 0))} km/h").add_to(fg_storm)
             else: 
                 for n in final_df['name'].unique():
                     sub = final_df[final_df['name']==n].sort_values('dt')
@@ -747,5 +747,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
