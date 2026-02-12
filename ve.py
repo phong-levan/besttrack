@@ -90,7 +90,7 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. CSS CHUNG
+# 2. CSS CHUNG (ĐÃ SỬA LẠI CỠ CHỮ)
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -140,16 +140,34 @@ st.markdown(f"""
 
     .legend-box {{ width: 340px; pointer-events: none; margin-bottom: 5px; }}
     
+    /* --- PHẦN CHỈNH SỬA CỠ CHỮ INFO BOX --- */
     .info-box {{
         width: fit-content; background: rgba(255, 255, 255, 0.9);
         border: 1px solid #ccc; border-radius: 6px;
-        padding: 10px !important; color: #000; text-align: center;
+        padding: 5px !important; /* Giảm padding tổng */
+        color: #000; text-align: center;
     }}
     
     .info-box table {{ width: 100%; margin: 0 auto; border-collapse: collapse; }}
-    .info-box th, .info-box td {{ text-align: center !important; padding: 4px 8px; }}
-    .info-title {{ font-weight: bold; margin-bottom: 2px; }}
-    .info-subtitle {{ font-size: 0.9em; margin-bottom: 8px; font-style: italic; }}
+    
+    .info-box th, .info-box td {{ 
+        text-align: center !important; 
+        padding: 2px 5px !important; /* Giảm padding ô */
+        font-size: 11px !important; /* Cỡ chữ bảng nhỏ lại */
+    }}
+    
+    .info-title {{ 
+        font-weight: bold; 
+        margin-bottom: 2px; 
+        font-size: 14px !important; /* Tiêu đề nhỏ lại */
+    }}
+    
+    .info-subtitle {{ 
+        font-size: 10px !important; /* Phụ đề nhỏ lại */
+        margin-bottom: 5px; 
+        font-style: italic; 
+    }}
+    /* -------------------------------------- */
     </style>
 """, unsafe_allow_html=True)
 
@@ -729,4 +747,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
