@@ -480,9 +480,16 @@ def main():
 
         if topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
+            
+            # --- CẬP NHẬT: CHO PHÉP NGƯỜI DÙNG TỰ NHẬP TIÊU ĐỀ ---
+            # Tiêu đề mặc định dựa trên chế độ chọn, nhưng người dùng có thể sửa
+            default_title = "TIN BÃO KHẨN CẤP" if "Hiện trạng" in storm_opt else "THỐNG KÊ LỊCH SỬ"
+            dashboard_title = st.text_input("Tiêu đề bảng thông tin:", value=default_title)
+            # -----------------------------------------------------
+
             active_mode = storm_opt
             if "Hiện trạng" in storm_opt:
-                dashboard_title = "TIN BÃO KHẨN CẤP"
+                # dashboard_title = "TIN BÃO KHẨN CẤP" # Đã bỏ dòng này để lấy từ input
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
                     # Hỗ trợ cả csv và xlsx
@@ -503,7 +510,7 @@ def main():
                     else:
                         st.info("Vui lòng upload file dữ liệu để xem thông tin bão.")
             else:
-                dashboard_title = "THỐNG KÊ LỊCH SỬ"
+                # dashboard_title = "THỐNG KÊ LỊCH SỬ" # Đã bỏ dòng này để lấy từ input
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
                     show_widgets = True
                     f = st.file_uploader("Upload besttrack_capgio.xlsx", type="xlsx", key="o2")
@@ -722,4 +729,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
