@@ -80,7 +80,7 @@ COLOR_SIDEBAR = "#f8f9fa"
 COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
-SIDEBAR_WIDTH = "320px"
+SIDEBAR_WIDTH = "300px"
 
 # Cấu hình trang
 st.set_page_config(
@@ -138,7 +138,7 @@ st.markdown(f"""
         display: flex; flex-direction: column; align-items: center;    
     }}
 
-    .legend-box {{ width: 340px; pointer-events: none; margin-bottom: 5px; }}
+    .legend-box {{ width: 300px; pointer-events: none; margin-bottom: 5px; }}
     
     /* --- PHẦN CHỈNH SỬA CỠ CHỮ INFO BOX --- */
     .info-box {{
@@ -747,3 +747,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
