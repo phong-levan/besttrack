@@ -428,8 +428,19 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: 
         mask_shape.to_crs(epsg=4326, inplace=True)
         
-    if selected_provinces and shape_col:
-        display_shape = mask_shape[mask_shape[shape_col].isin(selected_provinces)]
+    # Đảm bảo luôn lấy được cột đúng để filter
+    found_col = shape_col
+    if selected_provinces:
+        for col in ['TEN_TINH', 'NAME_1', 'Name', 'PROVINCE', 'Tỉnh', 'Tinh']:
+            if col in mask_shape.columns:
+                found_col = col
+                break
+                
+        if found_col:
+            display_shape = mask_shape[mask_shape[found_col].isin(selected_provinces)]
+            shape_col = found_col # cập nhật để hiển thị tooltip đúng
+        else:
+            display_shape = mask_shape
     else:
         display_shape = mask_shape
 
@@ -640,21 +651,28 @@ def main():
                             st.error("Lỗi định dạng. Vui lòng nhập số cách nhau bằng dấu phẩy.")
                     
                     st.markdown("**2. Ranh giới Tỉnh**")
-                    province_list = []
-                    shape_col = None
+                    
+                    # Danh sách dự phòng để hộp chọn LUÔN LUÔN hiện lên kể cả khi chưa đọc được file
+                    fallback_provinces = [
+                        "An Giang", "Bà Rịa - Vũng Tàu", "Bắc Giang", "Bắc Kạn", "Bạc Liêu", "Bắc Ninh", "Bến Tre", "Bình Định", "Bình Dương", "Bình Phước", "Bình Thuận", "Cà Mau", "Cần Thơ", "Cao Bằng", "Đà Nẵng", "Đắk Lắk", "Đắk Nông", "Điện Biên", "Đồng Nai", "Đồng Tháp", "Gia Lai", "Hà Giang", "Hà Nam", "Hà Nội", "Hà Tĩnh", "Hải Dương", "Hải Phòng", "Hậu Giang", "Hòa Bình", "Hưng Yên", "Khánh Hòa", "Kiên Giang", "Kon Tum", "Lai Châu", "Lâm Đồng", "Lạng Sơn", "Lào Cai", "Long An", "Nam Định", "Nghệ An", "Ninh Bình", "Ninh Thuận", "Phú Thọ", "Phú Yên", "Quảng Bình", "Quảng Nam", "Quảng Ngãi", "Quảng Ninh", "Quảng Trị", "Sóc Trăng", "Sơn La", "Tây Ninh", "Thái Bình", "Thái Nguyên", "Thanh Hóa", "Thừa Thiên Huế", "Tiền Giang", "TP Hồ Chí Minh", "Trà Vinh", "Tuyên Quang", "Vĩnh Long", "Vĩnh Phúc", "Yên Bái"
+                    ]
+                    province_list = fallback_provinces
+                    shape_col = "NAME_1"
+                    
                     if os.path.exists(SHP_MASK_PATH):
                         try:
                             tmp_shp = gpd.read_file(SHP_MASK_PATH)
                             for col in ['TEN_TINH', 'NAME_1', 'Name', 'PROVINCE', 'Tỉnh', 'Tinh']:
                                 if col in tmp_shp.columns:
                                     shape_col = col
-                                    province_list = sorted(tmp_shp[col].dropna().unique().tolist())
+                                    extracted = sorted(tmp_shp[col].dropna().unique().tolist())
+                                    if extracted:
+                                        province_list = extracted
                                     break
                         except: pass
                     
-                    selected_provinces = []
-                    if province_list:
-                        selected_provinces = st.multiselect("Tách chọn Tỉnh (Để trống = Toàn bộ):", province_list)
+                    # Hộp chọn multiselect - cho phép click chọn 1 hoặc nhiều tỉnh
+                    selected_provinces = st.multiselect("Tách chọn Tỉnh (Để trống = Toàn bộ):", province_list)
                     
                     st.markdown("**3. Cắt cúp hiển thị & tải (Kinh Vĩ độ)**")
                     use_custom_bounds = st.checkbox("✂️ Bật giới hạn tải/hiển thị ô lưới", value=False)
