@@ -498,11 +498,11 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     
     folium.GeoJson(
         outside_polygon,
-        name="Che mờ ngoài lãnh thổ",
+        name="Che mờ ngoài khu vực chọn",
         style_function=lambda x: {
             'fillColor': '#ffffff',  
             'color': 'none',         
-            'fillOpacity': 0.7       
+            'fillOpacity': 0.75       
         },
         interactive=False 
     ).add_to(m)
