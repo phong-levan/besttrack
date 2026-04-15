@@ -27,6 +27,13 @@ import branca.colormap as cm
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
+# 0. CẤU HÌNH FONT TIẾNG VIỆT (TRÁNH LỖI Ô VUÔNG KHI XUẤT ẢNH)
+# ==============================================================================
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans', 'Liberation Sans', 'Tahoma']
+plt.rcParams['axes.unicode_minus'] = False
+
+# ==============================================================================
 # 1. CẤU HÌNH & DỮ LIỆU
 # ==============================================================================
 ICON_DIR = "icon"
@@ -361,7 +368,7 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     
     if os.path.exists(SHP_MASK_PATH):
         try:
-            mask_shape = gpd.read_file(SHP_MASK_PATH)
+            mask_shape = gpd.read_file(SHP_MASK_PATH, encoding='utf-8')
             if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: mask_shape.to_crs(epsg=4326, inplace=True)
         except Exception as e: return None, f"Lỗi đọc Mask Shapefile: {e}"
     else:
@@ -370,7 +377,7 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
 
     if os.path.exists(SHP_DISP_PATH):
         try:
-            disp_shape = gpd.read_file(SHP_DISP_PATH)
+            disp_shape = gpd.read_file(SHP_DISP_PATH, encoding='utf-8')
             if disp_shape.crs and disp_shape.crs.to_epsg() != 4326: disp_shape.to_crs(epsg=4326, inplace=True)
         except Exception as e: return None, f"Lỗi đọc Display Shapefile: {e}"
     else:
@@ -425,7 +432,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         return None, None, "Không tìm thấy file Shapefile ranh giới."
     
     try:
-        mask_shape = gpd.read_file(SHP_MASK_PATH)
+        mask_shape = gpd.read_file(SHP_MASK_PATH, encoding='utf-8')
         if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: 
             mask_shape.to_crs(epsg=4326, inplace=True)
     except Exception as e:
@@ -548,7 +555,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         interactive=False
     ).add_to(m)
 
-    # Đường viền tỉnh - Hỗ trợ Click/Hover
+    # Đường viền tỉnh - Hỗ trợ Click/Hover (Chỉnh lại Tooltip dễ nhìn)
     tooltip_fields = [shape_col] if shape_col and shape_col in display_shape.columns else []
     tooltip_aliases = ['Tên Tỉnh/Thành: '] if tooltip_fields else []
     
@@ -557,7 +564,11 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         name="Ranh giới hành chính",
         style_function=lambda x: {'fillColor': 'transparent', 'color': '#333333', 'weight': 1.0},
         highlight_function=lambda x: {'weight': 2, 'color': 'red', 'fillColor': '#ffff00', 'fillOpacity': 0.2},
-        tooltip=folium.GeoJsonTooltip(fields=tooltip_fields, aliases=tooltip_aliases) if tooltip_fields else None
+        tooltip=folium.GeoJsonTooltip(
+            fields=tooltip_fields, 
+            aliases=tooltip_aliases,
+            style="font-family: Arial; font-size: 14px; font-weight: bold; background-color: white;"
+        ) if tooltip_fields else None
     ).add_to(m)
 
     # Chú giải màu
@@ -683,7 +694,7 @@ def main():
                     # Cố gắng quét file Shapefile để lấy đúng danh sách và tên cột
                     if os.path.exists(SHP_MASK_PATH):
                         try:
-                            tmp_shp = gpd.read_file(SHP_MASK_PATH)
+                            tmp_shp = gpd.read_file(SHP_MASK_PATH, encoding='utf-8')
                             found = False
                             for col in ['TEN_TINH', 'NAME_1', 'Name', 'PROVINCE', 'Tỉnh', 'Tinh', 'TENTINH', 'Ten_Tinh', 'ten_tinh', 'NAME', 'tinh']:
                                 for shp_col in tmp_shp.columns:
