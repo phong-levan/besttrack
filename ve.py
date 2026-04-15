@@ -13,7 +13,6 @@ import warnings
 import textwrap
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-import matplotlib.lines as mlines
 from matplotlib.colors import LinearSegmentedColormap, Normalize, BoundaryNorm
 import geopandas as gpd
 from shapely.geometry import Point, box, Polygon, mapping
@@ -28,21 +27,16 @@ import branca.colormap as cm
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# 0. CẤU HÌNH FONT CHO VIỆT NAM (SỬA LỖI FONT TRÊN BIỂU ĐỒ TĨNH)
-# ==============================================================================
-plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Liberation Sans', 'Tahoma']
-plt.rcParams['axes.unicode_minus'] = False
-
-# ==============================================================================
 # 1. CẤU HÌNH & DỮ LIỆU
 # ==============================================================================
 ICON_DIR = "icon"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
+# --- CẤU HÌNH ĐƯỜNG DẪN SHAPEFILE CỐ ĐỊNH ---
 SHP_MASK_PATH = os.path.join("shp", "vn34tinh.shp")
 SHP_DISP_PATH = os.path.join("shp", "vungmoi.shp")
 
+# --- ĐỊNH NGHĨA ICON PATHS ---
 ICON_PATHS = {
     "vungthap_daqua": os.path.join(ICON_DIR, 'vungthapdaqua.png'),
     "atnd_daqua": os.path.join(ICON_DIR, 'atnddaqua.PNG'),
@@ -54,42 +48,119 @@ ICON_PATHS = {
     "sieubao_dubao": os.path.join(ICON_DIR, 'sieubao.PNG')
 }
 
+# --- DANH SÁCH LINK WEB ---
 LINK_WEATHEROBS = "https://weatherobs.com/"
 LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
 
+# --- HÀM TẠO LINK KMA DYNAMIC ---
 def get_kma_url():
     now_utc = datetime.utcnow()
     check_time = now_utc - timedelta(hours=5)
     run_hour = 0 if check_time.hour < 12 else 12
     date_str = check_time.strftime("%Y.%m.%d")
     tm_str = f"{date_str}.{run_hour:02d}"
-    return f"https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm={tm_str}&delta=000&ftm={tm_str}"
+    url = f"https://www.kma.go.kr/ema/nema03_kim/rall/detail.jsp?opt1=epsgram&opt2=VietNam&opt3=136&tm={tm_str}&delta=000&ftm={tm_str}"
+    return url
 
+# Màu sắc
+COLOR_BG = "#ffffff"
 COLOR_SIDEBAR = "#f8f9fa"
+COLOR_TEXT = "#333333"
+COLOR_ACCENT = "#007bff"
+COLOR_BORDER = "#dee2e6"
 SIDEBAR_WIDTH = "300px"
 
-st.set_page_config(page_title="Hệ thống giám sát", layout="wide", initial_sidebar_state="expanded")
+# Cấu hình trang
+st.set_page_config(
+    page_title="Hệ thống giám sát",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- CSS CHUNG ---
+# ==============================================================================
+# 2. CSS CHUNG
+# ==============================================================================
 st.markdown(f"""
     <style>
-    .block-container {{ padding: 0 !important; margin: 0 !important; max-width: 100% !important; }}
+    .block-container {{
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
+    }}
     header, footer {{ display: none !important; }}
-    div[data-testid="stToolbar"], div[data-testid="stDecoration"], div[data-testid="stStatusWidget"] {{
-        visibility: hidden !important; display: none !important; height: 0px !important;
+    
+    div[data-testid="stToolbar"], 
+    div[data-testid="stDecoration"], 
+    div[data-testid="stStatusWidget"] {{
+        visibility: hidden !important;
+        display: none !important;
+        height: 0px !important;
     }}
+
     section[data-testid="stSidebar"] {{
-        width: {SIDEBAR_WIDTH} !important; min-width: {SIDEBAR_WIDTH} !important;
-        background-color: {COLOR_SIDEBAR} !important; border-right: 1px solid #ddd;
+        display: block !important;
+        visibility: visible !important;
+        width: {SIDEBAR_WIDTH} !important;
+        min-width: {SIDEBAR_WIDTH} !important;
+        max-width: {SIDEBAR_WIDTH} !important;
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        height: 100vh !important;
+        transform: none !important;
+        z-index: 100000 !important;
+        background-color: {COLOR_SIDEBAR} !important;
+        border-right: 1px solid #ddd;
     }}
-    [data-testid="stAppViewContainer"] {{ padding-left: {SIDEBAR_WIDTH} !important; }}
-    iframe {{ width: 100% !important; height: 100vh !important; border: none !important; }}
-    .floating-container {{ position: fixed; top: 20px; right: 60px; z-index: 9999; display: flex; flex-direction: column; align-items: center; }}
-    .info-box {{ background: rgba(255, 255, 255, 0.9); border: 1px solid #ccc; border-radius: 6px; padding: 5px; color: #000; text-align: center; }}
+
+    [data-testid="stSidebarCollapseBtn"],
+    [data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
+
+    [data-testid="stAppViewContainer"] {{ padding-left: {SIDEBAR_WIDTH} !important; padding-top: 0 !important; }}
+    [data-testid="stMainViewContainer"] {{ margin-left: 0 !important; width: 100% !important; padding-top: 0 !important; }}
+
+    iframe {{ width: 100% !important; height: 100vh !important; border: none !important; display: block !important; }}
+
+    .floating-container {{
+        position: fixed; top: 20px; right: 60px; z-index: 9999;
+        display: flex; flex-direction: column; align-items: center;    
+    }}
+
+    .legend-box {{ width: 300px; pointer-events: none; margin-bottom: 5px; }}
+    
+    .info-box {{
+        width: fit-content; background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #ccc; border-radius: 6px;
+        padding: 5px !important;
+        color: #000; text-align: center;
+    }}
+    
+    .info-box table {{ width: 100%; margin: 0 auto; border-collapse: collapse; }}
+    
+    .info-box th, .info-box td {{ 
+        text-align: center !important; 
+        padding: 2px 5px !important; 
+        font-size: 12px !important; 
+    }}
+    
+    .info-title {{ 
+        font-weight: bold; 
+        margin-bottom: 2px; 
+        font-size: 14px !important; 
+    }}
+    
+    .info-subtitle {{ 
+        font-size: 10px !important; 
+        margin-bottom: 5px; 
+        font-style: italic; 
+    }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- CÁC HÀM XỬ LÝ DỮ LIỆU CŨ (GIỮ NGUYÊN) ---
+# ==============================================================================
+# 3. HÀM XỬ LÝ LOGIC
+# ==============================================================================
+
 @st.cache_data(ttl=300) 
 def get_rainviewer_ts():
     try:
@@ -116,14 +187,8 @@ def normalize_columns(df):
         "bán kính gió mạnh cấp 10 (km)": "r10", "bán kính tâm (km)": "rc",
         "khí áp": "pressure", "khí áp (mb)": "pressure", "pmin": "pressure", "pmin (mb)": "pressure"
     }
-    return df.rename(columns={k:v for k,v in rename.items() if k in df.columns})
-
-def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0):
-    tree = cKDTree(np.column_stack([xi, yi]))
-    dists, idxs = tree.query(query_xy, k=min(k, xi.size))
-    if dists.ndim == 1: dists, idxs = dists[:, None], idxs[:, None]
-    w = 1.0 / np.maximum(dists, 1e-12)**power
-    return (w * zi[idxs]).sum(axis=1) / w.sum(axis=1)
+    df = df.rename(columns={k:v for k,v in rename.items() if k in df.columns})
+    return df
 
 def densify_track(df, step_km=10):
     new_rows = []
@@ -216,138 +281,336 @@ def create_info_table(df, title):
     
     return textwrap.dedent(f"""<div class="info-box"><div class="info-title">{title}</div><div class="info-subtitle">{subtitle}</div><table><thead><tr><th>Ngày-Giờ</th><th>Kinh độ</th><th>Vĩ độ</th><th>Cấp gió</th><th>Pmin (hPa)</th></tr></thead><tbody>{rows}</tbody></table></div>""")
 
-def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
-    # Hàm tĩnh cũ (Giữ nguyên)
-    return None, None
-
-# ==============================================================================
-# HÀM NỘI SUY LINH TINH (TÍCH HỢP OSM NỀN VÀ CẮT CHUẨN LÃNH THỔ VN)
-# ==============================================================================
-def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
-    input_df.columns = input_df.columns.str.lower().str.strip()
-    valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
-    if valid.empty: return None, None, "Dữ liệu trống."
-
-    # 1. Nạp ranh giới và tự động tải GeoJSON VN chuẩn nếu không có file local
-    path_to_use = SHP_DISP_PATH if os.path.exists(SHP_DISP_PATH) else SHP_MASK_PATH
-    try:
-        if os.path.exists(path_to_use):
-            mask_shape = gpd.read_file(path_to_use)
-        else:
-            st.toast("Đang tự động tải dữ liệu ranh giới Việt Nam chuẩn...")
-            url_vn = "https://raw.githubusercontent.com/TungTh/tungth.github.io/master/data/vn-provinces.json"
-            mask_shape = gpd.read_file(url_vn)
-            shape_col = "Name" # Tên cột của file GeoJSON tải về
+# === LOGIC NỘI SUY ===
+def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
+    tree = cKDTree(np.column_stack([xi, yi]))
+    dists, idxs = tree.query(query_xy, k=min(k, xi.size))
+    if dists.ndim == 1: dists, idxs = dists[:, None], idxs[:, None]
+    
+    exact = dists <= eps
+    out = np.empty(dists.shape[0], dtype=float)
+    if np.any(exact):
+        for r in np.where(exact.any(axis=1))[0]:
+            out[r] = zi[idxs[r, np.where(exact[r])[0][0]]]
             
+    rest = ~exact.any(axis=1)
+    if np.any(rest):
+        d, nn = dists[rest], idxs[rest]
+        w = 1.0 / np.maximum(d, eps)**power
+        out[rest] = (w * zi[nn]).sum(axis=1) / w.sum(axis=1)
+    return out
+
+def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
+    minx, maxx = 101.8, 115.0
+    miny, maxy = 8.0, 23.9
+    GRID_N = 1000 
+    SIGMA = 1.5
+    IDW_POWER = 3.0
+    KNN = 12
+
+    if data_type == 'rain':
+        vmin, vmax = 0, 1400
+        levels_for_ticks = np.arange(0, 1450, 100)
+        colors = ['#FFFFFF', '#A0E6FF', '#00FF00', '#FFFF00', '#FFA500', '#FF0000', '#800080', '#4B0082']
+        cmap = LinearSegmentedColormap.from_list('rain_smooth', colors, N=512)
+        cmap.set_under(colors[0])
+        cmap.set_over(colors[-1])
+        unit_label = "Lượng mưa (mm)"
+    else: 
+        vmin, vmax = 0.0, 40.0
+        levels_for_ticks = list(range(0, 42, 4))
+        colors = [(0.0, '#FFFFFF'), (0.1, '#D0F0FF'), (0.2, '#00A0FF'), (0.4, '#00FF00'),
+                 (0.6, '#FFFF00'), (0.75, '#FFA500'), (0.9, '#FF0000'), (1.0, '#8B0000')]
+        cmap = LinearSegmentedColormap.from_list("custom_smooth_temp", colors, N=256)
+        unit_label = "Nhiệt độ (°C)"
+
+    norm = Normalize(vmin=vmin, vmax=vmax)
+
+    input_df.columns = input_df.columns.str.lower().str.strip()
+    cols_check = ['lon', 'lat', 'value']
+    if not all(c in input_df.columns for c in cols_check):
+        return None, f"File thiếu cột bắt buộc: {cols_check}"
+
+    valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
+    if valid.empty:
+        return None, "Dữ liệu trống sau khi lọc bỏ NaN."
+
+    x_pts = valid['lon'].to_numpy()
+    y_pts = valid['lat'].to_numpy()
+    z_pts = valid['value'].to_numpy()
+
+    edge_points = pd.DataFrame({
+        'lon': [minx, minx, maxx, maxx, (minx + maxx)/2],
+        'lat': [miny, maxy, miny, maxy, (miny + maxy)/2],
+        'value': [float(np.nanmean(z_pts))] * 5
+    })
+    
+    aug = pd.concat([valid[['lon', 'lat', 'value']], edge_points], ignore_index=True)
+    xi = aug['lon'].to_numpy()
+    yi = aug['lat'].to_numpy()
+    zi = aug['value'].to_numpy()
+
+    gx, gy = np.meshgrid(np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N))
+    grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
+
+    gv = idw_knn(xi, yi, zi, grid_xy, k=KNN, power=IDW_POWER).reshape(gx.shape)
+    if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
+
+    mask_shape = None
+    disp_shape = None
+    
+    if os.path.exists(SHP_MASK_PATH):
+        try:
+            mask_shape = gpd.read_file(SHP_MASK_PATH)
+            if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: mask_shape.to_crs(epsg=4326, inplace=True)
+        except Exception as e: return None, f"Lỗi đọc Mask Shapefile: {e}"
+    else:
+        bbox_poly = box(minx, miny, maxx, maxy)
+        mask_shape = gpd.GeoDataFrame({'geometry': [bbox_poly]}, crs='EPSG:4326')
+
+    if os.path.exists(SHP_DISP_PATH):
+        try:
+            disp_shape = gpd.read_file(SHP_DISP_PATH)
+            if disp_shape.crs and disp_shape.crs.to_epsg() != 4326: disp_shape.to_crs(epsg=4326, inplace=True)
+        except Exception as e: return None, f"Lỗi đọc Display Shapefile: {e}"
+    else:
+        disp_shape = mask_shape
+
+    if mask_shape is not None:
+        shape_union = mask_shape.unary_union
+        prep_shape = prep(shape_union)
+        mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
+        gv_masked = np.where(mask_flat, gv, np.nan)
+    else:
+        gv_masked = gv
+
+    fig, ax = plt.subplots(figsize=(14, 10)) 
+    ax.set_title(title_text if title_text else f'Bản đồ {unit_label}', fontsize=16)
+
+    if disp_shape is not None:
+        disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
+
+    im = ax.imshow(
+        gv_masked,
+        extent=[minx, maxx, miny, maxy],
+        cmap=cmap,
+        norm=norm,
+        interpolation='bilinear',
+        origin='lower'
+    )
+
+    cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.7, pad=0.02, extend='both')
+    cbar.set_label(unit_label, fontsize=12)
+    cbar.set_ticks(levels_for_ticks)
+    cbar.set_ticklabels([str(l) for l in levels_for_ticks])
+
+    ax.set_xlim(minx, maxx)
+    ax.set_ylim(miny, maxy)
+    ax.ticklabel_format(useOffset=False, style='plain')
+    
+    return fig, None
+
+def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
+    # 1. Chuẩn hóa dữ liệu đầu vào
+    input_df.columns = input_df.columns.str.lower().str.strip()
+    cols_check = ['lon', 'lat', 'value']
+    if not all(c in input_df.columns for c in cols_check):
+        return None, None, f"File thiếu cột bắt buộc: {cols_check}"
+
+    valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
+    if valid.empty: return None, None, "Dữ liệu trống sau khi lọc bỏ NaN."
+
+    # 2. Đọc và lọc ranh giới hành chính
+    if not os.path.exists(SHP_MASK_PATH):
+        return None, None, "Không tìm thấy file Shapefile ranh giới."
+    
+    try:
+        mask_shape = gpd.read_file(SHP_MASK_PATH)
         if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: 
             mask_shape.to_crs(epsg=4326, inplace=True)
     except Exception as e:
-        return None, None, f"Lỗi ranh giới: {e}"
+        return None, None, f"Lỗi đọc file Shapefile: {e}"
 
-    # 2. Lọc ranh giới theo tỉnh đã chọn
-    actual_col = shape_col
+    # Nhận diện cột THÔNG MINH (Auto-detect column)
+    actual_col = None
+    if shape_col in mask_shape.columns:
+        actual_col = shape_col
+    else:
+        # Quét ưu tiên các tên cột hay gặp
+        common_cols = ['TEN_TINH', 'NAME_1', 'Name', 'PROVINCE', 'Tỉnh', 'Tinh', 'TENTINH', 'Ten_Tinh', 'ten_tinh', 'NAME', 'tinh']
+        for col in common_cols:
+            for shp_col in mask_shape.columns:
+                if col.lower() == shp_col.lower():
+                    actual_col = shp_col
+                    break
+            if actual_col: break
+            
+        # Nếu vẫn không thấy, tự quét dữ liệu bên trong để đối chiếu với danh sách tỉnh đã chọn
+        if not actual_col and selected_provinces:
+            for col in mask_shape.columns:
+                if mask_shape[col].dtype == 'object' or str(mask_shape[col].dtype) == 'string':
+                    vals = mask_shape[col].dropna().astype(str).values
+                    # Nếu thấy bất kỳ tỉnh nào trùng khớp, chốt luôn cột đó
+                    if any(p in vals for p in selected_provinces):
+                        actual_col = col
+                        break
+
     if selected_provinces:
-        # Tìm cột đúng chứa tên tỉnh
-        actual_col = next((c for c in mask_shape.columns if any(p in mask_shape[c].astype(str).values for p in selected_provinces)), shape_col)
-        mask_shape = mask_shape[mask_shape[actual_col].isin(selected_provinces)]
+        if actual_col:
+            display_shape = mask_shape[mask_shape[actual_col].isin(selected_provinces)]
+            shape_col = actual_col # Cập nhật để tooltip hiển thị đúng
+        else:
+            return None, None, f"Lỗi Shapefile: Không thể tự động xác định được cột chứa tên tỉnh. Các cột hiện có: {list(mask_shape.columns)}"
+    else:
+        display_shape = mask_shape
+        if actual_col: shape_col = actual_col
 
-    # Hợp nhất ranh giới để tạo thành khung cắt (Khuôn đúc)
-    vietnam_union = mask_shape.unary_union
-    minx, miny, maxx, maxy = (custom_bounds['minx'], custom_bounds['miny'], custom_bounds['maxx'], custom_bounds['maxy']) if custom_bounds else vietnam_union.bounds
+    if display_shape.empty: return None, None, "Không tìm thấy vùng ranh giới sau khi lọc."
+    
+    # Xác định giới hạn tọa độ
+    if custom_bounds:
+        minx = custom_bounds['minx']
+        maxx = custom_bounds['maxx']
+        miny = custom_bounds['miny']
+        maxy = custom_bounds['maxy']
+    else:
+        minx, miny, maxx, maxy = display_shape.total_bounds
+        # Mở rộng nhẹ ranh giới để lưới nội suy phủ kín biên giới
+        padding = 0.5
+        minx -= padding; maxx += padding; miny -= padding; maxy += padding
 
-    # Tính toán nội suy
+    x_pts = valid['lon'].to_numpy()
+    y_pts = valid['lat'].to_numpy()
+    z_pts = valid['value'].to_numpy()
+
+    # 3. Tính toán nội suy IDW
     GRID_N = 800
+    SIGMA = 1.0
+
     gx, gy = np.meshgrid(np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N))
     grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
-    gv = idw_knn(valid['lon'].values, valid['lat'].values, valid['value'].values, grid_xy).reshape(gx.shape)
-    gv = gaussian_filter(gv, sigma=1.0)
 
-    # 3. KỸ THUẬT CLIPPING: Đảm bảo màu chỉ nằm gọn 100% trong ranh giới
-    prep_shape = prep(vietnam_union)
+    gv = idw_knn(x_pts, y_pts, z_pts, grid_xy, k=12, power=3.0).reshape(gx.shape)
+    if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
+
+    # 4. Cắt dữ liệu (Clip) theo đúng ranh giới
+    shape_union = display_shape.unary_union
+    prep_shape = prep(shape_union)
     mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
     gv_masked = np.where(mask_flat, gv, np.nan)
 
-    # Thang màu
+    # 5. Xử lý thang màu
     cmap = plt.get_cmap(cmap_name)
-    if custom_levels:
-        norm = BoundaryNorm(sorted(list(set(custom_levels))), ncolors=cmap.N, extend='both')
+    if custom_levels is not None and len(custom_levels) > 1:
+        custom_levels = sorted(list(set(custom_levels)))
+        norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
     else:
-        norm = BoundaryNorm(np.linspace(np.nanmin(gv_masked), np.nanmax(gv_masked), num_bins + 1), ncolors=cmap.N, extend='both')
+        vmin_val, vmax_val = np.nanmin(gv_masked), np.nanmax(gv_masked)
+        custom_levels = np.linspace(vmin_val, vmax_val, num_bins + 1)
+        norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
 
-    # Tạo ảnh RGBA cho Folium
+    # Chuyển đổi thành ảnh RGBA cho Folium
     rgba = cmap(norm(gv_masked))
-    rgba[np.isnan(gv_masked)] = [0, 0, 0, 0] 
+    rgba[np.isnan(gv_masked)] = [0, 0, 0, 0] # Trong suốt ngoài ranh giới
+    rgba_folium = np.flipud(rgba) 
+
     buf = io.BytesIO()
-    plt.imsave(buf, np.flipud(rgba), format='png')
-    img_b64 = base64.b64encode(buf.getvalue()).decode()
+    plt.imsave(buf, rgba_folium, format='png')
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode()
 
-    # ==========================================================================
-    # --- Bản đồ Folium (Nền OpenStreetMap) ---
-    # ==========================================================================
-    m = folium.Map(location=[(miny+maxy)/2, (minx+maxx)/2], zoom_start=6, tiles="OpenStreetMap")
+    # 6. Khởi tạo bản đồ tương tác
+    center_lat = (miny + maxy) / 2
+    center_lon = (minx + maxx) / 2
+    m = folium.Map(location=[center_lat, center_lon], zoom_start=6, tiles="CartoDB positron")
 
-    # Che mờ bên ngoài lãnh thổ VN
-    world_box = box(-180, -90, 180, 90)
-    outside_vn = world_box.difference(vietnam_union)
-    folium.GeoJson(outside_vn, style_function=lambda x: {'fillColor': '#ffffff', 'color': 'none', 'fillOpacity': 0.75}, interactive=False).add_to(m)
+    # Kỹ thuật Inverted Polygon: Che mờ bên ngoài
+    world_polygon = box(-180, -90, 180, 90)
+    outside_polygon = world_polygon.difference(shape_union)
     
-    # Lớp phủ màu nội suy
-    folium.raster_layers.ImageOverlay(image=f"data:image/png;base64,{img_b64}", bounds=[[miny, minx], [maxy, maxx]], opacity=0.8).add_to(m)
+    folium.GeoJson(
+        outside_polygon,
+        name="Che mờ ngoài khu vực chọn",
+        style_function=lambda x: {
+            'fillColor': '#ffffff',  
+            'color': 'none',         
+            'fillOpacity': 0.75       
+        },
+        interactive=False 
+    ).add_to(m)
 
-    # Viền tỉnh
-    tooltip_fields = [actual_col] if actual_col in mask_shape.columns else []
-    folium.GeoJson(mask_shape, name="Ranh giới chọn", style_function=lambda x: {'fillColor': 'transparent', 'color': '#333333', 'weight': 1.5},
-                   tooltip=folium.GeoJsonTooltip(fields=tooltip_fields, aliases=['Khu vực: ']) if tooltip_fields else None).add_to(m)
+    # Lớp ảnh nội suy
+    folium.raster_layers.ImageOverlay(
+        image=f"data:image/png;base64,{img_base64}",
+        bounds=[[miny, minx], [maxy, maxx]],
+        opacity=0.85,
+        name=title_text,
+        interactive=False
+    ).add_to(m)
 
-    m.add_child(cm.StepColormap(colors=[mcolors.to_hex(cmap(norm(v))) for v in (custom_levels[:-1] if custom_levels else np.linspace(np.nanmin(gv_masked), np.nanmax(gv_masked), num_bins))],
-                                vmin=np.nanmin(gv_masked), vmax=np.nanmax(gv_masked), index=custom_levels, caption=title_text))
-
-    # ==========================================================================
-    # --- Bản đồ Tĩnh Matplotlib (Sửa Font & Tích hợp Contextily OpenStreetMap) ---
-    # ==========================================================================
-    fig, ax = plt.subplots(figsize=(12, 14))
+    # Đường viền tỉnh - Hỗ trợ Click/Hover
+    tooltip_fields = [shape_col] if shape_col and shape_col in display_shape.columns else []
+    tooltip_aliases = ['Tên Tỉnh/Thành: '] if tooltip_fields else []
     
-    # Vẽ lớp màu nội suy (Bám sát ranh giới)
-    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, origin='lower', alpha=0.85)
+    folium.GeoJson(
+        display_shape,
+        name="Ranh giới hành chính",
+        style_function=lambda x: {'fillColor': 'transparent', 'color': '#333333', 'weight': 1.0},
+        highlight_function=lambda x: {'weight': 2, 'color': 'red', 'fillColor': '#ffff00', 'fillOpacity': 0.2},
+        tooltip=folium.GeoJsonTooltip(fields=tooltip_fields, aliases=tooltip_aliases) if tooltip_fields else None
+    ).add_to(m)
+
+    # Chú giải màu
+    colormap_branca = cm.StepColormap(
+        colors=[mcolors.to_hex(cmap(norm(val))) for val in custom_levels[:-1]],
+        vmin=custom_levels[0], vmax=custom_levels[-1],
+        index=custom_levels,
+        caption=title_text
+    )
+    m.add_child(colormap_branca)
+    folium.LayerControl().add_to(m)
+
+    # 7. Tạo Figure tĩnh cho file tải (PNG/PDF)
+    fig, ax = plt.subplots(figsize=(10, 12))
+    ax.set_title(title_text, fontsize=16)
     
-    # Nhúng bản đồ OpenStreetMap làm lớp nền (Thay thế cho xa.shp, song.shp)
-    try:
-        import contextily as cx
-        # Thêm nền OSM. Trục của geopandas đang dùng EPSG:4326 nên phải set crs tương ứng
-        cx.add_basemap(ax, crs="EPSG:4326", source=cx.providers.OpenStreetMap.Mapnik, alpha=0.9)
-    except ImportError:
-        st.warning("⚡ Gợi ý: Hãy mở Terminal/CMD gõ lệnh `pip install contextily` để bản đồ tải xuống hiển thị nền OpenStreetMap siêu đẹp!")
+    if not display_shape.empty:
+        display_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
 
-    # Vẽ ranh giới các tỉnh
-    mask_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.5)
+    im = ax.imshow(
+        gv_masked,
+        extent=[minx, maxx, miny, maxy],
+        cmap=cmap,
+        norm=norm,
+        interpolation='bilinear',
+        origin='lower'
+    )
+    cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.6, pad=0.02)
+    cbar.set_ticks(custom_levels)
+    cbar.set_ticklabels([f"{val:.1f}" for val in custom_levels])
 
-    # Gắn nhãn tên tỉnh (Fix lỗi font & tạo hộp nền cho dễ đọc)
-    for _, row in mask_shape.iterrows():
-        centroid = row.geometry.centroid
-        name = str(row[actual_col])
-        ax.text(centroid.x, centroid.y, name, fontsize=8, fontweight='bold',
-                ha='center', va='center', color='#2b2b2b',
-                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle='round,pad=0.3'))
-
-    cbar = plt.colorbar(im, ax=ax, shrink=0.6, pad=0.02)
-    cbar.set_label(f"Giá trị Nội suy", fontsize=11, fontweight='bold')
-    
-    # Cắt giới hạn trục hiển thị vừa vặn với vùng
     ax.set_xlim(minx, maxx)
     ax.set_ylim(miny, maxy)
-    ax.set_title(title_text, fontsize=16, fontweight='bold', pad=20)
-    ax.set_xlabel("Kinh độ", fontsize=10)
-    ax.set_ylabel("Vĩ độ", fontsize=10)
-    ax.grid(True, linestyle='--', alpha=0.3)
+    ax.ticklabel_format(useOffset=False, style='plain')
+    ax.set_xlabel("Kinh độ")
+    ax.set_ylabel("Vĩ độ")
 
     return m, fig, None
 
 # ==============================================================================
-# CẤU TRÚC MAIN APP (GIỮ NGUYÊN)
+# 4. MAIN APP
 # ==============================================================================
 def main():
-    if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
-    
+    if 'interpol_fig' not in st.session_state:
+        st.session_state['interpol_fig'] = None
+    if 'folium_map_obj' not in st.session_state:
+        st.session_state['folium_map_obj'] = None
+    if 'folium_fig_obj' not in st.session_state:
+        st.session_state['folium_fig_obj'] = None
+        
+    if 'logged_in' not in st.session_state:
+        st.session_state['logged_in'] = False
+
     with st.sidebar:
         st.title("Dữ liệu thời tiết")
         topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
@@ -359,157 +622,389 @@ def main():
         active_mode = ""
         obs_mode = ""
         
-        if topic == "Dữ liệu quan trắc" and st.session_state['logged_in']:
-            obs_mode = st.radio("Nguồn dữ liệu:", ["WeatherObs", "Gió tự động", "Nội suy linh tinh"])
-            if obs_mode == "Nội suy linh tinh":
-                title_interpol = st.text_input("Tiêu đề bản đồ:", "BẢN ĐỒ NỘI SUY")
-                data_file = st.file_uploader("Upload số liệu (.csv/.xlsx):", type=['csv', 'xlsx'])
-                
-                cmap_list = plt.colormaps()
-                cmap_option = st.selectbox("Thang màu:", cmap_list, index=cmap_list.index('jet') if 'jet' in cmap_list else 0)
-                
-                threshold_type = st.radio("Chia ngưỡng:", ["Tự động", "Nhập tay"])
-                num_bins, custom_levels = 10, None
-                if threshold_type == "Tự động":
-                    num_bins = st.number_input("Số lượng ngưỡng:", 2, 50, 10)
-                else:
-                    levels_str = st.text_input("Nhập các ngưỡng (cách nhau bằng dấu phẩy):", "0, 10, 20, 30, 40")
-                    try: custom_levels = [float(x.strip()) for x in levels_str.split(',') if x.strip()]
-                    except: st.error("Lỗi định dạng số.")
-                
-                # Quét danh sách tỉnh (Thêm Fallback link online)
-                province_list = []
-                s_col = "NAME_1"
-                path_shp = SHP_DISP_PATH if os.path.exists(SHP_DISP_PATH) else SHP_MASK_PATH
-                try:
-                    if not os.path.exists(path_shp):
-                        url_vn = "https://raw.githubusercontent.com/TungTh/tungth.github.io/master/data/vn-provinces.json"
-                        temp_s = gpd.read_file(url_vn)
-                    else:
-                        temp_s = gpd.read_file(path_shp)
-                        
-                    s_col = next((c for c in ['TEN_TINH', 'NAME_1', 'Name', 'PROVINCE', 'Tỉnh'] if c in temp_s.columns), temp_s.columns[0])
-                    province_list = sorted(temp_s[s_col].dropna().astype(str).unique().tolist())
-                except: pass
-                
-                sel_prov = st.multiselect("Tách chọn vùng (Trống = Toàn VN):", province_list)
-                
-                custom_bounds_dict = None
-                if st.checkbox("✂️ Bật giới hạn ô lưới tải (Kinh Vĩ độ)"):
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        min_lon = st.number_input("Kinh độ Min", value=101.80)
-                        min_lat = st.number_input("Vĩ độ Min", value=8.00)
-                    with c2:
-                        max_lon = st.number_input("Kinh độ Max", value=110.00)
-                        max_lat = st.number_input("Vĩ độ Max", value=24.00)
-                    custom_bounds_dict = {'minx': min_lon, 'maxx': max_lon, 'miny': min_lat, 'maxy': max_lat}
+        title_interpol = ""
+        data_file_interpol = None
+        btn_run_interpol = False
+        custom_bounds_dict = None
 
-                btn_run = st.button("🚀 VẼ BẢN ĐỒ CHUẨN", type="primary")
+        if topic == "Dữ liệu quan trắc":
+            if st.session_state['logged_in']:
+                obs_mode = st.radio("Chọn nguồn dữ liệu:", 
+                                  ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ", "Nội suy lượng mưa", "Nội suy linh tinh"])
+                
+                # --- MENU NỘI SUY TĨNH ---
+                if obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
+                    st.markdown("---")
+                    st.markdown(f"### 🛠️ CÔNG CỤ {obs_mode.upper()}")
+                    
+                    default_title = "Bản đồ nhiệt độ nội suy" if obs_mode == "Nội suy nhiệt độ" else "Bản đồ lượng mưa nội suy"
+                    title_interpol = st.text_input("Tiêu đề bản đồ:", value=default_title)
+                    
+                    st.markdown("**1. Upload dữ liệu (.xlsx/.csv)**")
+                    st.caption("Cột: `stations`, `lon`, `lat`, `value`")
+                    data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv'], key="data_up")
+                    
+                    st.markdown("---")
+                    btn_run_interpol = st.button("🚀 VẼ BẢN ĐỒ", type="primary", use_container_width=True)
+
+                # --- MENU NỘI SUY TƯƠNG TÁC (FOLIUM) ---
+                elif obs_mode == "Nội suy linh tinh":
+                    st.markdown("---")
+                    st.markdown("### 🛠️ NỘI SUY TÙY BIẾN (TƯƠNG TÁC)")
+                    title_interpol = st.text_input("Tiêu đề bản đồ:", value="Bản đồ Nội Suy")
+                    data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv'], key="data_up_custom")
+                    
+                    st.markdown("**1. Cấu hình màu & Ngưỡng**")
+                    cmap_list = plt.colormaps()
+                    default_cmap_idx = cmap_list.index('jet') if 'jet' in cmap_list else 0
+                    cmap_option = st.selectbox("Chọn thang màu (Colormap):", cmap_list, index=default_cmap_idx)
+                    
+                    threshold_type = st.radio("Cách chia ngưỡng:", ["Tự động (Số lớp)", "Tùy chỉnh (Nhập tay)"])
+                    num_bins = 10
+                    custom_levels = None
+                    if threshold_type == "Tự động (Số lớp)":
+                        num_bins = st.number_input("Số lượng ngưỡng chia:", min_value=2, max_value=50, value=10)
+                    else:
+                        custom_levels_str = st.text_input("Nhập các ngưỡng (cách nhau bằng dấu phẩy):", "0, 10, 20, 30, 40, 50")
+                        try:
+                            custom_levels = [float(x.strip()) for x in custom_levels_str.split(',') if x.strip()]
+                        except:
+                            st.error("Lỗi định dạng. Vui lòng nhập số cách nhau bằng dấu phẩy.")
+                    
+                    st.markdown("**2. Ranh giới Tỉnh**")
+                    
+                    # Danh sách dự phòng để hộp chọn LUÔN LUÔN hiện lên đầy đủ
+                    fallback_provinces = [
+                        "An Giang", "Bà Rịa - Vũng Tàu", "Bắc Giang", "Bắc Kạn", "Bạc Liêu", "Bắc Ninh", "Bến Tre", "Bình Định", "Bình Dương", "Bình Phước", "Bình Thuận", "Cà Mau", "Cần Thơ", "Cao Bằng", "Đà Nẵng", "Đắk Lắk", "Đắk Nông", "Điện Biên", "Đồng Nai", "Đồng Tháp", "Gia Lai", "Hà Giang", "Hà Nam", "Hà Nội", "Hà Tĩnh", "Hải Dương", "Hải Phòng", "Hậu Giang", "Hòa Bình", "Hưng Yên", "Khánh Hòa", "Kiên Giang", "Kon Tum", "Lai Châu", "Lâm Đồng", "Lạng Sơn", "Lào Cai", "Long An", "Nam Định", "Nghệ An", "Ninh Bình", "Ninh Thuận", "Phú Thọ", "Phú Yên", "Quảng Bình", "Quảng Nam", "Quảng Ngãi", "Quảng Ninh", "Quảng Trị", "Sóc Trăng", "Sơn La", "Tây Ninh", "Thái Bình", "Thái Nguyên", "Thanh Hóa", "Thừa Thiên Huế", "Tiền Giang", "TP Hồ Chí Minh", "Trà Vinh", "Tuyên Quang", "Vĩnh Long", "Vĩnh Phúc", "Yên Bái"
+                    ]
+                    province_list = fallback_provinces
+                    shape_col = "NAME_1"
+                    
+                    # Cố gắng quét file Shapefile để lấy đúng danh sách và tên cột
+                    if os.path.exists(SHP_MASK_PATH):
+                        try:
+                            tmp_shp = gpd.read_file(SHP_MASK_PATH)
+                            found = False
+                            for col in ['TEN_TINH', 'NAME_1', 'Name', 'PROVINCE', 'Tỉnh', 'Tinh', 'TENTINH', 'Ten_Tinh', 'ten_tinh', 'NAME', 'tinh']:
+                                for shp_col in tmp_shp.columns:
+                                    if col.lower() == shp_col.lower():
+                                        shape_col = shp_col
+                                        extracted = sorted(tmp_shp[shp_col].dropna().astype(str).unique().tolist())
+                                        if extracted:
+                                            province_list = extracted
+                                        found = True
+                                        break
+                                if found: break
+                                
+                            if not found:
+                                # Fallback: tìm cột dạng string có nhiều giá trị unique
+                                for col in tmp_shp.columns:
+                                    if tmp_shp[col].dtype == 'object' or str(tmp_shp[col].dtype) == 'string':
+                                        unique_vals = tmp_shp[col].dropna().astype(str).unique()
+                                        if len(unique_vals) > 5: 
+                                            shape_col = col
+                                            province_list = sorted(unique_vals.tolist())
+                                            break
+                        except: pass
+                    
+                    # Hộp chọn Multiselect
+                    selected_provinces = st.multiselect("Tách chọn Tỉnh (Để trống = Toàn bộ):", province_list)
+                    
+                    st.markdown("**3. Cắt cúp hiển thị & tải (Kinh Vĩ độ)**")
+                    use_custom_bounds = st.checkbox("✂️ Bật giới hạn tải/hiển thị ô lưới", value=False)
+                    if use_custom_bounds:
+                        col_b1, col_b2 = st.columns(2)
+                        with col_b1:
+                            min_lon = st.number_input("Kinh độ Min (Trái)", value=101.80, format="%.2f")
+                            min_lat = st.number_input("Vĩ độ Min (Dưới)", value=8.00, format="%.2f")
+                        with col_b2:
+                            max_lon = st.number_input("Kinh độ Max (Phải)", value=110.00, format="%.2f")
+                            max_lat = st.number_input("Vĩ độ Max (Trên)", value=24.00, format="%.2f")
+                        custom_bounds_dict = {'minx': min_lon, 'maxx': max_lon, 'miny': min_lat, 'maxy': max_lat}
+
+                    st.markdown("---")
+                    btn_run_interpol = st.button("🚀 VẼ BẢN ĐỒ TƯƠNG TÁC", type="primary", use_container_width=True)
 
                 st.markdown("---")
-                if st.button("🔒 Đăng xuất"):
+                if st.button("🔒 Đăng xuất", key="logout_obs_sidebar"):
                     st.session_state['logged_in'] = False
                     st.rerun()
 
         if topic == "Dự báo điểm (KMA)":
-            if st.session_state['logged_in'] and st.button("🔒 Đăng xuất"):
-                st.session_state['logged_in'] = False
-                st.rerun()
+            if st.session_state['logged_in']:
+                st.markdown("---")
+                if st.button("🔒 Đăng xuất", key="logout_kma_sidebar"):
+                    st.session_state['logged_in'] = False
+                    st.rerun()
 
         if topic == "Bản đồ Bão":
             storm_opt = st.selectbox("Dữ liệu bão:", ["Hiện trạng (Besttrack)", "Lịch sử (Historical)"])
-            dashboard_title = st.text_input("Tiêu đề bảng:", "TIN BÃO KHẨN CẤP" if "Hiện trạng" in storm_opt else "THỐNG KÊ LỊCH SỬ")
+            default_title = "TIN BÃO KHẨN CẤP" if "Hiện trạng" in storm_opt else "THỐNG KÊ LỊCH SỬ"
+            dashboard_title = st.text_input("Tiêu đề bảng thông tin:", value=default_title)
+
             active_mode = storm_opt
-            if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
-                show_widgets = True
-                f = st.file_uploader("Upload besttrack", type=["csv", "xlsx"], key="o1")
-                if f:
-                    try:
-                        df = pd.read_csv(f) if f.name.endswith('.csv') else pd.read_excel(f)
-                        df = normalize_columns(df)
-                        if 'name' not in df: df['name'], df['storm_no'] = 'Storm', 'Current'
-                        for c in ['wind_km/h','bf','r6','r10','rc','pressure','hour_explicit']: 
-                            if c not in df: df[c]=0
-                        df = df.dropna(subset=['lat','lon'])
-                        if "Hiện trạng" in storm_opt:
+            if "Hiện trạng" in storm_opt:
+                if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
+                    show_widgets = True
+                    f = st.file_uploader("Upload besttrack (.csv / .xlsx)", type=["csv", "xlsx"], key="o1")
+                    if f:
+                        try:
+                            df = pd.read_csv(f) if f.name.endswith('.csv') else pd.read_excel(f)
+                            df = normalize_columns(df)
+                            if 'name' not in df: df['name'], df['storm_no'] = 'Storm', 'Current'
+                            for c in ['wind_km/h','bf','r6','r10','rc','pressure','hour_explicit']: 
+                                if c not in df: df[c]=0
+                            df = df.dropna(subset=['lat','lon'])
                             all_s = df['storm_no'].unique() if 'storm_no' in df else []
-                            sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s)
+                            sel = st.multiselect("Chọn cơn bão:", all_s, default=all_s) if len(all_s)>0 else []
                             final_df = df[df['storm_no'].isin(sel)] if len(sel)>0 else df
-                        else:
+                        except: pass
+                    else:
+                        st.info("Vui lòng upload file dữ liệu để xem thông tin bão.")
+            else:
+                if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
+                    show_widgets = True
+                    f = st.file_uploader("Upload besttrack_capgio.xlsx", type="xlsx", key="o2")
+                    if f:
+                        try:
+                            df = pd.read_excel(f)
+                            df = normalize_columns(df)
+                            df = df.dropna(subset=['lat','lon'])
                             years = st.multiselect("Năm:", sorted(df['year'].unique()), default=sorted(df['year'].unique())[-1:])
                             temp = df[df['year'].isin(years)]
                             names = st.multiselect("Tên bão:", temp['name'].unique(), default=temp['name'].unique())
                             final_df = temp[temp['name'].isin(names)]
-                    except: pass
+                        except: pass
+                    else:
+                        st.info("Vui lòng upload file dữ liệu lịch sử bão.")
 
-    # ==========================================================================
-    # KHU VỰC HIỂN THỊ CHÍNH
-    # ==========================================================================
+    # --- MAIN CONTENT ---
     if topic == "Ảnh mây vệ tinh":
-        components.iframe("https://embed.windy.com/embed2.html?overlay=satellite&product=satellite&zoom=5&lat=16&lon=114")
-
+        components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
+    
     elif topic == "Dữ liệu quan trắc":
         if not st.session_state['logged_in']:
-            with st.form("login"):
-                u, p = st.text_input("Tên đăng nhập"), st.text_input("Mật khẩu", type="password")
-                if st.form_submit_button("Đăng nhập") and u == "admin" and p == "kttv@2026":
-                    st.session_state['logged_in'] = True
-                    st.rerun()
+            st.title("🔐 Đăng nhập Hệ thống")
+            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
+            
+            with st.form("login_form_common"):
+                user_input = st.text_input("Tên đăng nhập")
+                pass_input = st.text_input("Mật khẩu", type="password")
+                submitted = st.form_submit_button("Đăng nhập")
+                
+                if submitted:
+                    if user_input == "admin" and pass_input == "kttv@2026":
+                        st.session_state['logged_in'] = True
+                        st.success("Đăng nhập thành công!")
+                        st.rerun()
+                    else:
+                        st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
         else:
-            if obs_mode == "WeatherObs":
-                st.markdown(f'<div style="overflow:hidden; height:95vh; position:relative;"><iframe src="{LINK_WEATHEROBS}" style="width:100%; height:1000px; position:absolute; top:-50px; border:none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
-            elif obs_mode == "Gió tự động":
-                st.markdown(f'<div style="overflow:hidden; height:95vh; position:relative;"><iframe src="{LINK_WIND_AUTO}" style="width:100%; height:1200px; position:absolute; top:-75px; border:none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
-            elif obs_mode == "Nội suy linh tinh" and btn_run and data_file:
-                df = pd.read_csv(data_file) if data_file.name.endswith('.csv') else pd.read_excel(data_file)
-                with st.spinner("Đang tính toán mảng và nhúng nền OpenStreetMap..."):
-                    m_obj, f_obj, err = run_interactive_folium_interpolation(df, title_interpol, cmap_option, num_bins, custom_levels, sel_prov, s_col, custom_bounds_dict)
-                if err: st.error(err)
-                else:
-                    st_folium(m_obj, width=None, height=750, use_container_width=True)
+            if "WeatherObs" in obs_mode:
+                html_weather = f"""
+                <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
+                    <iframe 
+                        src="{LINK_WEATHEROBS}" 
+                        style="
+                            width: calc(100% + 19px); 
+                            height: 1000px; 
+                            position: absolute; 
+                            top: -50px; 
+                            left: 0px; 
+                            border: none;"
+                        allow="fullscreen"
+                    ></iframe>
+                </div>
+                """
+                st.markdown(html_weather, unsafe_allow_html=True)
+
+            elif "Gió tự động" in obs_mode:
+                 html_kttv = f"""
+                <div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;">
+                    <iframe 
+                        src="{LINK_WIND_AUTO}" 
+                        style="
+                            width: calc(100% + 19px); 
+                            height: 1200px; 
+                            position: absolute; 
+                            top: -75px; 
+                            left: 0px; 
+                            border: none;"
+                        allow="fullscreen"
+                    ></iframe>
+                </div>
+                 """
+                 st.markdown(html_kttv, unsafe_allow_html=True)
+            
+            # --- VIEW NỘI SUY TĨNH ---
+            elif obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
+                if btn_run_interpol:
+                    if data_file_interpol:
+                        try:
+                            df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
+                            data_type = 'rain' if obs_mode == "Nội suy lượng mưa" else 'temp'
+                            
+                            with st.spinner("Đang tính toán nội suy và tạo bản đồ..."):
+                                fig, err = run_interpolation_and_plot(df_in, title_interpol, data_type)
+                                if err: st.error(f"❌ {err}")
+                                else: st.session_state['interpol_fig'] = fig
+                        except Exception as e: st.error(f"❌ Lỗi: {e}")
+                    else: st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
+
+                if st.session_state['interpol_fig']:
+                    st.pyplot(st.session_state['interpol_fig'], use_container_width=True)
+                    st.markdown("### 📥 Tải xuống")
+                    col_dl1, col_dl2 = st.columns([1, 3])
+                    with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_static")
                     buf = io.BytesIO()
-                    f_obj.savefig(buf, format="png", dpi=300, bbox_inches='tight')
-                    st.download_button("⬇️ Tải Bản đồ Xuất bản (Có sẵn nền OpenStreetMap)", buf.getvalue(), "BanDo_NoiSuy_OSM.png", "image/png")
+                    st.session_state['interpol_fig'].savefig(buf, format=fmt, dpi=300, bbox_inches='tight')
+                    buf.seek(0)
+                    with col_dl2:
+                        st.write(""); st.write("")
+                        st.download_button(label=f"⬇️ Tải ảnh về ({fmt.upper()})", data=buf, file_name=f"ban_do_tinh.{fmt}", mime=f"image/{fmt}", key="dl_btn_static")
+                else:
+                    st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
+
+            # --- VIEW NỘI SUY TƯƠNG TÁC ---
+            elif obs_mode == "Nội suy linh tinh":
+                if btn_run_interpol:
+                    if data_file_interpol:
+                        try:
+                            df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
+                            
+                            with st.spinner("Đang xử lý nội suy tương tác và trích xuất bản vẽ..."):
+                                m_map, m_fig, err = run_interactive_folium_interpolation(
+                                    df_in, title_interpol, cmap_option, 
+                                    num_bins, custom_levels, selected_provinces, shape_col, custom_bounds_dict
+                                )
+                                if err: 
+                                    st.error(f"❌ Lỗi: {err}")
+                                else: 
+                                    st.session_state['folium_map_obj'] = m_map
+                                    st.session_state['folium_fig_obj'] = m_fig
+                        except Exception as e: 
+                            st.error(f"❌ Lỗi Xử lý Dữ liệu: {e}")
+                    else: 
+                        st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
+
+                if st.session_state['folium_map_obj']:
+                    st.success("Tạo bản đồ thành công! Kéo xuống dưới cùng để TẢI ẢNH.")
+                    # Render bản đồ Folium
+                    st_folium(st.session_state['folium_map_obj'], width=None, height=800, use_container_width=True)
+                    
+                    st.markdown("---")
+                    st.markdown("### 📥 Tải bản vẽ tĩnh (Cắt theo khu vực đã chọn)")
+                    col_dl1, col_dl2 = st.columns([1, 3])
+                    with col_dl1: 
+                        fmt = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_folium")
+                    buf = io.BytesIO()
+                    st.session_state['folium_fig_obj'].savefig(buf, format=fmt, dpi=300, bbox_inches='tight')
+                    buf.seek(0)
+                    with col_dl2:
+                        st.write(""); st.write("")
+                        st.download_button(label=f"⬇️ Tải ảnh về ({fmt.upper()})", data=buf, file_name=f"ban_do_tuy_chinh.{fmt}", mime=f"image/{fmt}", key="dl_btn_folium")
+                else:
+                    st.info("👈 Vui lòng cấu hình dữ liệu, chọn màu, ngưỡng, tọa độ và nhấn 'VẼ BẢN ĐỒ TƯƠNG TÁC'.")
 
     elif topic == "Dự báo điểm (KMA)":
-        if st.session_state['logged_in']:
-            st.markdown(f'<div style="overflow:hidden; height:700px; position:relative;"><iframe src="{get_kma_url()}" style="width:100%; height:1200px; position:absolute; top:-130px; border:none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
+        if not st.session_state['logged_in']:
+            st.title("🔐 Đăng nhập Hệ thống")
+            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
+            
+            with st.form("login_form_common_kma"):
+                user_input = st.text_input("Tên đăng nhập")
+                pass_input = st.text_input("Mật khẩu", type="password")
+                submitted = st.form_submit_button("Đăng nhập")
+                
+                if submitted:
+                    if user_input == "admin" and pass_input == "kttv@2026":
+                        st.session_state['logged_in'] = True
+                        st.success("Đăng nhập thành công!")
+                        st.rerun()
+                    else:
+                        st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
+        else:
+            realtime_kma_url = get_kma_url()
+            html_kma = f"""
+            <div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;">
+                <iframe
+                    src="{realtime_kma_url}" 
+                    style="
+                        width: calc(100% + 19px); 
+                        height: 1200px; 
+                        position: absolute; 
+                        top: -130px; 
+                        left: 0px; 
+                        border: none;"
+                    allow="fullscreen"
+                ></iframe>
+            </div>
+            """
+            st.markdown(html_kma, unsafe_allow_html=True)
+            st.caption(f"Đang hiển thị dữ liệu từ nguồn KMA (Hàn Quốc). Link gốc: {realtime_kma_url}")
 
     elif topic == "Bản đồ Bão":
         m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
-        folium.TileLayer('CartoDB positron', name='Sáng', overlay=False).add_to(m)
-        folium.TileLayer('OpenStreetMap', name='Chi tiết', overlay=False).add_to(m)
+        folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
+        folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
+        folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
+        
         ts = get_rainviewer_ts()
-        if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây", overlay=True, show=True, opacity=0.5).add_to(m)
+        if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
 
-        fg_storm = folium.FeatureGroup(name="🌀 Bão")
+        fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
         if not final_df.empty and show_widgets:
             if "Hiện trạng" in str(active_mode):
-                for g in final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]:
+                groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
+                for g in groups:
                     sub = final_df[final_df['storm_no']==g] if g else final_df
-                    f6, f10, fc = create_storm_swaths(densify_track(sub))
+                    dense = densify_track(sub)
+                    f6, f10, fc = create_storm_swaths(dense)
                     for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#90EE90',0.6)]:
-                        if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
+                        if geom and not geom.is_empty:
+                           folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
                     
                     for _, r in sub.iterrows():
-                        icon_path = ICON_PATHS.get(get_icon_name(r))
-                        if icon_path and os.path.exists(icon_path):
-                            folium.Marker([r['lat'], r['lon']], icon=folium.CustomIcon(image_to_base64(icon_path), icon_size=(40,40)), tooltip=f"Vmax {int(r.get('wind_km/h', 0))}").add_to(fg_storm)
-            else:
+                        icon_key = get_icon_name(r)
+                        icon_path = ICON_PATHS.get(icon_key)
+                        icon_base64 = None
+                        if icon_path:
+                            icon_base64 = image_to_base64(icon_path)
+                        
+                        if icon_base64:
+                            if 'vungthap' in icon_key:
+                                i_size = (20, 20)
+                                i_anchor = (10, 10)
+                            else:
+                                i_size = (40, 40)
+                                i_anchor = (20, 20)
+                            
+                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=i_size, icon_anchor=i_anchor)
+                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Vmax {int(r.get('wind_km/h', 0))} km/h").add_to(fg_storm)
+            else: 
                 for n in final_df['name'].unique():
                     sub = final_df[final_df['name']==n].sort_values('dt')
                     folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
-                    for _, r in sub.iterrows(): folium.CircleMarker([r['lat'],r['lon']], radius=3, color='#00f2ff' if r.get('wind_km/h',0)<64 else '#ff0055', fill=True, popup=n).add_to(fg_storm)
+                    for _, r in sub.iterrows():
+                        c = '#00f2ff' if r.get('wind_km/h',0)<64 else '#ff0055'
+                        folium.CircleMarker([r['lat'],r['lon']], radius=3, color=c, fill=True, popup=f"{n}").add_to(fg_storm)
         
         fg_storm.add_to(m)
-        folium.LayerControl(position='topleft').add_to(m)
+        folium.LayerControl(position='topleft', collapsed=False).add_to(m)
         
         if show_widgets:
             html_to_render = '<div class="floating-container">'
-            if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG): html_to_render += f'<div class="legend-box"><img src="{image_to_base64(CHUTHICH_IMG)}"></div>'
-            html_to_render += create_info_table(final_df, dashboard_title) if not final_df.empty else create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU...")
+            
+            if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
+                with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
+                html_to_render += f'<div class="legend-box"><img src="data:image/png;base64,{b64}"></div>'
+            
+            if not final_df.empty: 
+                html_to_render += create_info_table(final_df, dashboard_title)
+            else: 
+                html_to_render += create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU...")
+            
             html_to_render += '</div>'
             st.markdown(html_to_render, unsafe_allow_html=True)
         
