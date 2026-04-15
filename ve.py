@@ -20,9 +20,6 @@ from shapely.prepared import prep
 from shapely.ops import unary_union
 from scipy.ndimage import gaussian_filter
 from scipy.spatial import cKDTree
-import zipfile
-import tempfile
-import shutil
 import io
 from datetime import datetime, timedelta
 import branca.colormap as cm
@@ -303,7 +300,6 @@ def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
         out[rest] = (w * zi[nn]).sum(axis=1) / w.sum(axis=1)
     return out
 
-# Hàm cũ: Dùng tĩnh cho Nhiệt độ và Lượng mưa (Matplotlib)
 def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     minx, maxx = 101.8, 115.0
     miny, maxy = 8.0, 23.9
@@ -414,8 +410,8 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     
     return fig, None
 
-# Hàm MỚI: Dành cho "Nội suy linh tinh" (Tương tác Folium, tách tỉnh, tùy chọn màu, CÓ TỌA ĐỘ)
 def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
+    # 1. Chuẩn hóa dữ liệu đầu vào
     input_df.columns = input_df.columns.str.lower().str.strip()
     cols_check = ['lon', 'lat', 'value']
     if not all(c in input_df.columns for c in cols_check):
@@ -424,7 +420,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
     if valid.empty: return None, None, "Dữ liệu trống sau khi lọc bỏ NaN."
 
-    # Xử lý Shapefile và Bounding Box
+    # 2. Đọc và lọc ranh giới hành chính
     if not os.path.exists(SHP_MASK_PATH):
         return None, None, "Không tìm thấy file vn34tinh.shp"
     
@@ -433,18 +429,21 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         mask_shape.to_crs(epsg=4326, inplace=True)
         
     if selected_provinces and shape_col:
-        mask_shape = mask_shape[mask_shape[shape_col].isin(selected_provinces)]
-        if mask_shape.empty: return None, None, "Không tìm thấy tỉnh đã chọn."
+        display_shape = mask_shape[mask_shape[shape_col].isin(selected_provinces)]
+    else:
+        display_shape = mask_shape
+
+    if display_shape.empty: return None, None, "Không tìm thấy vùng ranh giới."
     
-    # Xác định giới hạn Tọa độ
+    # Xác định giới hạn tọa độ
     if custom_bounds:
         minx = custom_bounds['minx']
         maxx = custom_bounds['maxx']
         miny = custom_bounds['miny']
         maxy = custom_bounds['maxy']
     else:
-        minx, miny, maxx, maxy = mask_shape.total_bounds
-        # Mở rộng nhẹ ranh giới để nội suy tràn đều nếu không dùng bounds tùy chỉnh
+        minx, miny, maxx, maxy = display_shape.total_bounds
+        # Mở rộng nhẹ ranh giới để lưới nội suy phủ kín biên giới
         padding = 0.5
         minx -= padding; maxx += padding; miny -= padding; maxy += padding
 
@@ -452,6 +451,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     y_pts = valid['lat'].to_numpy()
     z_pts = valid['value'].to_numpy()
 
+    # 3. Tính toán nội suy IDW
     GRID_N = 800
     SIGMA = 1.0
 
@@ -461,62 +461,74 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     gv = idw_knn(x_pts, y_pts, z_pts, grid_xy, k=12, power=3.0).reshape(gx.shape)
     if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
 
-    shape_union = mask_shape.unary_union
+    # 4. Cắt dữ liệu (Clip) theo đúng ranh giới
+    shape_union = display_shape.unary_union
     prep_shape = prep(shape_union)
     mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
     gv_masked = np.where(mask_flat, gv, np.nan)
 
-    # Lấy thang màu do user chọn
+    # 5. Xử lý thang màu
     cmap = plt.get_cmap(cmap_name)
-    
     if custom_levels is not None and len(custom_levels) > 1:
         custom_levels = sorted(list(set(custom_levels)))
         norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
     else:
         vmin_val, vmax_val = np.nanmin(gv_masked), np.nanmax(gv_masked)
-        # Tự động tạo step
         custom_levels = np.linspace(vmin_val, vmax_val, num_bins + 1)
         norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
 
-    # ----------------------------------------------------
-    # TẠO HÌNH ẢNH RGBA ĐỂ ĐƯA LÊN FOLIUM
-    # ----------------------------------------------------
+    # Chuyển đổi thành ảnh RGBA cho Folium
     rgba = cmap(norm(gv_masked))
-    rgba[np.isnan(gv_masked)] = [0, 0, 0, 0] # Đặt vùng ngoài Mask thành trong suốt
-    rgba_folium = np.flipud(rgba) # Folium đọc tọa độ từ trên xuống
+    rgba[np.isnan(gv_masked)] = [0, 0, 0, 0] # Trong suốt ngoài ranh giới
+    rgba_folium = np.flipud(rgba) 
 
     buf = io.BytesIO()
     plt.imsave(buf, rgba_folium, format='png')
     buf.seek(0)
     img_base64 = base64.b64encode(buf.read()).decode()
 
-    # Tạo Folium Map
+    # 6. Khởi tạo bản đồ tương tác
     center_lat = (miny + maxy) / 2
     center_lon = (minx + maxx) / 2
     m = folium.Map(location=[center_lat, center_lon], zoom_start=6, tiles="CartoDB positron")
 
-    # Thêm Overlay Nội suy
+    # Kỹ thuật Inverted Polygon: Che mờ bên ngoài
+    world_polygon = box(-180, -90, 180, 90)
+    outside_polygon = world_polygon.difference(shape_union)
+    
+    folium.GeoJson(
+        outside_polygon,
+        name="Che mờ ngoài lãnh thổ",
+        style_function=lambda x: {
+            'fillColor': '#ffffff',  
+            'color': 'none',         
+            'fillOpacity': 0.7       
+        },
+        interactive=False 
+    ).add_to(m)
+
+    # Lớp ảnh nội suy
     folium.raster_layers.ImageOverlay(
         image=f"data:image/png;base64,{img_base64}",
         bounds=[[miny, minx], [maxy, maxx]],
-        opacity=0.75,
+        opacity=0.85,
         name=title_text,
         interactive=False
     ).add_to(m)
 
-    # Thêm đường viền tỉnh (GeoJson) để có thể Click xem Tên tỉnh
+    # Đường viền tỉnh - Hỗ trợ Click/Hover
     tooltip_fields = [shape_col] if shape_col else []
-    tooltip_aliases = ['Tên Tỉnh: '] if shape_col else []
+    tooltip_aliases = ['Tên Tỉnh/Thành: '] if shape_col else []
     
     folium.GeoJson(
-        mask_shape,
-        name="Ranh giới Tỉnh",
-        style_function=lambda x: {'fillColor': 'transparent', 'color': 'black', 'weight': 1.5},
-        highlight_function=lambda x: {'weight': 3, 'color': 'red'},
+        display_shape,
+        name="Ranh giới hành chính",
+        style_function=lambda x: {'fillColor': 'transparent', 'color': '#333333', 'weight': 1.0},
+        highlight_function=lambda x: {'weight': 2, 'color': 'red', 'fillColor': '#ffff00', 'fillOpacity': 0.2},
         tooltip=folium.GeoJsonTooltip(fields=tooltip_fields, aliases=tooltip_aliases) if tooltip_fields else None
     ).add_to(m)
 
-    # Thêm thanh ColorMap
+    # Chú giải màu
     colormap_branca = cm.StepColormap(
         colors=[mcolors.to_hex(cmap(norm(val))) for val in custom_levels[:-1]],
         vmin=custom_levels[0], vmax=custom_levels[-1],
@@ -526,14 +538,12 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     m.add_child(colormap_branca)
     folium.LayerControl().add_to(m)
 
-    # ----------------------------------------------------
-    # TẠO FIGURE MATPLOTLIB ĐỂ TẢI XUỐNG (PDF/PNG)
-    # ----------------------------------------------------
-    fig, ax = plt.subplots(figsize=(12, 10))
+    # 7. Tạo Figure tĩnh cho file tải (PNG/PDF)
+    fig, ax = plt.subplots(figsize=(10, 12))
     ax.set_title(title_text, fontsize=16)
     
-    if not mask_shape.empty:
-        mask_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
+    if not display_shape.empty:
+        display_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
 
     im = ax.imshow(
         gv_masked,
@@ -543,7 +553,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         interpolation='bilinear',
         origin='lower'
     )
-    cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.7, pad=0.02)
+    cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.6, pad=0.02)
     cbar.set_ticks(custom_levels)
     cbar.set_ticklabels([f"{val:.1f}" for val in custom_levels])
 
@@ -590,7 +600,7 @@ def main():
                 obs_mode = st.radio("Chọn nguồn dữ liệu:", 
                                   ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ", "Nội suy lượng mưa", "Nội suy linh tinh"])
                 
-                # --- MENU CHO NỘI SUY TĨNH (NHIỆT ĐỘ / MƯA) ---
+                # --- MENU NỘI SUY TĨNH ---
                 if obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
                     st.markdown("---")
                     st.markdown(f"### 🛠️ CÔNG CỤ {obs_mode.upper()}")
@@ -605,11 +615,11 @@ def main():
                     st.markdown("---")
                     btn_run_interpol = st.button("🚀 VẼ BẢN ĐỒ", type="primary", use_container_width=True)
 
-                # --- MENU MỚI: NỘI SUY LINH TINH (TƯƠNG TÁC) ---
+                # --- MENU NỘI SUY TƯƠNG TÁC (FOLIUM) ---
                 elif obs_mode == "Nội suy linh tinh":
                     st.markdown("---")
                     st.markdown("### 🛠️ NỘI SUY TÙY BIẾN (TƯƠNG TÁC)")
-                    title_interpol = st.text_input("Tiêu đề bản đồ:", value="Bản đồ Nội Suy Tùy Chọn")
+                    title_interpol = st.text_input("Tiêu đề bản đồ:", value="Bản đồ Nội Suy")
                     data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv'], key="data_up_custom")
                     
                     st.markdown("**1. Cấu hình màu & Ngưỡng**")
@@ -644,17 +654,17 @@ def main():
                     
                     selected_provinces = []
                     if province_list:
-                        selected_provinces = st.multiselect("Bật tắt/Tách chọn Tỉnh (Để trống = Tất cả):", province_list)
+                        selected_provinces = st.multiselect("Tách chọn Tỉnh (Để trống = Toàn bộ):", province_list)
                     
-                    st.markdown("**3. Cắt cúp theo Tọa độ**")
-                    use_custom_bounds = st.checkbox("✂️ Giới hạn tải & hiển thị theo Tọa độ", value=False)
+                    st.markdown("**3. Cắt cúp hiển thị & tải (Kinh Vĩ độ)**")
+                    use_custom_bounds = st.checkbox("✂️ Bật giới hạn tải/hiển thị ô lưới", value=False)
                     if use_custom_bounds:
                         col_b1, col_b2 = st.columns(2)
                         with col_b1:
                             min_lon = st.number_input("Kinh độ Min (Trái)", value=101.80, format="%.2f")
                             min_lat = st.number_input("Vĩ độ Min (Dưới)", value=8.00, format="%.2f")
                         with col_b2:
-                            max_lon = st.number_input("Kinh độ Max (Phải)", value=115.00, format="%.2f")
+                            max_lon = st.number_input("Kinh độ Max (Phải)", value=110.00, format="%.2f")
                             max_lat = st.number_input("Vĩ độ Max (Trên)", value=24.00, format="%.2f")
                         custom_bounds_dict = {'minx': min_lon, 'maxx': max_lon, 'miny': min_lat, 'maxy': max_lat}
 
@@ -772,7 +782,7 @@ def main():
                  """
                  st.markdown(html_kttv, unsafe_allow_html=True)
             
-            # Xử lý CŨ: Nội suy Tĩnh (Nhiệt độ / Mưa)
+            # --- VIEW NỘI SUY TĨNH ---
             elif obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
                 if btn_run_interpol:
                     if data_file_interpol:
@@ -801,7 +811,7 @@ def main():
                 else:
                     st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
 
-            # Xử lý MỚI: Nội suy Linh tinh (Tương tác Folium & Có Tọa độ)
+            # --- VIEW NỘI SUY TƯƠNG TÁC ---
             elif obs_mode == "Nội suy linh tinh":
                 if btn_run_interpol:
                     if data_file_interpol:
@@ -825,6 +835,7 @@ def main():
 
                 if st.session_state['folium_map_obj']:
                     st.success("Tạo bản đồ thành công! Kéo xuống dưới cùng để TẢI ẢNH.")
+                    # Render bản đồ Folium
                     st_folium(st.session_state['folium_map_obj'], width=None, height=800, use_container_width=True)
                     
                     st.markdown("---")
