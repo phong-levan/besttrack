@@ -417,6 +417,9 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     
     return fig, None
 
+# ==============================================================================
+# HÀM NỘI SUY LINH TINH (TƯƠNG TÁC + BẢN ĐỒ TẢI XUỐNG CÓ LỚP NỀN OSM)
+# ==============================================================================
 def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
     # 1. Chuẩn hóa dữ liệu đầu vào
     input_df.columns = input_df.columns.str.lower().str.strip()
@@ -438,39 +441,25 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     except Exception as e:
         return None, None, f"Lỗi đọc file Shapefile: {e}"
 
-    # Nhận diện cột THÔNG MINH (Auto-detect column)
-    actual_col = None
-    if shape_col in mask_shape.columns:
-        actual_col = shape_col
-    else:
-        # Quét ưu tiên các tên cột hay gặp
-        common_cols = ['TEN_TINH', 'NAME_1', 'Name', 'PROVINCE', 'Tỉnh', 'Tinh', 'TENTINH', 'Ten_Tinh', 'ten_tinh', 'NAME', 'tinh']
-        for col in common_cols:
-            for shp_col in mask_shape.columns:
-                if col.lower() == shp_col.lower():
-                    actual_col = shp_col
-                    break
-            if actual_col: break
-            
-        # Nếu vẫn không thấy, tự quét dữ liệu bên trong để đối chiếu với danh sách tỉnh đã chọn
-        if not actual_col and selected_provinces:
-            for col in mask_shape.columns:
-                if mask_shape[col].dtype == 'object' or str(mask_shape[col].dtype) == 'string':
-                    vals = mask_shape[col].dropna().astype(str).values
-                    # Nếu thấy bất kỳ tỉnh nào trùng khớp, chốt luôn cột đó
-                    if any(p in vals for p in selected_provinces):
-                        actual_col = col
-                        break
-
+    # Lọc thông minh tránh lỗi cột (KeyError)
+    actual_col = shape_col
     if selected_provinces:
-        if actual_col:
-            display_shape = mask_shape[mask_shape[actual_col].isin(selected_provinces)]
-            shape_col = actual_col # Cập nhật để tooltip hiển thị đúng
+        if shape_col in mask_shape.columns:
+            display_shape = mask_shape[mask_shape[shape_col].isin(selected_provinces)]
         else:
-            return None, None, f"Lỗi Shapefile: Không thể tự động xác định được cột chứa tên tỉnh. Các cột hiện có: {list(mask_shape.columns)}"
+            # Tự động tìm kiếm nếu truyền sai tên cột
+            found_col = None
+            for c in mask_shape.columns:
+                if mask_shape[c].astype(str).isin(selected_provinces).any():
+                    found_col = c
+                    break
+            if found_col:
+                display_shape = mask_shape[mask_shape[found_col].isin(selected_provinces)]
+                actual_col = found_col
+            else:
+                return None, None, "Lỗi Shapefile: Không thể tìm thấy tỉnh đã chọn trong bất kỳ cột nào."
     else:
         display_shape = mask_shape
-        if actual_col: shape_col = actual_col
 
     if display_shape.empty: return None, None, "Không tìm thấy vùng ranh giới sau khi lọc."
     
@@ -500,7 +489,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     gv = idw_knn(x_pts, y_pts, z_pts, grid_xy, k=12, power=3.0).reshape(gx.shape)
     if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
 
-    # 4. Cắt dữ liệu (Clip) theo đúng ranh giới (KHÔNG CHE MỜ THẾ GIỚI TRÊN FOLIUM)
+    # 4. Cắt dữ liệu (Clip) theo đúng ranh giới
     shape_union = display_shape.unary_union
     prep_shape = prep(shape_union)
     mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
@@ -526,29 +515,31 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     buf.seek(0)
     img_base64 = base64.b64encode(buf.read()).decode()
 
-    # 6. Khởi tạo bản đồ tương tác (Nền OpenStreetMap)
+    # ==============================================================================
+    # 6. Khởi tạo bản đồ tương tác (Hiển thị nguyên vẹn nền OpenStreetMap, màu làm mờ)
+    # ==============================================================================
     center_lat = (miny + maxy) / 2
     center_lon = (minx + maxx) / 2
     m = folium.Map(location=[center_lat, center_lon], zoom_start=6, tiles="OpenStreetMap")
 
-    # Lớp ảnh nội suy
+    # Lớp ảnh nội suy (Opacity = 0.6 để nhìn xuyên thấu xuống bản đồ đường xá, sông ngòi bên dưới)
     folium.raster_layers.ImageOverlay(
         image=f"data:image/png;base64,{img_base64}",
         bounds=[[miny, minx], [maxy, maxx]],
-        opacity=0.85,
+        opacity=0.6,
         name=title_text,
         interactive=False
     ).add_to(m)
 
     # Đường viền tỉnh - Hỗ trợ Click/Hover (Chỉnh lại Tooltip dễ nhìn)
-    tooltip_fields = [shape_col] if shape_col and shape_col in display_shape.columns else []
+    tooltip_fields = [actual_col] if actual_col and actual_col in display_shape.columns else []
     tooltip_aliases = ['Tên Tỉnh/Thành: '] if tooltip_fields else []
     
     folium.GeoJson(
         display_shape,
         name="Ranh giới hành chính",
-        style_function=lambda x: {'fillColor': 'transparent', 'color': '#333333', 'weight': 1.0},
-        highlight_function=lambda x: {'weight': 2, 'color': 'red', 'fillColor': '#ffff00', 'fillOpacity': 0.2},
+        style_function=lambda x: {'fillColor': 'transparent', 'color': '#333333', 'weight': 1.5},
+        highlight_function=lambda x: {'weight': 3, 'color': 'red', 'fillColor': '#ffff00', 'fillOpacity': 0.2},
         tooltip=folium.GeoJsonTooltip(
             fields=tooltip_fields, 
             aliases=tooltip_aliases,
@@ -566,23 +557,13 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     m.add_child(colormap_branca)
     folium.LayerControl().add_to(m)
 
-    # 7. Tạo Figure tĩnh cho file tải (PNG/PDF)
+    # ==============================================================================
+    # 7. Tạo Figure tĩnh cho file tải (PNG/PDF) - Nhúng sẵn lớp nền OSM
+    # ==============================================================================
     fig, ax = plt.subplots(figsize=(10, 12))
     ax.set_title(title_text, fontsize=16, fontweight='bold', pad=20)
     
-    if not display_shape.empty:
-        display_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
-        
-        # Thêm nhãn tên tỉnh (Fix lỗi font ô vuông)
-        if shape_col and shape_col in display_shape.columns:
-            for _, row in display_shape.iterrows():
-                centroid = row.geometry.centroid
-                name = str(row[shape_col])
-                ax.text(centroid.x, centroid.y, name, fontsize=8, fontweight='bold',
-                        ha='center', va='center', color='#2b2b2b',
-                        bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle='round,pad=0.3'))
-
-    # Vẽ nội suy
+    # Ảnh nội suy mờ đi chút xíu (alpha=0.6)
     im = ax.imshow(
         gv_masked,
         extent=[minx, maxx, miny, maxy],
@@ -590,16 +571,29 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         norm=norm,
         interpolation='bilinear',
         origin='lower',
-        alpha=0.85
+        alpha=0.6 
     )
-    
-    # Nền Contextily OpenStreetMap (sẽ hoạt động nếu đã cài pip install contextily)
+
+    # Vẽ ranh giới tỉnh
+    if not display_shape.empty:
+        display_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.0)
+        
+        # Thêm nhãn tên tỉnh (Fix lỗi font ô vuông, tạo hộp nền trắng)
+        if actual_col and actual_col in display_shape.columns:
+            for _, row in display_shape.iterrows():
+                centroid = row.geometry.centroid
+                name = str(row[actual_col])
+                ax.text(centroid.x, centroid.y, name, fontsize=8, fontweight='bold',
+                        ha='center', va='center', color='#111111',
+                        bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle='round,pad=0.2'))
+
+    # Nhúng nền OpenStreetMap bằng Contextily (nếu thư viện đã được cài)
     try:
         import contextily as cx
-        cx.add_basemap(ax, crs="EPSG:4326", source=cx.providers.OpenStreetMap.Mapnik, alpha=0.6)
+        cx.add_basemap(ax, crs="EPSG:4326", source=cx.providers.OpenStreetMap.Mapnik, alpha=0.8)
     except ImportError:
-        pass # Nếu chưa cài contextily thì bỏ qua, xuất nền trắng mặc định
-    
+        pass # Nếu chưa cài contextily thì bỏ qua, xuất nền trắng
+
     cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.6, pad=0.02)
     cbar.set_label(f"Giá trị Nội suy", fontsize=11, fontweight='bold')
     cbar.set_ticks(custom_levels)
@@ -608,8 +602,8 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     ax.set_xlim(minx, maxx)
     ax.set_ylim(miny, maxy)
     ax.ticklabel_format(useOffset=False, style='plain')
-    ax.set_xlabel("Kinh độ", fontsize=10)
-    ax.set_ylabel("Vĩ độ", fontsize=10)
+    ax.set_xlabel("Kinh độ")
+    ax.set_ylabel("Vĩ độ")
 
     return m, fig, None
 
