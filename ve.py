@@ -500,7 +500,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     gv = idw_knn(x_pts, y_pts, z_pts, grid_xy, k=12, power=3.0).reshape(gx.shape)
     if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
 
-    # 4. Cắt dữ liệu (Clip) theo đúng ranh giới
+    # 4. Cắt dữ liệu (Clip) theo đúng ranh giới (KHÔNG CHE MỜ THẾ GIỚI TRÊN FOLIUM)
     shape_union = display_shape.unary_union
     prep_shape = prep(shape_union)
     mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
@@ -526,25 +526,10 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     buf.seek(0)
     img_base64 = base64.b64encode(buf.read()).decode()
 
-    # 6. Khởi tạo bản đồ tương tác
+    # 6. Khởi tạo bản đồ tương tác (Nền OpenStreetMap)
     center_lat = (miny + maxy) / 2
     center_lon = (minx + maxx) / 2
-    m = folium.Map(location=[center_lat, center_lon], zoom_start=6, tiles="CartoDB positron")
-
-    # Kỹ thuật Inverted Polygon: Che mờ bên ngoài
-    world_polygon = box(-180, -90, 180, 90)
-    outside_polygon = world_polygon.difference(shape_union)
-    
-    folium.GeoJson(
-        outside_polygon,
-        name="Che mờ ngoài khu vực chọn",
-        style_function=lambda x: {
-            'fillColor': '#ffffff',  
-            'color': 'none',         
-            'fillOpacity': 0.75       
-        },
-        interactive=False 
-    ).add_to(m)
+    m = folium.Map(location=[center_lat, center_lon], zoom_start=6, tiles="OpenStreetMap")
 
     # Lớp ảnh nội suy
     folium.raster_layers.ImageOverlay(
@@ -583,28 +568,48 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
 
     # 7. Tạo Figure tĩnh cho file tải (PNG/PDF)
     fig, ax = plt.subplots(figsize=(10, 12))
-    ax.set_title(title_text, fontsize=16)
+    ax.set_title(title_text, fontsize=16, fontweight='bold', pad=20)
     
     if not display_shape.empty:
         display_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
+        
+        # Thêm nhãn tên tỉnh (Fix lỗi font ô vuông)
+        if shape_col and shape_col in display_shape.columns:
+            for _, row in display_shape.iterrows():
+                centroid = row.geometry.centroid
+                name = str(row[shape_col])
+                ax.text(centroid.x, centroid.y, name, fontsize=8, fontweight='bold',
+                        ha='center', va='center', color='#2b2b2b',
+                        bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle='round,pad=0.3'))
 
+    # Vẽ nội suy
     im = ax.imshow(
         gv_masked,
         extent=[minx, maxx, miny, maxy],
         cmap=cmap,
         norm=norm,
         interpolation='bilinear',
-        origin='lower'
+        origin='lower',
+        alpha=0.85
     )
+    
+    # Nền Contextily OpenStreetMap (sẽ hoạt động nếu đã cài pip install contextily)
+    try:
+        import contextily as cx
+        cx.add_basemap(ax, crs="EPSG:4326", source=cx.providers.OpenStreetMap.Mapnik, alpha=0.6)
+    except ImportError:
+        pass # Nếu chưa cài contextily thì bỏ qua, xuất nền trắng mặc định
+    
     cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.6, pad=0.02)
+    cbar.set_label(f"Giá trị Nội suy", fontsize=11, fontweight='bold')
     cbar.set_ticks(custom_levels)
     cbar.set_ticklabels([f"{val:.1f}" for val in custom_levels])
 
     ax.set_xlim(minx, maxx)
     ax.set_ylim(miny, maxy)
     ax.ticklabel_format(useOffset=False, style='plain')
-    ax.set_xlabel("Kinh độ")
-    ax.set_ylabel("Vĩ độ")
+    ax.set_xlabel("Kinh độ", fontsize=10)
+    ax.set_ylabel("Vĩ độ", fontsize=10)
 
     return m, fig, None
 
