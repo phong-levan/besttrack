@@ -560,7 +560,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         norm=norm,
         interpolation='bilinear',
         origin='lower',
-        alpha=0.85 
+        alpha=1.0 
     )
 
     if not display_shape.empty:
