@@ -417,10 +417,6 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     
     return fig, None
 
-# ==============================================================================
-# HÀM NỘI SUY LINH TINH (TƯƠNG TÁC + TẢI ẢNH CÓ NỀN OSM)
-# BẮT BUỘC DÙNG FILE SHAPEFILE LOCAL CỦA NGƯỜI DÙNG (vn34tinh/vungmoi)
-# ==============================================================================
 def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
     # 1. Chuẩn hóa dữ liệu đầu vào
     input_df.columns = input_df.columns.str.lower().str.strip()
@@ -501,7 +497,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     gv = idw_knn(x_pts, y_pts, z_pts, grid_xy, k=12, power=3.0).reshape(gx.shape)
     if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
 
-    # 4. Cắt dữ liệu (Clip) theo đúng ranh giới
+    # 4. Cắt dữ liệu (Clip) theo ĐÚNG ranh giới
     shape_union = display_shape.unary_union
     prep_shape = prep(shape_union)
     mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
@@ -527,12 +523,12 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     buf.seek(0)
     img_base64 = base64.b64encode(buf.read()).decode()
 
-    # 6. Khởi tạo bản đồ tương tác (KHÔNG CÓ LỚP CHE MỜ, HIỂN THỊ OSM BÌNH THƯỜNG)
+    # 6. Khởi tạo bản đồ tương tác (Nền OpenStreetMap)
     center_lat = (miny + maxy) / 2
     center_lon = (minx + maxx) / 2
     m = folium.Map(location=[center_lat, center_lon], zoom_start=6, tiles="OpenStreetMap")
 
-    # Lớp ảnh nội suy
+    # Lớp ảnh nội suy (Opacity 0.85 đậm đà, không lấn nền ngoài biên giới)
     folium.raster_layers.ImageOverlay(
         image=f"data:image/png;base64,{img_base64}",
         bounds=[[miny, minx], [maxy, maxx]],
@@ -567,7 +563,9 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     m.add_child(colormap_branca)
     folium.LayerControl().add_to(m)
 
-    # 7. TẠO FIGURE TĨNH CHO FILE TẢI
+    # ==============================================================================
+    # 7. TẠO FIGURE TĨNH CHO FILE TẢI 
+    # ==============================================================================
     fig, ax = plt.subplots(figsize=(10, 10)) 
     
     im = ax.imshow(
@@ -902,8 +900,8 @@ def main():
 
                 if st.session_state['folium_map_obj']:
                     st.success("Tạo bản đồ thành công! Kéo xuống dưới cùng để TẢI ẢNH.")
-                    # Render bản đồ Folium
-                    st_folium(st.session_state['folium_map_obj'], width=None, height=800, use_container_width=True)
+                    # THÊM returned_objects=[] ĐỂ CHỐNG RESET BẢN ĐỒ KHI KÉO THẢ
+                    st_folium(st.session_state['folium_map_obj'], width=None, height=800, use_container_width=True, returned_objects=[])
                     
                     st.markdown("---")
                     st.markdown("### 📥 Tải bản vẽ tĩnh (Cắt theo khu vực đã chọn)")
@@ -1021,7 +1019,8 @@ def main():
             html_to_render += '</div>'
             st.markdown(html_to_render, unsafe_allow_html=True)
         
-        st_folium(m, width=None, height=1000, use_container_width=True)
+        # THÊM returned_objects=[] ĐỂ CHỐNG RESET BẢN ĐỒ KHI KÉO THẢ
+        st_folium(m, width=None, height=1000, use_container_width=True, returned_objects=[])
 
 if __name__ == "__main__":
     main()
