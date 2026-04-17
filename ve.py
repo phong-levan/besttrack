@@ -39,7 +39,7 @@ plt.rcParams['axes.unicode_minus'] = False
 ICON_DIR = "icon"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# --- CẤU HÌNH ĐƯỜNG DẪN SHAPEFILE CỐ ĐỊNH ---
+# --- CẤU HÌNH ĐƯỜNG DẪN SHAPEFILE CỐ ĐỊNH (Dùng cho nội suy tĩnh cũ) ---
 SHP_MASK_PATH = os.path.join("shp", "vn34tinh.shp")
 SHP_DISP_PATH = os.path.join("shp", "vungmoi.shp")
 
@@ -165,8 +165,20 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. HÀM XỬ LÝ LOGIC
+# 3. HÀM XỬ LÝ LOGIC & DỮ LIỆU TỪ XA
 # ==============================================================================
+
+@st.cache_data(ttl=86400)
+def get_vn_geojson_online():
+    """Hàm tự động lấy dữ liệu ranh giới 63 tỉnh VN từ Internet (Không cần Shapefile local)"""
+    url = "https://raw.githubusercontent.com/TungTh/tungth.github.io/master/data/vn-provinces.json"
+    try:
+        gdf = gpd.read_file(url)
+        if gdf.crs and gdf.crs.to_epsg() != 4326:
+            gdf.to_crs(epsg=4326, inplace=True)
+        return gdf
+    except Exception as e:
+        return None
 
 @st.cache_data(ttl=300) 
 def get_rainviewer_ts():
@@ -418,9 +430,9 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     return fig, None
 
 # ==============================================================================
-# HÀM NỘI SUY LINH TINH (TƯƠNG TÁC + BẢN ĐỒ TẢI XUỐNG CÓ LỚP NỀN OSM)
+# HÀM NỘI SUY LINH TINH (SỬ DỤNG GEOJSON ONLINE, NỀN OSM, CLIP CHUẨN XÁC)
 # ==============================================================================
-def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
+def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, mask_shape, custom_bounds=None):
     # 1. Chuẩn hóa dữ liệu đầu vào
     input_df.columns = input_df.columns.str.lower().str.strip()
     cols_check = ['lon', 'lat', 'value']
@@ -430,34 +442,16 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
     if valid.empty: return None, None, "Dữ liệu trống sau khi lọc bỏ NaN."
 
-    # 2. Đọc và lọc ranh giới hành chính
-    if not os.path.exists(SHP_MASK_PATH):
-        return None, None, "Không tìm thấy file Shapefile ranh giới."
-    
-    try:
-        mask_shape = gpd.read_file(SHP_MASK_PATH, encoding='utf-8')
-        if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: 
-            mask_shape.to_crs(epsg=4326, inplace=True)
-    except Exception as e:
-        return None, None, f"Lỗi đọc file Shapefile: {e}"
+    # 2. Xử lý ranh giới hành chính từ GeoJSON Online đã tải
+    if mask_shape is None or mask_shape.empty:
+        return None, None, "Lỗi dữ liệu ranh giới. Vui lòng tải lại trang."
 
-    # Lọc thông minh tránh lỗi cột (KeyError)
     actual_col = shape_col
     if selected_provinces:
-        if shape_col in mask_shape.columns:
-            display_shape = mask_shape[mask_shape[shape_col].isin(selected_provinces)]
+        if actual_col in mask_shape.columns:
+            display_shape = mask_shape[mask_shape[actual_col].isin(selected_provinces)]
         else:
-            # Tự động tìm kiếm nếu truyền sai tên cột
-            found_col = None
-            for c in mask_shape.columns:
-                if mask_shape[c].astype(str).isin(selected_provinces).any():
-                    found_col = c
-                    break
-            if found_col:
-                display_shape = mask_shape[mask_shape[found_col].isin(selected_provinces)]
-                actual_col = found_col
-            else:
-                return None, None, "Lỗi Shapefile: Không thể tìm thấy tỉnh đã chọn trong bất kỳ cột nào."
+            return None, None, "Lỗi Shapefile: Không thể tìm thấy tỉnh đã chọn."
     else:
         display_shape = mask_shape
 
@@ -515,14 +509,12 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     buf.seek(0)
     img_base64 = base64.b64encode(buf.read()).decode()
 
-    # ==============================================================================
-    # 6. Khởi tạo bản đồ tương tác (Hiển thị nguyên vẹn nền OpenStreetMap, màu làm mờ)
-    # ==============================================================================
+    # 6. Khởi tạo bản đồ tương tác (KHÔNG CHE MỜ BÊN NGOÀI ĐỂ HIỆN RÕ NỀN THẾ GIỚI OSM)
     center_lat = (miny + maxy) / 2
     center_lon = (minx + maxx) / 2
     m = folium.Map(location=[center_lat, center_lon], zoom_start=6, tiles="OpenStreetMap")
 
-    # Lớp ảnh nội suy (Opacity = 0.6 để nhìn xuyên thấu xuống bản đồ đường xá, sông ngòi bên dưới)
+    # Lớp ảnh nội suy
     folium.raster_layers.ImageOverlay(
         image=f"data:image/png;base64,{img_base64}",
         bounds=[[miny, minx], [maxy, maxx]],
@@ -538,8 +530,8 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     folium.GeoJson(
         display_shape,
         name="Ranh giới hành chính",
-        style_function=lambda x: {'fillColor': 'transparent', 'color': '#333333', 'weight': 1.5},
-        highlight_function=lambda x: {'weight': 3, 'color': 'red', 'fillColor': '#ffff00', 'fillOpacity': 0.2},
+        style_function=lambda x: {'fillColor': 'transparent', 'color': '#333333', 'weight': 1.0},
+        highlight_function=lambda x: {'weight': 2, 'color': 'red', 'fillColor': '#ffff00', 'fillOpacity': 0.2},
         tooltip=folium.GeoJsonTooltip(
             fields=tooltip_fields, 
             aliases=tooltip_aliases,
@@ -557,13 +549,10 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     m.add_child(colormap_branca)
     folium.LayerControl().add_to(m)
 
-    # ==============================================================================
     # 7. Tạo Figure tĩnh cho file tải (PNG/PDF) - Nhúng sẵn lớp nền OSM
-    # ==============================================================================
     fig, ax = plt.subplots(figsize=(10, 12))
     ax.set_title(title_text, fontsize=16, fontweight='bold', pad=20)
     
-    # Ảnh nội suy mờ đi chút xíu (alpha=0.6)
     im = ax.imshow(
         gv_masked,
         extent=[minx, maxx, miny, maxy],
@@ -574,7 +563,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         alpha=0.6 
     )
 
-    # Vẽ ranh giới tỉnh
     if not display_shape.empty:
         display_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.0)
         
@@ -592,7 +580,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         import contextily as cx
         cx.add_basemap(ax, crs="EPSG:4326", source=cx.providers.OpenStreetMap.Mapnik, alpha=0.8)
     except ImportError:
-        pass # Nếu chưa cài contextily thì bỏ qua, xuất nền trắng
+        pass 
 
     cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.6, pad=0.02)
     cbar.set_label(f"Giá trị Nội suy", fontsize=11, fontweight='bold')
@@ -657,7 +645,7 @@ def main():
                     st.markdown("---")
                     btn_run_interpol = st.button("🚀 VẼ BẢN ĐỒ", type="primary", use_container_width=True)
 
-                # --- MENU NỘI SUY TƯƠNG TÁC (FOLIUM) ---
+                # --- MENU NỘI SUY TƯƠNG TÁC (FOLIUM MỚI HOÀN TOÀN) ---
                 elif obs_mode == "Nội suy linh tinh":
                     st.markdown("---")
                     st.markdown("### 🛠️ NỘI SUY TÙY BIẾN (TƯƠNG TÁC)")
@@ -681,44 +669,26 @@ def main():
                         except:
                             st.error("Lỗi định dạng. Vui lòng nhập số cách nhau bằng dấu phẩy.")
                     
-                    st.markdown("**2. Ranh giới Tỉnh**")
+                    st.markdown("**2. Ranh giới Tỉnh (Dữ liệu chuẩn 63 tỉnh)**")
                     
-                    # Danh sách dự phòng để hộp chọn LUÔN LUÔN hiện lên đầy đủ
-                    fallback_provinces = [
-                        "An Giang", "Bà Rịa - Vũng Tàu", "Bắc Giang", "Bắc Kạn", "Bạc Liêu", "Bắc Ninh", "Bến Tre", "Bình Định", "Bình Dương", "Bình Phước", "Bình Thuận", "Cà Mau", "Cần Thơ", "Cao Bằng", "Đà Nẵng", "Đắk Lắk", "Đắk Nông", "Điện Biên", "Đồng Nai", "Đồng Tháp", "Gia Lai", "Hà Giang", "Hà Nam", "Hà Nội", "Hà Tĩnh", "Hải Dương", "Hải Phòng", "Hậu Giang", "Hòa Bình", "Hưng Yên", "Khánh Hòa", "Kiên Giang", "Kon Tum", "Lai Châu", "Lâm Đồng", "Lạng Sơn", "Lào Cai", "Long An", "Nam Định", "Nghệ An", "Ninh Bình", "Ninh Thuận", "Phú Thọ", "Phú Yên", "Quảng Bình", "Quảng Nam", "Quảng Ngãi", "Quảng Ninh", "Quảng Trị", "Sóc Trăng", "Sơn La", "Tây Ninh", "Thái Bình", "Thái Nguyên", "Thanh Hóa", "Thừa Thiên Huế", "Tiền Giang", "TP Hồ Chí Minh", "Trà Vinh", "Tuyên Quang", "Vĩnh Long", "Vĩnh Phúc", "Yên Bái"
-                    ]
-                    province_list = fallback_provinces
-                    shape_col = "NAME_1"
+                    # Tải tự động GeoJSON chuẩn của VN từ Internet
+                    mask_shape_online = get_vn_geojson_online()
                     
-                    # Cố gắng quét file Shapefile để lấy đúng danh sách và tên cột
-                    if os.path.exists(SHP_MASK_PATH):
-                        try:
-                            tmp_shp = gpd.read_file(SHP_MASK_PATH, encoding='utf-8')
-                            found = False
-                            for col in ['TEN_TINH', 'NAME_1', 'Name', 'PROVINCE', 'Tỉnh', 'Tinh', 'TENTINH', 'Ten_Tinh', 'ten_tinh', 'NAME', 'tinh']:
-                                for shp_col in tmp_shp.columns:
-                                    if col.lower() == shp_col.lower():
-                                        shape_col = shp_col
-                                        extracted = sorted(tmp_shp[shp_col].dropna().astype(str).unique().tolist())
-                                        if extracted:
-                                            province_list = extracted
-                                        found = True
-                                        break
-                                if found: break
-                                
-                            if not found:
-                                # Fallback: tìm cột dạng string có nhiều giá trị unique
-                                for col in tmp_shp.columns:
-                                    if tmp_shp[col].dtype == 'object' or str(tmp_shp[col].dtype) == 'string':
-                                        unique_vals = tmp_shp[col].dropna().astype(str).unique()
-                                        if len(unique_vals) > 5: 
-                                            shape_col = col
-                                            province_list = sorted(unique_vals.tolist())
-                                            break
-                        except: pass
+                    if mask_shape_online is not None:
+                        # Cột chứa tên tỉnh trong file Github TungTh thường là 'Name'
+                        shape_col = "Name" if "Name" in mask_shape_online.columns else mask_shape_online.columns[0]
+                        for c in ['Name', 'TEN_TINH', 'NAME_1', 'PROVINCE']:
+                            if c in mask_shape_online.columns:
+                                shape_col = c
+                                break
+                        province_list = sorted(mask_shape_online[shape_col].dropna().astype(str).unique().tolist())
+                    else:
+                        st.error("Không thể tải ranh giới Việt Nam từ Internet. Vui lòng kiểm tra kết nối mạng!")
+                        province_list = []
+                        shape_col = ""
                     
                     # Hộp chọn Multiselect
-                    selected_provinces = st.multiselect("Tách chọn Tỉnh (Để trống = Toàn bộ):", province_list)
+                    selected_provinces = st.multiselect("Tách chọn Tỉnh (Để trống = Toàn bộ VN):", province_list)
                     
                     st.markdown("**3. Cắt cúp hiển thị & tải (Kinh Vĩ độ)**")
                     use_custom_bounds = st.checkbox("✂️ Bật giới hạn tải/hiển thị ô lưới", value=False)
@@ -885,7 +855,7 @@ def main():
                             with st.spinner("Đang xử lý nội suy tương tác và trích xuất bản vẽ..."):
                                 m_map, m_fig, err = run_interactive_folium_interpolation(
                                     df_in, title_interpol, cmap_option, 
-                                    num_bins, custom_levels, selected_provinces, shape_col, custom_bounds_dict
+                                    num_bins, custom_levels, selected_provinces, shape_col, mask_shape_online, custom_bounds_dict
                                 )
                                 if err: 
                                     st.error(f"❌ Lỗi: {err}")
