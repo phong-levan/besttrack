@@ -414,7 +414,7 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     
     return fig, None
 
-# Hàm MỚI: Dành cho "Nội suy linh tinh" (Tương tác Folium, tách tỉnh, tùy chọn màu, CÓ TỌA ĐỘ)
+# Hàm MỚI: Dành cho "Nội suy linh tinh" (Tương tác Folium, tách tỉnh, tùy chọn màu, CÓ TỌA ĐỘ VÀ CÓ VIỀN QUỐC GIA)
 def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
     input_df.columns = input_df.columns.str.lower().str.strip()
     cols_check = ['lon', 'lat', 'value']
@@ -424,7 +424,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
     if valid.empty: return None, None, "Dữ liệu trống sau khi lọc bỏ NaN."
 
-    # Xử lý Shapefile và Bounding Box
+    # 1. Xử lý Shapefile Mask (vn34tinh)
     if not os.path.exists(SHP_MASK_PATH):
         return None, None, "Không tìm thấy file vn34tinh.shp"
     
@@ -435,6 +435,16 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     if selected_provinces and shape_col:
         mask_shape = mask_shape[mask_shape[shape_col].isin(selected_provinces)]
         if mask_shape.empty: return None, None, "Không tìm thấy tỉnh đã chọn."
+
+    # 2. Xử lý Shapefile Ranh giới hiển thị (vungmoi.shp - Ranh giới quốc gia)
+    disp_shape = None
+    if os.path.exists(SHP_DISP_PATH):
+        try:
+            disp_shape = gpd.read_file(SHP_DISP_PATH)
+            if disp_shape.crs and disp_shape.crs.to_epsg() != 4326: 
+                disp_shape.to_crs(epsg=4326, inplace=True)
+        except Exception as e:
+            pass # Nếu lỗi thì bỏ qua, chỉ hiển thị ranh giới tỉnh
     
     # Xác định giới hạn Tọa độ
     if custom_bounds:
@@ -504,14 +514,23 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         interactive=False
     ).add_to(m)
 
-    # Thêm đường viền tỉnh (GeoJson) để có thể Click xem Tên tỉnh
+    # Thêm đường viền Quốc gia/Khu vực (vungmoi.shp)
+    if disp_shape is not None and not disp_shape.empty:
+        folium.GeoJson(
+            disp_shape,
+            name="Ranh giới Khu vực/Quốc gia",
+            style_function=lambda x: {'fillColor': 'transparent', 'color': '#333333', 'weight': 1.5, 'dashArray': '4, 4'},
+            interactive=False # Không tương tác để tránh đè lên tooltip của tỉnh
+        ).add_to(m)
+
+    # Thêm đường viền tỉnh (GeoJson - vn34tinh) để có thể Click xem Tên tỉnh
     tooltip_fields = [shape_col] if shape_col else []
     tooltip_aliases = ['Tên Tỉnh: '] if shape_col else []
     
     folium.GeoJson(
         mask_shape,
         name="Ranh giới Tỉnh",
-        style_function=lambda x: {'fillColor': 'transparent', 'color': 'black', 'weight': 1.5},
+        style_function=lambda x: {'fillColor': 'transparent', 'color': 'black', 'weight': 1.0},
         highlight_function=lambda x: {'weight': 3, 'color': 'red'},
         tooltip=folium.GeoJsonTooltip(fields=tooltip_fields, aliases=tooltip_aliases) if tooltip_fields else None
     ).add_to(m)
@@ -532,8 +551,13 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     fig, ax = plt.subplots(figsize=(12, 10))
     ax.set_title(title_text, fontsize=16)
     
+    # Vẽ ranh giới quốc gia (vungmoi.shp)
+    if disp_shape is not None and not disp_shape.empty:
+        disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.0)
+
+    # Vẽ ranh giới tỉnh (vn34tinh)
     if not mask_shape.empty:
-        mask_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
+        mask_shape.boundary.plot(ax=ax, edgecolor='gray', linewidth=0.5, linestyle=':')
 
     im = ax.imshow(
         gv_masked,
@@ -825,7 +849,7 @@ def main():
 
                 if st.session_state['folium_map_obj']:
                     st.success("Tạo bản đồ thành công! Kéo xuống dưới cùng để TẢI ẢNH.")
-                    st_folium(st.session_state['folium_map_obj'], width=None, height=800, use_container_width=True)
+                    st.components.v1.html(st.session_state['folium_map_obj']._repr_html_(), width=None, height=800)
                     
                     st.markdown("---")
                     st.markdown("### 📥 Tải bản vẽ tĩnh (Cắt theo khu vực đã chọn)")
