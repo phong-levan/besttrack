@@ -414,19 +414,70 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     
     return fig, None
 
-# Hàm MỚI: Dành cho "Nội suy linh tinh" (Tương tác Folium, tách tỉnh, tùy chọn màu, CÓ TỌA ĐỘ VÀ CÓ VIỀN QUỐC GIA)
+# Hàm trích xuất tĩnh bản vẽ cho 1 Tỉnh (dùng chung Cache Nội suy)
+def generate_single_province_fig(cache, prov_name, title_text):
+    mask_shape = cache['mask_shape']
+    shape_col = cache['shape_col']
+    prov_shape = mask_shape[mask_shape[shape_col] == prov_name]
+    
+    if prov_shape.empty: 
+        return None
+
+    # Lấy tọa độ Box của Tỉnh
+    p_minx, p_miny, p_maxx, p_maxy = prov_shape.total_bounds
+    # Mở rộng Padding (10%) để nhìn đẹp hơn
+    pad_x = (p_maxx - p_minx) * 0.1
+    pad_y = (p_maxy - p_miny) * 0.1
+    p_minx -= pad_x; p_maxx += pad_x; p_miny -= pad_y; p_maxy += pad_y
+    
+    # Tạo Mask riêng cho Tỉnh này từ Grid Data chung
+    grid_xy = np.column_stack([cache['gx'].ravel(), cache['gy'].ravel()])
+    prep_shape = prep(prov_shape.unary_union)
+    mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(cache['gx'].shape)
+    gv_masked = np.where(mask_flat, cache['gv'], np.nan)
+    
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.set_title(f"{title_text}\n(Khu vực: {prov_name})", fontsize=16)
+    
+    # Vẽ ranh giới Tỉnh
+    prov_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.5)
+    
+    im = ax.imshow(
+        gv_masked,
+        extent=[cache['minx'], cache['maxx'], cache['miny'], cache['maxy']],
+        cmap=cache['cmap'],
+        norm=cache['norm'],
+        interpolation='bilinear',
+        origin='lower'
+    )
+    
+    # Zoom camera vào đúng Tỉnh
+    ax.set_xlim(p_minx, p_maxx)
+    ax.set_ylim(p_miny, p_maxy)
+    
+    cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.7, pad=0.02)
+    cbar.set_ticks(cache['custom_levels'])
+    cbar.set_ticklabels([f"{val:.1f}" for val in cache['custom_levels']])
+    
+    ax.ticklabel_format(useOffset=False, style='plain')
+    ax.set_xlabel("Kinh độ")
+    ax.set_ylabel("Vĩ độ")
+    
+    return fig
+
+# Hàm MỚI: Dành cho "Nội suy linh tinh"
 def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
     input_df.columns = input_df.columns.str.lower().str.strip()
     cols_check = ['lon', 'lat', 'value']
     if not all(c in input_df.columns for c in cols_check):
-        return None, None, f"File thiếu cột bắt buộc: {cols_check}"
+        return None, None, None, f"File thiếu cột bắt buộc: {cols_check}"
 
     valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
-    if valid.empty: return None, None, "Dữ liệu trống sau khi lọc bỏ NaN."
+    if valid.empty: return None, None, None, "Dữ liệu trống sau khi lọc bỏ NaN."
 
     # 1. Xử lý Shapefile Mask (vn34tinh)
     if not os.path.exists(SHP_MASK_PATH):
-        return None, None, "Không tìm thấy file vn34tinh.shp"
+        return None, None, None, "Không tìm thấy file vn34tinh.shp"
     
     mask_shape = gpd.read_file(SHP_MASK_PATH)
     if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: 
@@ -434,7 +485,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         
     if selected_provinces and shape_col:
         mask_shape = mask_shape[mask_shape[shape_col].isin(selected_provinces)]
-        if mask_shape.empty: return None, None, "Không tìm thấy tỉnh đã chọn."
+        if mask_shape.empty: return None, None, None, "Không tìm thấy tỉnh đã chọn."
 
     # 2. Xử lý Shapefile Ranh giới hiển thị (vungmoi.shp - Ranh giới quốc gia)
     disp_shape = None
@@ -444,7 +495,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
             if disp_shape.crs and disp_shape.crs.to_epsg() != 4326: 
                 disp_shape.to_crs(epsg=4326, inplace=True)
         except Exception as e:
-            pass # Nếu lỗi thì bỏ qua, chỉ hiển thị ranh giới tỉnh
+            pass
     
     # Xác định giới hạn Tọa độ
     if custom_bounds:
@@ -454,7 +505,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         maxy = custom_bounds['maxy']
     else:
         minx, miny, maxx, maxy = mask_shape.total_bounds
-        # Mở rộng nhẹ ranh giới để nội suy tràn đều nếu không dùng bounds tùy chỉnh
         padding = 0.5
         minx -= padding; maxx += padding; miny -= padding; maxy += padding
 
@@ -476,7 +526,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
     gv_masked = np.where(mask_flat, gv, np.nan)
 
-    # Lấy thang màu do user chọn
+    # Lấy thang màu
     cmap = plt.get_cmap(cmap_name)
     
     if custom_levels is not None and len(custom_levels) > 1:
@@ -484,16 +534,31 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
     else:
         vmin_val, vmax_val = np.nanmin(gv_masked), np.nanmax(gv_masked)
-        # Tự động tạo step
         custom_levels = np.linspace(vmin_val, vmax_val, num_bins + 1)
         norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
+
+    # LƯU TRỮ CACHE NỘI SUY (ĐỂ SAU CLICK VÀO TỈNH KHÔNG CẦN TÍNH LẠI MÀ CHỈ MASK LẠI)
+    cache_dict = {
+        'gv': gv,
+        'gx': gx,
+        'gy': gy,
+        'minx': minx,
+        'maxx': maxx,
+        'miny': miny,
+        'maxy': maxy,
+        'cmap': cmap,
+        'norm': norm,
+        'custom_levels': custom_levels,
+        'mask_shape': mask_shape,
+        'shape_col': shape_col
+    }
 
     # ----------------------------------------------------
     # TẠO HÌNH ẢNH RGBA ĐỂ ĐƯA LÊN FOLIUM
     # ----------------------------------------------------
     rgba = cmap(norm(gv_masked))
-    rgba[np.isnan(gv_masked)] = [0, 0, 0, 0] # Đặt vùng ngoài Mask thành trong suốt
-    rgba_folium = np.flipud(rgba) # Folium đọc tọa độ từ trên xuống
+    rgba[np.isnan(gv_masked)] = [0, 0, 0, 0]
+    rgba_folium = np.flipud(rgba)
 
     buf = io.BytesIO()
     plt.imsave(buf, rgba_folium, format='png')
@@ -514,16 +579,16 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         interactive=False
     ).add_to(m)
 
-    # Thêm đường viền Quốc gia/Khu vực (vungmoi.shp)
+    # Thêm đường viền Quốc gia
     if disp_shape is not None and not disp_shape.empty:
         folium.GeoJson(
             disp_shape,
             name="Ranh giới Khu vực/Quốc gia",
             style_function=lambda x: {'fillColor': 'transparent', 'color': '#333333', 'weight': 1.5, 'dashArray': '4, 4'},
-            interactive=False # Không tương tác để tránh đè lên tooltip của tỉnh
+            interactive=False
         ).add_to(m)
 
-    # Thêm đường viền tỉnh (GeoJson - vn34tinh) để có thể Click xem Tên tỉnh
+    # Thêm đường viền tỉnh (GeoJson) CÓ CHO PHÉP INTERACTIVE CLICK
     tooltip_fields = [shape_col] if shape_col else []
     tooltip_aliases = ['Tên Tỉnh: '] if shape_col else []
     
@@ -531,11 +596,10 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         mask_shape,
         name="Ranh giới Tỉnh",
         style_function=lambda x: {'fillColor': 'transparent', 'color': 'black', 'weight': 1.0},
-        highlight_function=lambda x: {'weight': 3, 'color': 'red'},
+        highlight_function=lambda x: {'weight': 3, 'color': 'red', 'fillColor': '#ff0000', 'fillOpacity': 0.2},
         tooltip=folium.GeoJsonTooltip(fields=tooltip_fields, aliases=tooltip_aliases) if tooltip_fields else None
     ).add_to(m)
 
-    # Thêm thanh ColorMap
     colormap_branca = cm.StepColormap(
         colors=[mcolors.to_hex(cmap(norm(val))) for val in custom_levels[:-1]],
         vmin=custom_levels[0], vmax=custom_levels[-1],
@@ -546,16 +610,14 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     folium.LayerControl().add_to(m)
 
     # ----------------------------------------------------
-    # TẠO FIGURE MATPLOTLIB ĐỂ TẢI XUỐNG (PDF/PNG)
+    # TẠO FIGURE MATPLOTLIB TỔNG ĐỂ TẢI XUỐNG
     # ----------------------------------------------------
     fig, ax = plt.subplots(figsize=(12, 10))
     ax.set_title(title_text, fontsize=16)
     
-    # Vẽ ranh giới quốc gia (vungmoi.shp)
     if disp_shape is not None and not disp_shape.empty:
         disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.0)
 
-    # Vẽ ranh giới tỉnh (vn34tinh)
     if not mask_shape.empty:
         mask_shape.boundary.plot(ax=ax, edgecolor='gray', linewidth=0.5, linestyle=':')
 
@@ -577,7 +639,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     ax.set_xlabel("Kinh độ")
     ax.set_ylabel("Vĩ độ")
 
-    return m, fig, None
+    return m, fig, cache_dict, None
 
 # ==============================================================================
 # 4. MAIN APP
@@ -589,6 +651,8 @@ def main():
         st.session_state['folium_map_obj'] = None
     if 'folium_fig_obj' not in st.session_state:
         st.session_state['folium_fig_obj'] = None
+    if 'interp_cache' not in st.session_state:
+        st.session_state['interp_cache'] = None
         
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
@@ -633,7 +697,7 @@ def main():
                 elif obs_mode == "Nội suy linh tinh":
                     st.markdown("---")
                     st.markdown("### 🛠️ NỘI SUY TÙY BIẾN (TƯƠNG TÁC)")
-                    title_interpol = st.text_input("Tiêu đề bản đồ:", value="Bản đồ Nội Suy Tùy Chọn")
+                    title_interpol = st.text_input("Tiêu đề bản đồ:", value="Bản đồ Nội Suy Tùy Chọn", key="title_custom_interp")
                     data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv'], key="data_up_custom")
                     
                     st.markdown("**1. Cấu hình màu & Ngưỡng**")
@@ -833,7 +897,7 @@ def main():
                             df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
                             
                             with st.spinner("Đang xử lý nội suy tương tác và trích xuất bản vẽ..."):
-                                m_map, m_fig, err = run_interactive_folium_interpolation(
+                                m_map, m_fig, m_cache, err = run_interactive_folium_interpolation(
                                     df_in, title_interpol, cmap_option, 
                                     num_bins, custom_levels, selected_provinces, shape_col, custom_bounds_dict
                                 )
@@ -842,17 +906,27 @@ def main():
                                 else: 
                                     st.session_state['folium_map_obj'] = m_map
                                     st.session_state['folium_fig_obj'] = m_fig
+                                    st.session_state['interp_cache'] = m_cache
                         except Exception as e: 
                             st.error(f"❌ Lỗi Xử lý Dữ liệu: {e}")
                     else: 
                         st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
 
                 if st.session_state['folium_map_obj']:
-                    st.success("Tạo bản đồ thành công! Kéo xuống dưới cùng để TẢI ẢNH.")
-                    st.components.v1.html(st.session_state['folium_map_obj']._repr_html_(), width=None, height=800)
+                    st.success("Bản đồ thành công! Kéo xuống để tải Toàn bộ khu vực, HOẶC click thẳng vào Tỉnh trên bản đồ để tải riêng.")
                     
+                    # Gọi map với st_folium và hứng lại event click để bắt Province
+                    map_data = st_folium(
+                        st.session_state['folium_map_obj'], 
+                        width=None, 
+                        height=800, 
+                        use_container_width=True,
+                        returned_objects=["last_active_drawing"]
+                    )
+                    
+                    # Nút Tải Toàn bộ khu vực
                     st.markdown("---")
-                    st.markdown("### 📥 Tải bản vẽ tĩnh (Cắt theo khu vực đã chọn)")
+                    st.markdown("### 📥 Tải bản vẽ tĩnh (Toàn bộ khu vực đã chọn)")
                     col_dl1, col_dl2 = st.columns([1, 3])
                     with col_dl1: 
                         fmt = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_folium")
@@ -861,7 +935,42 @@ def main():
                     buf.seek(0)
                     with col_dl2:
                         st.write(""); st.write("")
-                        st.download_button(label=f"⬇️ Tải ảnh về ({fmt.upper()})", data=buf, file_name=f"ban_do_tuy_chinh.{fmt}", mime=f"image/{fmt}", key="dl_btn_folium")
+                        st.download_button(label=f"⬇️ Tải Toàn bộ ({fmt.upper()})", data=buf, file_name=f"ban_do_tong.{fmt}", mime=f"image/{fmt}", key="dl_btn_folium")
+
+                    # Phần xuất Tỉnh đang Click (Nếu có)
+                    if map_data and map_data.get("last_active_drawing"):
+                        props = map_data["last_active_drawing"].get("properties", {})
+                        cache = st.session_state.get('interp_cache')
+                        
+                        if cache and cache.get('shape_col') and cache['shape_col'] in props:
+                            clicked_prov = props[cache['shape_col']]
+                            
+                            st.markdown("---")
+                            st.markdown(f"### 🎯 Tải bản vẽ Tỉnh: **{clicked_prov}**")
+                            
+                            # Trích xuất hình cho 1 tỉnh ngay tức thời dựa vào dữ liệu Grid trong cache
+                            prov_fig = generate_single_province_fig(cache, clicked_prov, st.session_state.get("title_custom_interp", "Bản đồ Nội Suy"))
+                            
+                            if prov_fig:
+                                col_p1, col_p2 = st.columns([1, 3])
+                                with col_p1:
+                                    fmt_prov = st.selectbox("Định dạng riêng:", ["png", "pdf"], key="fmt_prov")
+                                    
+                                buf_prov = io.BytesIO()
+                                prov_fig.savefig(buf_prov, format=fmt_prov, dpi=300, bbox_inches='tight')
+                                buf_prov.seek(0)
+                                
+                                with col_p2:
+                                    st.write(""); st.write("")
+                                    st.download_button(
+                                        label=f"⬇️ Tải ảnh Tỉnh {clicked_prov} ({fmt_prov.upper()})", 
+                                        data=buf_prov, 
+                                        file_name=f"ban_do_{clicked_prov}.{fmt_prov}", 
+                                        mime=f"image/{fmt_prov}", 
+                                        key="dl_btn_prov"
+                                    )
+                                # Streamlit handles automatic display garbage collection for subplots over time, 
+                                # but implicit handling is fine here given the workflow.
                 else:
                     st.info("👈 Vui lòng cấu hình dữ liệu, chọn màu, ngưỡng, tọa độ và nhấn 'VẼ BẢN ĐỒ TƯƠNG TÁC'.")
 
