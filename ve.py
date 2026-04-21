@@ -414,19 +414,19 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     
     return fig, None
 
-# Hàm MỚI: Dành cho "Nội suy linh tinh" (Tương tác Folium, tách tỉnh, tùy chọn màu)
-def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col):
+# Hàm MỚI: Dành cho "Nội suy linh tinh" (Tương tác Folium, tách tỉnh, tùy chọn màu, CÓ TỌA ĐỘ)
+def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
     input_df.columns = input_df.columns.str.lower().str.strip()
     cols_check = ['lon', 'lat', 'value']
     if not all(c in input_df.columns for c in cols_check):
-        return None, f"File thiếu cột bắt buộc: {cols_check}"
+        return None, None, f"File thiếu cột bắt buộc: {cols_check}"
 
     valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
-    if valid.empty: return None, "Dữ liệu trống sau khi lọc bỏ NaN."
+    if valid.empty: return None, None, "Dữ liệu trống sau khi lọc bỏ NaN."
 
     # Xử lý Shapefile và Bounding Box
     if not os.path.exists(SHP_MASK_PATH):
-        return None, "Không tìm thấy file vn34tinh.shp"
+        return None, None, "Không tìm thấy file vn34tinh.shp"
     
     mask_shape = gpd.read_file(SHP_MASK_PATH)
     if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: 
@@ -434,14 +434,19 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         
     if selected_provinces and shape_col:
         mask_shape = mask_shape[mask_shape[shape_col].isin(selected_provinces)]
-        if mask_shape.empty: return None, "Không tìm thấy tỉnh đã chọn."
+        if mask_shape.empty: return None, None, "Không tìm thấy tỉnh đã chọn."
     
-    # Lấy ranh giới theo các tỉnh đã chọn
-    minx, miny, maxx, maxy = mask_shape.total_bounds
-    
-    # Mở rộng nhẹ ranh giới để nội suy tràn đều
-    padding = 0.5
-    minx -= padding; maxx += padding; miny -= padding; maxy += padding
+    # Xác định giới hạn Tọa độ
+    if custom_bounds:
+        minx = custom_bounds['minx']
+        maxx = custom_bounds['maxx']
+        miny = custom_bounds['miny']
+        maxy = custom_bounds['maxy']
+    else:
+        minx, miny, maxx, maxy = mask_shape.total_bounds
+        # Mở rộng nhẹ ranh giới để nội suy tràn đều nếu không dùng bounds tùy chỉnh
+        padding = 0.5
+        minx -= padding; maxx += padding; miny -= padding; maxy += padding
 
     x_pts = valid['lon'].to_numpy()
     y_pts = valid['lat'].to_numpy()
@@ -473,13 +478,15 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         custom_levels = np.linspace(vmin_val, vmax_val, num_bins + 1)
         norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
 
-    # Convert Grid to RGBA Image
+    # ----------------------------------------------------
+    # TẠO HÌNH ẢNH RGBA ĐỂ ĐƯA LÊN FOLIUM
+    # ----------------------------------------------------
     rgba = cmap(norm(gv_masked))
     rgba[np.isnan(gv_masked)] = [0, 0, 0, 0] # Đặt vùng ngoài Mask thành trong suốt
-    rgba = np.flipud(rgba) # Folium đọc tọa độ từ trên xuống
+    rgba_folium = np.flipud(rgba) # Folium đọc tọa độ từ trên xuống
 
     buf = io.BytesIO()
-    plt.imsave(buf, rgba, format='png')
+    plt.imsave(buf, rgba_folium, format='png')
     buf.seek(0)
     img_base64 = base64.b64encode(buf.read()).decode()
 
@@ -519,7 +526,34 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     m.add_child(colormap_branca)
     folium.LayerControl().add_to(m)
 
-    return m, None
+    # ----------------------------------------------------
+    # TẠO FIGURE MATPLOTLIB ĐỂ TẢI XUỐNG (PDF/PNG)
+    # ----------------------------------------------------
+    fig, ax = plt.subplots(figsize=(12, 10))
+    ax.set_title(title_text, fontsize=16)
+    
+    if not mask_shape.empty:
+        mask_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
+
+    im = ax.imshow(
+        gv_masked,
+        extent=[minx, maxx, miny, maxy],
+        cmap=cmap,
+        norm=norm,
+        interpolation='bilinear',
+        origin='lower'
+    )
+    cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.7, pad=0.02)
+    cbar.set_ticks(custom_levels)
+    cbar.set_ticklabels([f"{val:.1f}" for val in custom_levels])
+
+    ax.set_xlim(minx, maxx)
+    ax.set_ylim(miny, maxy)
+    ax.ticklabel_format(useOffset=False, style='plain')
+    ax.set_xlabel("Kinh độ")
+    ax.set_ylabel("Vĩ độ")
+
+    return m, fig, None
 
 # ==============================================================================
 # 4. MAIN APP
@@ -529,6 +563,8 @@ def main():
         st.session_state['interpol_fig'] = None
     if 'folium_map_obj' not in st.session_state:
         st.session_state['folium_map_obj'] = None
+    if 'folium_fig_obj' not in st.session_state:
+        st.session_state['folium_fig_obj'] = None
         
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
@@ -547,6 +583,7 @@ def main():
         title_interpol = ""
         data_file_interpol = None
         btn_run_interpol = False
+        custom_bounds_dict = None
 
         if topic == "Dữ liệu quan trắc":
             if st.session_state['logged_in']:
@@ -575,7 +612,7 @@ def main():
                     title_interpol = st.text_input("Tiêu đề bản đồ:", value="Bản đồ Nội Suy Tùy Chọn")
                     data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv'], key="data_up_custom")
                     
-                    st.markdown("**Cấu hình hiển thị**")
+                    st.markdown("**1. Cấu hình màu & Ngưỡng**")
                     cmap_list = plt.colormaps()
                     default_cmap_idx = cmap_list.index('jet') if 'jet' in cmap_list else 0
                     cmap_option = st.selectbox("Chọn thang màu (Colormap):", cmap_list, index=default_cmap_idx)
@@ -592,7 +629,7 @@ def main():
                         except:
                             st.error("Lỗi định dạng. Vui lòng nhập số cách nhau bằng dấu phẩy.")
                     
-                    # Trích xuất danh sách tỉnh từ shapefile để cho phép tách/chọn
+                    st.markdown("**2. Ranh giới Tỉnh**")
                     province_list = []
                     shape_col = None
                     if os.path.exists(SHP_MASK_PATH):
@@ -607,8 +644,20 @@ def main():
                     
                     selected_provinces = []
                     if province_list:
-                        selected_provinces = st.multiselect("Bật tắt/Tách chọn Tỉnh (Để trống = Chọn tất cả 34 tỉnh):", province_list)
+                        selected_provinces = st.multiselect("Bật tắt/Tách chọn Tỉnh (Để trống = Tất cả):", province_list)
                     
+                    st.markdown("**3. Cắt cúp theo Tọa độ**")
+                    use_custom_bounds = st.checkbox("✂️ Giới hạn tải & hiển thị theo Tọa độ", value=False)
+                    if use_custom_bounds:
+                        col_b1, col_b2 = st.columns(2)
+                        with col_b1:
+                            min_lon = st.number_input("Kinh độ Min (Trái)", value=101.80, format="%.2f")
+                            min_lat = st.number_input("Vĩ độ Min (Dưới)", value=8.00, format="%.2f")
+                        with col_b2:
+                            max_lon = st.number_input("Kinh độ Max (Phải)", value=115.00, format="%.2f")
+                            max_lat = st.number_input("Vĩ độ Max (Trên)", value=24.00, format="%.2f")
+                        custom_bounds_dict = {'minx': min_lon, 'maxx': max_lon, 'miny': min_lat, 'maxy': max_lat}
+
                     st.markdown("---")
                     btn_run_interpol = st.button("🚀 VẼ BẢN ĐỒ TƯƠNG TÁC", type="primary", use_container_width=True)
 
@@ -742,42 +791,55 @@ def main():
                     st.pyplot(st.session_state['interpol_fig'], use_container_width=True)
                     st.markdown("### 📥 Tải xuống")
                     col_dl1, col_dl2 = st.columns([1, 3])
-                    with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"])
+                    with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_static")
                     buf = io.BytesIO()
                     st.session_state['interpol_fig'].savefig(buf, format=fmt, dpi=300, bbox_inches='tight')
                     buf.seek(0)
                     with col_dl2:
                         st.write(""); st.write("")
-                        st.download_button(label=f"⬇️ Tải ảnh về ({fmt.upper()})", data=buf, file_name=f"ban_do.{fmt}", mime=f"image/{fmt}")
+                        st.download_button(label=f"⬇️ Tải ảnh về ({fmt.upper()})", data=buf, file_name=f"ban_do_tinh.{fmt}", mime=f"image/{fmt}", key="dl_btn_static")
                 else:
                     st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
 
-            # Xử lý MỚI: Nội suy Linh tinh (Tương tác Folium)
+            # Xử lý MỚI: Nội suy Linh tinh (Tương tác Folium & Có Tọa độ)
             elif obs_mode == "Nội suy linh tinh":
                 if btn_run_interpol:
                     if data_file_interpol:
                         try:
                             df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
                             
-                            with st.spinner("Đang xử lý nội suy tương tác (Folium)..."):
-                                m_map, err = run_interactive_folium_interpolation(
+                            with st.spinner("Đang xử lý nội suy tương tác và trích xuất bản vẽ..."):
+                                m_map, m_fig, err = run_interactive_folium_interpolation(
                                     df_in, title_interpol, cmap_option, 
-                                    num_bins, custom_levels, selected_provinces, shape_col
+                                    num_bins, custom_levels, selected_provinces, shape_col, custom_bounds_dict
                                 )
                                 if err: 
                                     st.error(f"❌ Lỗi: {err}")
                                 else: 
                                     st.session_state['folium_map_obj'] = m_map
+                                    st.session_state['folium_fig_obj'] = m_fig
                         except Exception as e: 
                             st.error(f"❌ Lỗi Xử lý Dữ liệu: {e}")
                     else: 
                         st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
 
                 if st.session_state['folium_map_obj']:
-                    st.success("Tạo bản đồ thành công! Bạn có thể lăn chuột thu phóng và click vào từng tỉnh.")
+                    st.success("Tạo bản đồ thành công! Kéo xuống dưới cùng để TẢI ẢNH.")
                     st_folium(st.session_state['folium_map_obj'], width=None, height=800, use_container_width=True)
+                    
+                    st.markdown("---")
+                    st.markdown("### 📥 Tải bản vẽ tĩnh (Cắt theo khu vực đã chọn)")
+                    col_dl1, col_dl2 = st.columns([1, 3])
+                    with col_dl1: 
+                        fmt = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_folium")
+                    buf = io.BytesIO()
+                    st.session_state['folium_fig_obj'].savefig(buf, format=fmt, dpi=300, bbox_inches='tight')
+                    buf.seek(0)
+                    with col_dl2:
+                        st.write(""); st.write("")
+                        st.download_button(label=f"⬇️ Tải ảnh về ({fmt.upper()})", data=buf, file_name=f"ban_do_tuy_chinh.{fmt}", mime=f"image/{fmt}", key="dl_btn_folium")
                 else:
-                    st.info("👈 Vui lòng cấu hình dữ liệu, chọn màu, ngưỡng và nhấn nút 'VẼ BẢN ĐỒ TƯƠNG TÁC'.")
+                    st.info("👈 Vui lòng cấu hình dữ liệu, chọn màu, ngưỡng, tọa độ và nhấn 'VẼ BẢN ĐỒ TƯƠNG TÁC'.")
 
     elif topic == "Dự báo điểm (KMA)":
         if not st.session_state['logged_in']:
