@@ -732,7 +732,14 @@ def main():
                     
                     selected_provinces = []
                     if province_list:
-                        selected_provinces = st.multiselect("Bật tắt/Tách chọn Tỉnh (Để trống = Tất cả):", province_list)
+                        # Thay đổi: Thêm selectbox ở đây để chọn 1 tỉnh nhanh gọn cho map chính
+                        quick_prov = st.selectbox("Hộp chọn nhanh 1 Tỉnh (Bản đồ chính):", ["-- Tất cả Tỉnh --"] + province_list)
+                        multi_provs = st.multiselect("Hoặc chọn thủ công nhiều Tỉnh (Bật/Tắt):", province_list)
+                        
+                        if quick_prov != "-- Tất cả Tỉnh --":
+                            selected_provinces = [quick_prov]
+                        else:
+                            selected_provinces = multi_provs
                     
                     st.markdown("**3. Cắt cúp theo Tọa độ**")
                     use_custom_bounds = st.checkbox("✂️ Giới hạn tải & hiển thị theo Tọa độ", value=False)
@@ -913,7 +920,7 @@ def main():
                         st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
 
                 if st.session_state['folium_map_obj']:
-                    st.success("Bản đồ thành công! Kéo xuống để tải Toàn bộ khu vực, HOẶC click thẳng vào Tỉnh trên bản đồ để tải riêng.")
+                    st.success("Bản đồ thành công! Kéo xuống để tải Toàn bộ khu vực, HOẶC dùng hộp chọn/click bản đồ để tải riêng từng Tỉnh.")
                     
                     # Gọi map với st_folium và hứng lại event click để bắt Province
                     map_data = st_folium(
@@ -924,7 +931,7 @@ def main():
                         returned_objects=["last_active_drawing"]
                     )
                     
-                    # Nút Tải Toàn bộ khu vực
+                    # --- TẢI TOÀN BỘ KHU VỰC ---
                     st.markdown("---")
                     st.markdown("### 📥 Tải bản vẽ tĩnh (Toàn bộ khu vực đã chọn)")
                     col_dl1, col_dl2 = st.columns([1, 3])
@@ -937,24 +944,45 @@ def main():
                         st.write(""); st.write("")
                         st.download_button(label=f"⬇️ Tải Toàn bộ ({fmt.upper()})", data=buf, file_name=f"ban_do_tong.{fmt}", mime=f"image/{fmt}", key="dl_btn_folium")
 
-                    # Phần xuất Tỉnh đang Click (Nếu có)
-                    if map_data and map_data.get("last_active_drawing"):
-                        props = map_data["last_active_drawing"].get("properties", {})
-                        cache = st.session_state.get('interp_cache')
+                    # --- TẢI RIÊNG TỪNG TỈNH ---
+                    cache = st.session_state.get('interp_cache')
+                    if cache and cache.get('mask_shape') is not None and not cache['mask_shape'].empty:
+                        st.markdown("---")
+                        st.markdown("### 🎯 Tải bản vẽ Tỉnh riêng lẻ (Cắt theo ranh giới tỉnh)")
                         
-                        if cache and cache.get('shape_col') and cache['shape_col'] in props:
-                            clicked_prov = props[cache['shape_col']]
+                        shape_col = cache['shape_col']
+                        # Danh sách tỉnh hiện tại có trên map
+                        available_provs = sorted(cache['mask_shape'][shape_col].dropna().unique().tolist())
+                        
+                        # HỘP CHỌN TỈNH ĐỂ TẢI (Tránh click lag)
+                        col_sel1, col_sel2 = st.columns([2, 2])
+                        with col_sel1:
+                            selected_dl_prov = st.selectbox("Hộp chọn Tỉnh muốn tải:", ["-- Click trên bản đồ hoặc Chọn tại đây --"] + available_provs)
+                        
+                        clicked_prov = None
+                        if map_data and map_data.get("last_active_drawing"):
+                            props = map_data["last_active_drawing"].get("properties", {})
+                            if shape_col in props:
+                                clicked_prov = props[shape_col]
+                                with col_sel2:
+                                    st.write("")
+                                    st.info(f"💡 Đang click chọn: **{clicked_prov}** trên bản đồ.")
+                        
+                        # Xác định Tỉnh nào sẽ được tải (Ưu tiên selectbox nếu đang chọn)
+                        final_dl_prov = None
+                        if selected_dl_prov != "-- Click trên bản đồ hoặc Chọn tại đây --":
+                            final_dl_prov = selected_dl_prov
+                        elif clicked_prov:
+                            final_dl_prov = clicked_prov
                             
-                            st.markdown("---")
-                            st.markdown(f"### 🎯 Tải bản vẽ Tỉnh: **{clicked_prov}**")
-                            
-                            # Trích xuất hình cho 1 tỉnh ngay tức thời dựa vào dữ liệu Grid trong cache
-                            prov_fig = generate_single_province_fig(cache, clicked_prov, st.session_state.get("title_custom_interp", "Bản đồ Nội Suy"))
+                        # Render khung hình 1 Tỉnh nếu được kích hoạt
+                        if final_dl_prov:
+                            prov_fig = generate_single_province_fig(cache, final_dl_prov, st.session_state.get("title_custom_interp", "Bản đồ Nội Suy"))
                             
                             if prov_fig:
                                 col_p1, col_p2 = st.columns([1, 3])
                                 with col_p1:
-                                    fmt_prov = st.selectbox("Định dạng riêng:", ["png", "pdf"], key="fmt_prov")
+                                    fmt_prov = st.selectbox("Định dạng ảnh:", ["png", "pdf"], key="fmt_prov")
                                     
                                 buf_prov = io.BytesIO()
                                 prov_fig.savefig(buf_prov, format=fmt_prov, dpi=300, bbox_inches='tight')
@@ -963,14 +991,12 @@ def main():
                                 with col_p2:
                                     st.write(""); st.write("")
                                     st.download_button(
-                                        label=f"⬇️ Tải ảnh Tỉnh {clicked_prov} ({fmt_prov.upper()})", 
+                                        label=f"⬇️ Tải ảnh Tỉnh {final_dl_prov} ({fmt_prov.upper()})", 
                                         data=buf_prov, 
-                                        file_name=f"ban_do_{clicked_prov}.{fmt_prov}", 
+                                        file_name=f"ban_do_{final_dl_prov}.{fmt_prov}", 
                                         mime=f"image/{fmt_prov}", 
                                         key="dl_btn_prov"
                                     )
-                                # Streamlit handles automatic display garbage collection for subplots over time, 
-                                # but implicit handling is fine here given the workflow.
                 else:
                     st.info("👈 Vui lòng cấu hình dữ liệu, chọn màu, ngưỡng, tọa độ và nhấn 'VẼ BẢN ĐỒ TƯƠNG TÁC'.")
 
