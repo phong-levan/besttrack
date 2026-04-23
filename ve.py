@@ -324,7 +324,7 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
         vmin, vmax = 0.0, 40.0
         levels_for_ticks = list(range(0, 42, 4))
         colors = [(0.0, '#FFFFFF'), (0.1, '#D0F0FF'), (0.2, '#00A0FF'), (0.4, '#00FF00'),
-                 (0.6, '#FFFF00'), (0.75, '#FFA500'), (0.9, '#FF0000'), (1.0, '#8B0000')]
+                  (0.6, '#FFFF00'), (0.75, '#FFA500'), (0.9, '#FF0000'), (1.0, '#8B0000')]
         cmap = LinearSegmentedColormap.from_list("custom_smooth_temp", colors, N=256)
         unit_label = "Nhiệt độ (°C)"
 
@@ -705,6 +705,17 @@ def main():
                     default_cmap_idx = cmap_list.index('jet') if 'jet' in cmap_list else 0
                     cmap_option = st.selectbox("Chọn thang màu (Colormap):", cmap_list, index=default_cmap_idx)
                     
+                    # ----------------------------------------------------
+                    # ĐOẠN CODE THÊM MỚI: HIỂN THỊ DẢI MÀU BÊN DƯỚI BOX
+                    # ----------------------------------------------------
+                    fig_cmap, ax_cmap = plt.subplots(figsize=(3, 0.2))
+                    fig_cmap.subplots_adjust(top=1, bottom=0, left=0, right=1)
+                    gradient = np.linspace(0, 1, 256).reshape(1, -1)
+                    ax_cmap.imshow(gradient, aspect='auto', cmap=cmap_option)
+                    ax_cmap.set_axis_off()
+                    st.pyplot(fig_cmap)
+                    # ----------------------------------------------------
+
                     threshold_type = st.radio("Cách chia ngưỡng:", ["Tự động (Số lớp)", "Tùy chỉnh (Nhập tay)"])
                     num_bins = 10
                     custom_levels = None
