@@ -26,6 +26,7 @@ import shutil
 import io
 from datetime import datetime, timedelta
 import branca.colormap as cm
+import xarray as xr
 
 warnings.filterwarnings("ignore")
 
@@ -303,7 +304,6 @@ def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
         out[rest] = (w * zi[nn]).sum(axis=1) / w.sum(axis=1)
     return out
 
-# Hàm cũ: Dùng tĩnh cho Nhiệt độ và Lượng mưa (Matplotlib)
 def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     minx, maxx = 101.8, 115.0
     miny, maxy = 8.0, 23.9
@@ -414,7 +414,6 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     
     return fig, None
 
-# Hàm trích xuất tĩnh bản vẽ cho 1 Tỉnh (dùng chung Cache Nội suy)
 def generate_single_province_fig(cache, prov_name, title_text):
     mask_shape = cache['mask_shape']
     shape_col = cache['shape_col']
@@ -423,14 +422,11 @@ def generate_single_province_fig(cache, prov_name, title_text):
     if prov_shape.empty: 
         return None
 
-    # Lấy tọa độ Box của Tỉnh
     p_minx, p_miny, p_maxx, p_maxy = prov_shape.total_bounds
-    # Mở rộng Padding (10%) để nhìn đẹp hơn
     pad_x = (p_maxx - p_minx) * 0.1
     pad_y = (p_maxy - p_miny) * 0.1
     p_minx -= pad_x; p_maxx += pad_x; p_miny -= pad_y; p_maxy += pad_y
     
-    # Tạo Mask riêng cho Tỉnh này từ Grid Data chung
     grid_xy = np.column_stack([cache['gx'].ravel(), cache['gy'].ravel()])
     prep_shape = prep(prov_shape.unary_union)
     mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(cache['gx'].shape)
@@ -439,7 +435,6 @@ def generate_single_province_fig(cache, prov_name, title_text):
     fig, ax = plt.subplots(figsize=(10, 10))
     ax.set_title(f"{title_text}\n(Khu vực: {prov_name})", fontsize=16)
     
-    # Vẽ ranh giới Tỉnh
     prov_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.5)
     
     im = ax.imshow(
@@ -451,7 +446,6 @@ def generate_single_province_fig(cache, prov_name, title_text):
         origin='lower'
     )
     
-    # Zoom camera vào đúng Tỉnh
     ax.set_xlim(p_minx, p_maxx)
     ax.set_ylim(p_miny, p_maxy)
     
@@ -465,7 +459,6 @@ def generate_single_province_fig(cache, prov_name, title_text):
     
     return fig
 
-# Hàm MỚI: Dành cho "Nội suy linh tinh"
 def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
     input_df.columns = input_df.columns.str.lower().str.strip()
     cols_check = ['lon', 'lat', 'value']
@@ -475,7 +468,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
     if valid.empty: return None, None, None, "Dữ liệu trống sau khi lọc bỏ NaN."
 
-    # 1. Xử lý Shapefile Mask (vn34tinh)
     if not os.path.exists(SHP_MASK_PATH):
         return None, None, None, "Không tìm thấy file vn34tinh.shp"
     
@@ -487,7 +479,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         mask_shape = mask_shape[mask_shape[shape_col].isin(selected_provinces)]
         if mask_shape.empty: return None, None, None, "Không tìm thấy tỉnh đã chọn."
 
-    # 2. Xử lý Shapefile Ranh giới hiển thị (vungmoi.shp - Ranh giới quốc gia)
     disp_shape = None
     if os.path.exists(SHP_DISP_PATH):
         try:
@@ -497,7 +488,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         except Exception as e:
             pass
     
-    # Xác định giới hạn Tọa độ
     if custom_bounds:
         minx = custom_bounds['minx']
         maxx = custom_bounds['maxx']
@@ -526,7 +516,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
     gv_masked = np.where(mask_flat, gv, np.nan)
 
-    # Lấy thang màu
     cmap = plt.get_cmap(cmap_name)
     
     if custom_levels is not None and len(custom_levels) > 1:
@@ -537,7 +526,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         custom_levels = np.linspace(vmin_val, vmax_val, num_bins + 1)
         norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
 
-    # LƯU TRỮ CACHE NỘI SUY (ĐỂ SAU CLICK VÀO TỈNH KHÔNG CẦN TÍNH LẠI MÀ CHỈ MASK LẠI)
     cache_dict = {
         'gv': gv,
         'gx': gx,
@@ -553,9 +541,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         'shape_col': shape_col
     }
 
-    # ----------------------------------------------------
-    # TẠO HÌNH ẢNH RGBA ĐỂ ĐƯA LÊN FOLIUM
-    # ----------------------------------------------------
     rgba = cmap(norm(gv_masked))
     rgba[np.isnan(gv_masked)] = [0, 0, 0, 0]
     rgba_folium = np.flipud(rgba)
@@ -565,12 +550,10 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     buf.seek(0)
     img_base64 = base64.b64encode(buf.read()).decode()
 
-    # Tạo Folium Map
     center_lat = (miny + maxy) / 2
     center_lon = (minx + maxx) / 2
     m = folium.Map(location=[center_lat, center_lon], zoom_start=6, tiles="CartoDB positron")
 
-    # Thêm Overlay Nội suy
     folium.raster_layers.ImageOverlay(
         image=f"data:image/png;base64,{img_base64}",
         bounds=[[miny, minx], [maxy, maxx]],
@@ -579,7 +562,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         interactive=False
     ).add_to(m)
 
-    # Thêm đường viền Quốc gia
     if disp_shape is not None and not disp_shape.empty:
         folium.GeoJson(
             disp_shape,
@@ -588,7 +570,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
             interactive=False
         ).add_to(m)
 
-    # Thêm đường viền tỉnh (GeoJson) CÓ CHO PHÉP INTERACTIVE CLICK
     tooltip_fields = [shape_col] if shape_col else []
     tooltip_aliases = ['Tên Tỉnh: '] if shape_col else []
     
@@ -609,9 +590,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     m.add_child(colormap_branca)
     folium.LayerControl().add_to(m)
 
-    # ----------------------------------------------------
-    # TẠO FIGURE MATPLOTLIB TỔNG ĐỂ TẢI XUỐNG
-    # ----------------------------------------------------
     fig, ax = plt.subplots(figsize=(12, 10))
     ax.set_title(title_text, fontsize=16)
     
@@ -698,23 +676,60 @@ def main():
                     st.markdown("---")
                     st.markdown("### 🛠️ NỘI SUY TÙY BIẾN (TƯƠNG TÁC)")
                     title_interpol = st.text_input("Tiêu đề bản đồ:", value="Bản đồ Nội Suy Tùy Chọn", key="title_custom_interp")
-                    data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv'], key="data_up_custom")
+                    
+                    data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv', 'nc'], key="data_up_custom")
+                    
+                    nc_var_selected = None
+                    nc_time_idx = None
+                    
+                    # === BỔ SUNG XỬ LÝ CHỌN BIẾN VÀ THỜI GIAN FILE .NC ===
+                    if data_file_interpol and data_file_interpol.name.endswith('.nc'):
+                        try:
+                            # Cần ghi tạm ra file để xr.open_dataset có thể đọc an toàn
+                            with tempfile.NamedTemporaryFile(delete=False, suffix='.nc') as tmp:
+                                tmp.write(data_file_interpol.getvalue())
+                                tmp_path = tmp.name
+                            
+                            ds_tmp = xr.open_dataset(tmp_path)
+                            vars_list = list(ds_tmp.data_vars.keys())
+                            
+                            if vars_list:
+                                nc_var_selected = st.selectbox("📌 Chọn biến dữ liệu (Variable):", vars_list)
+                            
+                            # Quét tìm dimension thời gian ('time', 't', 'valid_time', v.v.)
+                            time_dim = next((d for d in ds_tmp.dims if d.lower() in ['time', 't', 'valid_time']), None)
+                            
+                            if time_dim:
+                                time_values = ds_tmp[time_dim].values
+                                
+                                # Format thời gian đẹp mắt nếu là mảng datetime
+                                if np.issubdtype(time_values.dtype, np.datetime64):
+                                    time_options = [pd.to_datetime(str(t)).strftime("%Y-%m-%d %H:%M:%S") for t in time_values]
+                                else:
+                                    time_options = [str(t) for t in time_values]
+                                    
+                                selected_time_str = st.selectbox("⏳ Chọn thời gian (Time Step):", time_options)
+                                nc_time_idx = time_options.index(selected_time_str)
+                            else:
+                                st.info("File NetCDF không có dimension thời gian (Time).")
+
+                            ds_tmp.close()
+                            os.remove(tmp_path)
+                        except Exception as e:
+                            st.error(f"Lỗi đọc kiểm tra file NetCDF: {e}")
+                    # =====================================================
                     
                     st.markdown("**1. Cấu hình màu & Ngưỡng**")
                     cmap_list = plt.colormaps()
                     default_cmap_idx = cmap_list.index('jet') if 'jet' in cmap_list else 0
                     cmap_option = st.selectbox("Chọn thang màu (Colormap):", cmap_list, index=default_cmap_idx)
                     
-                    # ----------------------------------------------------
-                    # ĐOẠN CODE THÊM MỚI: HIỂN THỊ DẢI MÀU BÊN DƯỚI BOX
-                    # ----------------------------------------------------
                     fig_cmap, ax_cmap = plt.subplots(figsize=(3, 0.2))
                     fig_cmap.subplots_adjust(top=1, bottom=0, left=0, right=1)
                     gradient = np.linspace(0, 1, 256).reshape(1, -1)
                     ax_cmap.imshow(gradient, aspect='auto', cmap=cmap_option)
                     ax_cmap.set_axis_off()
                     st.pyplot(fig_cmap)
-                    # ----------------------------------------------------
 
                     threshold_type = st.radio("Cách chia ngưỡng:", ["Tự động (Số lớp)", "Tùy chỉnh (Nhập tay)"])
                     num_bins = 10
@@ -743,7 +758,6 @@ def main():
                     
                     selected_provinces = []
                     if province_list:
-                        # Thay đổi: Thêm selectbox ở đây để chọn 1 tỉnh nhanh gọn cho map chính
                         quick_prov = st.selectbox("Hộp chọn nhanh 1 Tỉnh (Bản đồ chính):", ["-- Tất cả Tỉnh --"] + province_list)
                         multi_provs = st.multiselect("Hoặc chọn thủ công nhiều Tỉnh (Bật/Tắt):", province_list)
                         
@@ -878,7 +892,6 @@ def main():
                  """
                  st.markdown(html_kttv, unsafe_allow_html=True)
             
-            # Xử lý CŨ: Nội suy Tĩnh (Nhiệt độ / Mưa)
             elif obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
                 if btn_run_interpol:
                     if data_file_interpol:
@@ -907,12 +920,42 @@ def main():
                 else:
                     st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
 
-            # Xử lý MỚI: Nội suy Linh tinh (Tương tác Folium & Có Tọa độ)
             elif obs_mode == "Nội suy linh tinh":
                 if btn_run_interpol:
                     if data_file_interpol:
                         try:
-                            df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
+                            # === XỬ LÝ ĐỌC FILE DỮ LIỆU CÓ THỜI GIAN .NC ===
+                            if data_file_interpol.name.endswith('.nc'):
+                                with tempfile.NamedTemporaryFile(delete=False, suffix='.nc') as tmp:
+                                    tmp.write(data_file_interpol.getvalue())
+                                    tmp_path = tmp.name
+                                
+                                ds = xr.open_dataset(tmp_path)
+                                
+                                # Cắt theo Time-step nếu được chọn ở sidebar
+                                time_dim = next((d for d in ds.dims if d.lower() in ['time', 't', 'valid_time']), None)
+                                if time_dim and nc_time_idx is not None:
+                                    ds = ds.isel({time_dim: nc_time_idx})
+                                    
+                                var_name = nc_var_selected if nc_var_selected else list(ds.data_vars.keys())[0]
+                                df_nc = ds[var_name].to_dataframe().reset_index()
+                                
+                                lat_col = next((c for c in df_nc.columns if c.lower() in ['lat', 'latitude', 'y']), None)
+                                lon_col = next((c for c in df_nc.columns if c.lower() in ['lon', 'longitude', 'x']), None)
+                                
+                                if lat_col and lon_col:
+                                    df_in = df_nc.rename(columns={lat_col: 'lat', lon_col: 'lon', var_name: 'value'})
+                                    df_in = df_in[['lon', 'lat', 'value']].dropna()
+                                else:
+                                    st.error("Không tìm thấy các biến tọa độ lat/lon thông dụng trong file NetCDF.")
+                                    df_in = pd.DataFrame()
+                                    
+                                ds.close()
+                                os.remove(tmp_path)
+                                
+                            else:
+                                df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
+                            # ===================================================
                             
                             with st.spinner("Đang xử lý nội suy tương tác và trích xuất bản vẽ..."):
                                 m_map, m_fig, m_cache, err = run_interactive_folium_interpolation(
@@ -933,7 +976,6 @@ def main():
                 if st.session_state['folium_map_obj']:
                     st.success("Bản đồ thành công! Kéo xuống để tải Toàn bộ khu vực, HOẶC dùng hộp chọn/click bản đồ để tải riêng từng Tỉnh.")
                     
-                    # Gọi map với st_folium và hứng lại event click để bắt Province
                     map_data = st_folium(
                         st.session_state['folium_map_obj'], 
                         width=None, 
@@ -942,7 +984,6 @@ def main():
                         returned_objects=["last_active_drawing"]
                     )
                     
-                    # --- TẢI TOÀN BỘ KHU VỰC ---
                     st.markdown("---")
                     st.markdown("### 📥 Tải bản vẽ tĩnh (Toàn bộ khu vực đã chọn)")
                     col_dl1, col_dl2 = st.columns([1, 3])
@@ -955,17 +996,14 @@ def main():
                         st.write(""); st.write("")
                         st.download_button(label=f"⬇️ Tải Toàn bộ ({fmt.upper()})", data=buf, file_name=f"ban_do_tong.{fmt}", mime=f"image/{fmt}", key="dl_btn_folium")
 
-                    # --- TẢI RIÊNG TỪNG TỈNH ---
                     cache = st.session_state.get('interp_cache')
                     if cache and cache.get('mask_shape') is not None and not cache['mask_shape'].empty:
                         st.markdown("---")
                         st.markdown("### 🎯 Tải bản vẽ Tỉnh riêng lẻ (Cắt theo ranh giới tỉnh)")
                         
                         shape_col = cache['shape_col']
-                        # Danh sách tỉnh hiện tại có trên map
                         available_provs = sorted(cache['mask_shape'][shape_col].dropna().unique().tolist())
                         
-                        # HỘP CHỌN TỈNH ĐỂ TẢI (Tránh click lag)
                         col_sel1, col_sel2 = st.columns([2, 2])
                         with col_sel1:
                             selected_dl_prov = st.selectbox("Hộp chọn Tỉnh muốn tải:", ["-- Click trên bản đồ hoặc Chọn tại đây --"] + available_provs)
@@ -979,14 +1017,12 @@ def main():
                                     st.write("")
                                     st.info(f"💡 Đang click chọn: **{clicked_prov}** trên bản đồ.")
                         
-                        # Xác định Tỉnh nào sẽ được tải (Ưu tiên selectbox nếu đang chọn)
                         final_dl_prov = None
                         if selected_dl_prov != "-- Click trên bản đồ hoặc Chọn tại đây --":
                             final_dl_prov = selected_dl_prov
                         elif clicked_prov:
                             final_dl_prov = clicked_prov
                             
-                        # Render khung hình 1 Tỉnh nếu được kích hoạt
                         if final_dl_prov:
                             prov_fig = generate_single_province_fig(cache, final_dl_prov, st.session_state.get("title_custom_interp", "Bản đồ Nội Suy"))
                             
