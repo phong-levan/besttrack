@@ -10,3 +10,7 @@ scipy
 shapely
 openpyxl
 contextily
+branca
+requests
+xarray
+netCDF4
