@@ -369,8 +369,18 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
             if disp_shape.crs and disp_shape.crs.to_epsg() != 4326: disp_shape.to_crs(epsg=4326, inplace=True)
         except Exception: pass
     
+    # -------------------------------------------------------------
+    # BỔ SUNG YÊU CẦU: CẮT KHUNG VÀ ZOOM KHI FIX TỌA ĐỘ
+    # -------------------------------------------------------------
     if custom_bounds:
         minx, maxx, miny, maxy = custom_bounds['minx'], custom_bounds['maxx'], custom_bounds['miny'], custom_bounds['maxy']
+        bbox_poly = box(minx, miny, maxx, maxy)
+        
+        # Cắt Shapefile theo đúng giới hạn hình chữ nhật (không hiển thị cả nước nữa)
+        if not mask_shape.empty:
+            mask_shape = gpd.clip(mask_shape, bbox_poly)
+        if disp_shape is not None and not disp_shape.empty:
+            disp_shape = gpd.clip(disp_shape, bbox_poly)
     else:
         minx, miny, maxx, maxy = mask_shape.total_bounds
         minx -= 0.5; maxx += 0.5; miny -= 0.5; maxy += 0.5
@@ -382,8 +392,14 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     gv = idw_knn(x_pts, y_pts, z_pts, grid_xy, k=12, power=3.0).reshape(gx.shape)
     if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
 
-    prep_shape = prep(mask_shape.unary_union)
-    mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
+    shape_union = mask_shape.unary_union
+    if shape_union.is_empty:
+        # Nếu cắt bỏ hết phần đất, nội suy hiện đầy khung lưới biển
+        mask_flat = np.ones(gx.shape, dtype=bool)
+    else:
+        prep_shape = prep(shape_union)
+        mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
+        
     gv_masked = np.where(mask_flat, gv, np.nan)
 
     cmap = plt.get_cmap(cmap_name)
@@ -392,6 +408,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
     else:
         vmin_val, vmax_val = np.nanmin(gv_masked), np.nanmax(gv_masked)
+        if np.isnan(vmin_val): vmin_val, vmax_val = 0, 1 # Xử lý lỗi nếu ngoài biển
         custom_levels = np.linspace(vmin_val, vmax_val, num_bins + 1)
         norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
 
@@ -409,7 +426,13 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     buf.seek(0)
     img_base64 = base64.b64encode(buf.read()).decode()
 
-    m = folium.Map(location=[(miny + maxy) / 2, (minx + maxx) / 2], zoom_start=6, tiles="CartoDB positron")
+    m = folium.Map(location=[(miny + maxy) / 2, (minx + maxx) / 2], tiles="CartoDB positron")
+    
+    # -------------------------------------------------------------
+    # Ép Folium phải fit (zoom vào) đúng vị trí của Bounding Box
+    # -------------------------------------------------------------
+    m.fit_bounds([[miny, minx], [maxy, maxx]])
+    
     folium.raster_layers.ImageOverlay(image=f"data:image/png;base64,{img_base64}", bounds=[[miny, minx], [maxy, maxx]], opacity=0.75, name=title_text, interactive=False).add_to(m)
 
     if disp_shape is not None and not disp_shape.empty:
@@ -418,12 +441,13 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     tooltip_fields = [shape_col] if shape_col and shape_col in mask_shape.columns else []
     tooltip_aliases = ['Tên Tỉnh: '] if tooltip_fields else []
     
-    folium.GeoJson(
-        mask_shape, name="Ranh giới Tỉnh",
-        style_function=lambda x: {'fillColor': 'transparent', 'color': 'black', 'weight': 1.0},
-        highlight_function=lambda x: {'weight': 3, 'color': 'red', 'fillColor': '#ff0000', 'fillOpacity': 0.2},
-        tooltip=folium.GeoJsonTooltip(fields=tooltip_fields, aliases=tooltip_aliases) if tooltip_fields else None
-    ).add_to(m)
+    if not mask_shape.empty:
+        folium.GeoJson(
+            mask_shape, name="Ranh giới Tỉnh",
+            style_function=lambda x: {'fillColor': 'transparent', 'color': 'black', 'weight': 1.0},
+            highlight_function=lambda x: {'weight': 3, 'color': 'red', 'fillColor': '#ff0000', 'fillOpacity': 0.2},
+            tooltip=folium.GeoJsonTooltip(fields=tooltip_fields, aliases=tooltip_aliases) if tooltip_fields else None
+        ).add_to(m)
 
     colormap_branca = cm.StepColormap(colors=[mcolors.to_hex(cmap(norm(val))) for val in custom_levels[:-1]], vmin=custom_levels[0], vmax=custom_levels[-1], index=custom_levels, caption=title_text)
     m.add_child(colormap_branca)
