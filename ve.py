@@ -670,3 +670,181 @@ def main():
                     buf.seek(0)
                     with col_dl2:
                         st.write(""); st.write("")
+                        st.download_button(label=f"⬇️ Tải ảnh về ({fmt.upper()})", data=buf, file_name=f"ban_do_tinh.{fmt}", mime=f"image/{fmt}", key="dl_btn_static")
+                else: st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
+
+            elif obs_mode == "Nội suy linh tinh":
+                if btn_run_interpol:
+                    if data_file_interpol:
+                        try:
+                            if data_file_interpol.name.endswith('.nc'):
+                                tmp_path = "run_check.nc"
+                                with open(tmp_path, "wb") as f: f.write(data_file_interpol.getvalue())
+                                
+                                ds = None
+                                for eng in ['netcdf4', 'scipy', 'h5netcdf', None]:
+                                    try:
+                                        ds = xr.open_dataset(tmp_path, engine=eng)
+                                        break
+                                    except: pass
+                                
+                                if ds is None:
+                                    st.error("Không thể đọc file NetCDF khi vẽ. Vui lòng đảm bảo file không bị hỏng.")
+                                    df_in = pd.DataFrame()
+                                else:
+                                    time_dim = next((d for d in ds.dims if d.lower() in ['time', 't', 'valid_time']), None)
+                                    if time_dim and nc_time_idx is not None: ds = ds.isel({time_dim: nc_time_idx})
+                                        
+                                    var_name = nc_var_selected if nc_var_selected else list(ds.data_vars.keys())[0]
+                                    df_nc = ds[var_name].to_dataframe().reset_index()
+                                    
+                                    lat_col = next((c for c in df_nc.columns if c.lower() in ['lat', 'latitude', 'y']), None)
+                                    lon_col = next((c for c in df_nc.columns if c.lower() in ['lon', 'longitude', 'x']), None)
+                                    
+                                    if lat_col and lon_col:
+                                        df_in = df_nc.rename(columns={lat_col: 'lat', lon_col: 'lon', var_name: 'value'})
+                                        df_in = df_in[['lon', 'lat', 'value']].dropna()
+                                    else:
+                                        st.error("Không tìm thấy các biến tọa độ lat/lon thông dụng trong file NetCDF.")
+                                        df_in = pd.DataFrame()
+                                    ds.close()
+
+                                if os.path.exists(tmp_path):
+                                    try: os.remove(tmp_path)
+                                    except: pass
+                                data_file_interpol.seek(0)
+                            else:
+                                df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
+                            
+                            if not df_in.empty:
+                                with st.spinner("Đang xử lý nội suy tương tác và trích xuất bản vẽ..."):
+                                    m_map, m_fig, m_cache, err = run_interactive_folium_interpolation(df_in, title_interpol, cmap_option, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds_dict)
+                                    if err: st.error(f"❌ Lỗi: {err}")
+                                    else: 
+                                        st.session_state['folium_map_obj'] = m_map
+                                        st.session_state['folium_fig_obj'] = m_fig
+                                        st.session_state['interp_cache'] = m_cache
+                        except Exception as e: st.error(f"❌ Lỗi Xử lý Dữ liệu: {e}")
+                    else: st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
+
+                if st.session_state['folium_map_obj']:
+                    st.success("Bản đồ thành công! Kéo xuống để tải Toàn bộ khu vực, HOẶC dùng hộp chọn/click bản đồ để tải riêng từng Tỉnh.")
+                    map_data = st_folium(st.session_state['folium_map_obj'], width=None, height=800, use_container_width=True, returned_objects=["last_active_drawing"])
+                    
+                    st.markdown("---")
+                    st.markdown("### 📥 Tải bản vẽ tĩnh (Toàn bộ khu vực đã chọn)")
+                    col_dl1, col_dl2 = st.columns([1, 3])
+                    with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_folium")
+                    buf = io.BytesIO()
+                    st.session_state['folium_fig_obj'].savefig(buf, format=fmt, dpi=300, bbox_inches='tight')
+                    buf.seek(0)
+                    with col_dl2:
+                        st.write(""); st.write("")
+                        st.download_button(label=f"⬇️ Tải Toàn bộ ({fmt.upper()})", data=buf, file_name=f"ban_do_tong.{fmt}", mime=f"image/{fmt}", key="dl_btn_folium")
+
+                    cache = st.session_state.get('interp_cache')
+                    if cache and cache.get('mask_shape') is not None and not cache['mask_shape'].empty:
+                        st.markdown("---")
+                        st.markdown("### 🎯 Tải bản vẽ Tỉnh riêng lẻ (Cắt theo ranh giới tỉnh)")
+                        shape_col_cache = cache.get('shape_col')
+                        
+                        if not shape_col_cache or shape_col_cache not in cache['mask_shape'].columns:
+                            st.warning("⚠️ Không thể tải riêng từng tỉnh vì Shapefile (vn34tinh.shp) không có cột chứa tên Tỉnh. Tính năng này tạm thời bị vô hiệu hóa.")
+                        else:
+                            available_provs = sorted(cache['mask_shape'][shape_col_cache].dropna().unique().tolist())
+                            col_sel1, col_sel2 = st.columns([2, 2])
+                            with col_sel1: selected_dl_prov = st.selectbox("Hộp chọn Tỉnh muốn tải:", ["-- Click trên bản đồ hoặc Chọn tại đây --"] + available_provs)
+                            
+                            clicked_prov = None
+                            if map_data and map_data.get("last_active_drawing"):
+                                props = map_data["last_active_drawing"].get("properties", {})
+                                if shape_col_cache in props:
+                                    clicked_prov = props[shape_col_cache]
+                                    with col_sel2:
+                                        st.write(""); st.info(f"💡 Đang click chọn: **{clicked_prov}** trên bản đồ.")
+                            
+                            final_dl_prov = selected_dl_prov if selected_dl_prov != "-- Click trên bản đồ hoặc Chọn tại đây --" else clicked_prov
+                            if final_dl_prov:
+                                prov_fig = generate_single_province_fig(cache, final_dl_prov, st.session_state.get("title_custom_interp", "Bản đồ Nội Suy"))
+                                if prov_fig:
+                                    col_p1, col_p2 = st.columns([1, 3])
+                                    with col_p1: fmt_prov = st.selectbox("Định dạng ảnh:", ["png", "pdf"], key="fmt_prov")
+                                    buf_prov = io.BytesIO()
+                                    prov_fig.savefig(buf_prov, format=fmt_prov, dpi=300, bbox_inches='tight')
+                                    buf_prov.seek(0)
+                                    with col_p2:
+                                        st.write(""); st.write("")
+                                        st.download_button(label=f"⬇️ Tải ảnh Tỉnh {final_dl_prov} ({fmt_prov.upper()})", data=buf_prov, file_name=f"ban_do_{final_dl_prov}.{fmt_prov}", mime=f"image/{fmt_prov}", key="dl_btn_prov")
+                else: st.info("👈 Vui lòng cấu hình dữ liệu, chọn màu, ngưỡng, tọa độ và nhấn 'VẼ BẢN ĐỒ TƯƠNG TÁC'.")
+
+    elif topic == "Dự báo điểm (KMA)":
+        if not st.session_state['logged_in']:
+            st.title("🔐 Đăng nhập Hệ thống")
+            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
+            with st.form("login_form_common_kma"):
+                user_input = st.text_input("Tên đăng nhập")
+                pass_input = st.text_input("Mật khẩu", type="password")
+                if st.form_submit_button("Đăng nhập"):
+                    if user_input == "admin" and pass_input == "kttv@2026":
+                        st.session_state['logged_in'] = True
+                        st.success("Đăng nhập thành công!")
+                        st.rerun()
+                    else: st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
+        else:
+            realtime_kma_url = get_kma_url()
+            st.markdown(f'<div style="overflow: hidden; width: 100%; height: 700px; position: relative; border: 1px solid #ddd;"><iframe src="{realtime_kma_url}" style="width: calc(100% + 19px); height: 1200px; position: absolute; top: -130px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
+            st.caption(f"Đang hiển thị dữ liệu từ nguồn KMA (Hàn Quốc). Link gốc: {realtime_kma_url}")
+
+    elif topic == "Bản đồ Bão":
+        m = folium.Map(location=[16.0, 114.0], zoom_start=6, tiles=None, zoom_control=False)
+        folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
+        folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
+        folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
+        
+        ts = get_rainviewer_ts()
+        if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
+
+        fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
+        if not final_df.empty and show_widgets:
+            if "Hiện trạng" in str(active_mode):
+                groups = final_df['storm_no'].unique() if 'storm_no' in final_df.columns else [None]
+                for g in groups:
+                    sub = final_df[final_df['storm_no']==g] if g else final_df
+                    dense = densify_track(sub)
+                    f6, f10, fc = create_storm_swaths(dense)
+                    for geom, c, o in [(f6,'#FFC0CB',0.4), (f10,'#FF6347',0.5), (fc,'#90EE90',0.6)]:
+                        if geom and not geom.is_empty: folium.GeoJson(mapping(geom), style_function=lambda x,c=c,o=o: {'fillColor':c,'color':c,'weight':1,'fillOpacity':o}).add_to(fg_storm)
+                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='black', weight=2).add_to(fg_storm)
+                    
+                    for _, r in sub.iterrows():
+                        icon_key = get_icon_name(r)
+                        icon_path = ICON_PATHS.get(icon_key)
+                        icon_base64 = image_to_base64(icon_path) if icon_path else None
+                        if icon_base64:
+                            i_size, i_anchor = ((20, 20), (10, 10)) if 'vungthap' in icon_key else ((40, 40), (20, 20))
+                            icon = folium.CustomIcon(icon_image=icon_base64, icon_size=i_size, icon_anchor=i_anchor)
+                            folium.Marker(location=[r['lat'], r['lon']], icon=icon, tooltip=f"Vmax {int(r.get('wind_km/h', 0))} km/h").add_to(fg_storm)
+            else: 
+                for n in final_df['name'].unique():
+                    sub = final_df[final_df['name']==n].sort_values('dt')
+                    folium.PolyLine(sub[['lat','lon']].values.tolist(), color='blue', weight=2).add_to(fg_storm)
+                    for _, r in sub.iterrows():
+                        c = '#00f2ff' if r.get('wind_km/h',0)<64 else '#ff0055'
+                        folium.CircleMarker([r['lat'],r['lon']], radius=3, color=c, fill=True, popup=f"{n}").add_to(fg_storm)
+        
+        fg_storm.add_to(m)
+        folium.LayerControl(position='topleft', collapsed=False).add_to(m)
+        
+        if show_widgets:
+            html_to_render = '<div class="floating-container">'
+            if "Hiện trạng" in str(active_mode) and os.path.exists(CHUTHICH_IMG):
+                with open(CHUTHICH_IMG, "rb") as f: b64 = base64.b64encode(f.read()).decode()
+                html_to_render += f'<div class="legend-box"><img src="data:image/png;base64,{b64}"></div>'
+            html_to_render += create_info_table(final_df, dashboard_title) if not final_df.empty else create_info_table(pd.DataFrame(), "ĐANG TẢI DỮ LIỆU...")
+            html_to_render += '</div>'
+            st.markdown(html_to_render, unsafe_allow_html=True)
+        
+        st_folium(m, width=None, height=1000, use_container_width=True)
+
+if __name__ == "__main__":
+    main()
