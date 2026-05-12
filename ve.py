@@ -26,7 +26,6 @@ import shutil
 import io
 from datetime import datetime, timedelta
 import branca.colormap as cm
-import xarray as xr # <--- THÊM XARRAY ĐỂ XỬ LÝ FILE .NC
 
 warnings.filterwarnings("ignore")
 
@@ -699,28 +698,7 @@ def main():
                     st.markdown("---")
                     st.markdown("### 🛠️ NỘI SUY TÙY BIẾN (TƯƠNG TÁC)")
                     title_interpol = st.text_input("Tiêu đề bản đồ:", value="Bản đồ Nội Suy Tùy Chọn", key="title_custom_interp")
-                    
-                    # === BỔ SUNG FILE .NC ===
-                    data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv', 'nc'], key="data_up_custom")
-                    
-                    nc_var_selected = None
-                    if data_file_interpol and data_file_interpol.name.endswith('.nc'):
-                        try:
-                            # Cần ghi tạm ra file để xr.open_dataset có thể đọc (tránh lỗi memory bytes với một số engine)
-                            with tempfile.NamedTemporaryFile(delete=False, suffix='.nc') as tmp:
-                                tmp.write(data_file_interpol.getvalue())
-                                tmp_path = tmp.name
-                            
-                            ds_tmp = xr.open_dataset(tmp_path)
-                            vars_list = list(ds_tmp.data_vars.keys())
-                            if vars_list:
-                                nc_var_selected = st.selectbox("📌 Chọn biến dữ liệu (từ file NetCDF):", vars_list)
-                            
-                            ds_tmp.close()
-                            os.remove(tmp_path)
-                        except Exception as e:
-                            st.error(f"Lỗi đọc kiểm tra file NetCDF: {e}")
-                    # ========================
+                    data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv'], key="data_up_custom")
                     
                     st.markdown("**1. Cấu hình màu & Ngưỡng**")
                     cmap_list = plt.colormaps()
@@ -728,7 +706,7 @@ def main():
                     cmap_option = st.selectbox("Chọn thang màu (Colormap):", cmap_list, index=default_cmap_idx)
                     
                     # ----------------------------------------------------
-                    # HIỂN THỊ DẢI MÀU BÊN DƯỚI BOX
+                    # ĐOẠN CODE THÊM MỚI: HIỂN THỊ DẢI MÀU BÊN DƯỚI BOX
                     # ----------------------------------------------------
                     fig_cmap, ax_cmap = plt.subplots(figsize=(3, 0.2))
                     fig_cmap.subplots_adjust(top=1, bottom=0, left=0, right=1)
@@ -765,6 +743,7 @@ def main():
                     
                     selected_provinces = []
                     if province_list:
+                        # Thay đổi: Thêm selectbox ở đây để chọn 1 tỉnh nhanh gọn cho map chính
                         quick_prov = st.selectbox("Hộp chọn nhanh 1 Tỉnh (Bản đồ chính):", ["-- Tất cả Tỉnh --"] + province_list)
                         multi_provs = st.multiselect("Hoặc chọn thủ công nhiều Tỉnh (Bật/Tắt):", province_list)
                         
@@ -933,38 +912,7 @@ def main():
                 if btn_run_interpol:
                     if data_file_interpol:
                         try:
-                            # === XỬ LÝ ĐỌC FILE DỮ LIỆU .NC / .CSV / .XLSX ===
-                            if data_file_interpol.name.endswith('.nc'):
-                                with tempfile.NamedTemporaryFile(delete=False, suffix='.nc') as tmp:
-                                    tmp.write(data_file_interpol.getvalue())
-                                    tmp_path = tmp.name
-                                
-                                ds = xr.open_dataset(tmp_path)
-                                
-                                # Nếu có thời gian, chọn time step đầu tiên
-                                if 'time' in ds.dims:
-                                    ds = ds.isel(time=0)
-                                    
-                                var_name = nc_var_selected if nc_var_selected else list(ds.data_vars.keys())[0]
-                                df_nc = ds[var_name].to_dataframe().reset_index()
-                                
-                                # Tìm cột tọa độ tự động
-                                lat_col = next((c for c in df_nc.columns if c.lower() in ['lat', 'latitude', 'y']), None)
-                                lon_col = next((c for c in df_nc.columns if c.lower() in ['lon', 'longitude', 'x']), None)
-                                
-                                if lat_col and lon_col:
-                                    df_in = df_nc.rename(columns={lat_col: 'lat', lon_col: 'lon', var_name: 'value'})
-                                    df_in = df_in[['lon', 'lat', 'value']].dropna()
-                                else:
-                                    st.error("Không tìm thấy các biến tọa độ lat/lon thông dụng trong file NetCDF.")
-                                    df_in = pd.DataFrame()
-                                    
-                                ds.close()
-                                os.remove(tmp_path)
-                                
-                            else:
-                                df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
-                            # ===================================================
+                            df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
                             
                             with st.spinner("Đang xử lý nội suy tương tác và trích xuất bản vẽ..."):
                                 m_map, m_fig, m_cache, err = run_interactive_folium_interpolation(
