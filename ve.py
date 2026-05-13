@@ -310,7 +310,7 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     fig, ax = plt.subplots(figsize=(14, 10)) 
     ax.set_title(title_text if title_text else f'Bản đồ {unit_label}', fontsize=16)
     if disp_shape is not None: disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
-    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower')
+    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower', aspect='auto')
     cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.7, pad=0.02, extend='both')
     cbar.set_label(unit_label, fontsize=12)
     cbar.set_ticks(levels_for_ticks)
@@ -339,7 +339,7 @@ def generate_single_province_fig(cache, prov_name, title_text):
     fig, ax = plt.subplots(figsize=(10, 10))
     ax.set_title(f"{title_text}\n(Khu vực: {prov_name})", fontsize=16)
     prov_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.5)
-    im = ax.imshow(gv_masked, extent=[cache['minx'], cache['maxx'], cache['miny'], cache['maxy']], cmap=cache['cmap'], norm=cache['norm'], interpolation='bilinear', origin='lower')
+    im = ax.imshow(gv_masked, extent=[cache['minx'], cache['maxx'], cache['miny'], cache['maxy']], cmap=cache['cmap'], norm=cache['norm'], interpolation='bilinear', origin='lower', aspect='auto')
     ax.set_xlim(p_minx, p_maxx); ax.set_ylim(p_miny, p_maxy)
     
     cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.7, pad=0.02)
@@ -380,6 +380,9 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     else:
         minx, miny, maxx, maxy = mask_shape.total_bounds
         minx -= 0.5; maxx += 0.5; miny -= 0.5; maxy += 0.5
+        
+    if np.isnan(minx) or minx == maxx or miny == maxy:
+        return None, None, None, "Khu vực lưới bị lỗi hoặc bằng 0."
 
     x_pts, y_pts, z_pts = valid['lon'].to_numpy(), valid['lat'].to_numpy(), valid['value'].to_numpy()
     GRID_N, SIGMA = 800, 1.0
@@ -448,7 +451,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     ax.set_title(title_text, fontsize=16)
     if disp_shape is not None and not disp_shape.empty: disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.0)
     if not mask_shape.empty: mask_shape.boundary.plot(ax=ax, edgecolor='gray', linewidth=0.5, linestyle=':')
-    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower')
+    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower', aspect='auto')
     cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.7, pad=0.02)
     cbar.set_ticks(custom_levels)
     cbar.set_ticklabels([f"{val:.1f}" for val in custom_levels])
@@ -505,6 +508,9 @@ def run_qn_folium_interpolation(input_df, title_text, cmap_name, num_bins, custo
     except Exception as e: return None, None, None, f"Lỗi đọc {GDB_NEN_PATH}: {e}"
 
     minx, miny, maxx, maxy = mask_shape.total_bounds
+    
+    if np.isnan(minx) or minx == maxx or miny == maxy:
+        return None, None, None, "Dữ liệu ranh giới (nen.gdb) không hợp lệ hoặc thiếu tọa độ."
     
     x_pts, y_pts, z_pts = valid['lon'].to_numpy(), valid['lat'].to_numpy(), valid['value'].to_numpy()
     GRID_N, SIGMA = 800, 1.0
@@ -577,7 +583,7 @@ def run_qn_folium_interpolation(input_df, title_text, cmap_name, num_bins, custo
             chuyende_shape.plot(ax=ax, edgecolor='blue', facecolor='none', linewidth=1.0, linestyle='--')
         except: pass
 
-    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower')
+    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower', aspect='auto')
     cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.7, pad=0.02)
     cbar.set_ticks(custom_levels)
     cbar.set_ticklabels([f"{val:.1f}" for val in custom_levels])
