@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 from math import radians, sin, cos, asin, sqrt, pi
 import warnings
 import textwrap
-import matplotlib.pyplot as plt
+import matplotlib.subplots as plt
 import matplotlib.colors as mcolors
 from matplotlib.colors import LinearSegmentedColormap, Normalize, BoundaryNorm
 import geopandas as gpd
@@ -40,8 +40,8 @@ SHP_MASK_PATH = os.path.join("shp", "vn34tinh.shp")
 SHP_DISP_PATH = os.path.join("shp", "vungmoi.shp")
 
 # --- ĐƯỜNG DẪN DỮ LIỆU ĐỀ TÀI QUẢNG NINH ---
-GDB_NEN_PATH = "nen.gdb"
-GDB_CHUYENDE_PATH = "chuyende.gdb"
+GDB_NEN_PATH = os.path.join("shp", "nen.gdb")
+GDB_CHUYENDE_PATH = os.path.join("shp", "chuyende.gdb")
 
 # --- ĐỊNH NGHĨA ICON PATHS ---
 ICON_PATHS = {
@@ -235,6 +235,7 @@ def create_info_table(df, title):
     return textwrap.dedent(f"""<div class="info-box"><div class="info-title">{title}</div><div class="info-subtitle">{subtitle}</div><table><thead><tr><th>Ngày-Giờ</th><th>Kinh độ</th><th>Vĩ độ</th><th>Cấp gió</th><th>Pmin (hPa)</th></tr></thead><tbody>{rows}</tbody></table></div>""")
 
 def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
+    import matplotlib.pyplot as plt
     tree = cKDTree(np.column_stack([xi, yi]))
     dists, idxs = tree.query(query_xy, k=min(k, xi.size))
     if dists.ndim == 1: dists, idxs = dists[:, None], idxs[:, None]
@@ -252,6 +253,7 @@ def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
     return out
 
 def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
+    import matplotlib.pyplot as plt
     minx, maxx, miny, maxy = 101.8, 115.0, 8.0, 23.9
     GRID_N, SIGMA, IDW_POWER, KNN = 1000, 1.5, 3.0, 12
 
@@ -319,6 +321,7 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     return fig, None
 
 def generate_single_province_fig(cache, prov_name, title_text):
+    import matplotlib.pyplot as plt
     mask_shape = cache.get('mask_shape')
     shape_col = cache.get('shape_col', "")
     
@@ -350,6 +353,7 @@ def generate_single_province_fig(cache, prov_name, title_text):
     return fig
 
 def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
+    import matplotlib.pyplot as plt
     shape_col = shape_col or ""
     input_df.columns = input_df.columns.str.lower().str.strip()
     if not all(c in input_df.columns for c in ['lon', 'lat', 'value']): return None, None, None, "File thiếu cột bắt buộc."
@@ -460,6 +464,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
 
 
 def run_qn_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, show_chuyende):
+    import matplotlib.pyplot as plt
     input_df.columns = input_df.columns.str.lower().str.strip()
     if not all(c in input_df.columns for c in ['lon', 'lat', 'value']): return None, None, None, "File thiếu cột bắt buộc."
     valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
@@ -564,6 +569,7 @@ def run_qn_folium_interpolation(input_df, title_text, cmap_name, num_bins, custo
 # 4. MAIN APP
 # ==============================================================================
 def main():
+    import matplotlib.pyplot as plt
     if 'interpol_fig' not in st.session_state: st.session_state['interpol_fig'] = None
     if 'folium_map_obj' not in st.session_state: st.session_state['folium_map_obj'] = None
     if 'folium_fig_obj' not in st.session_state: st.session_state['folium_fig_obj'] = None
