@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import folium
+import folium.plugins
 from streamlit_folium import st_folium
 import os
 import base64
@@ -474,60 +475,17 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     return m, fig, cache_dict, None
 
 
-# HÀM MỚI: TẠO BẢN ĐỒ NỀN TĨNH THEO CHUẨN GIS
-def get_default_qn_static_map(show_chuyende):
-    fig, ax = plt.subplots(figsize=(14, 10))
+def get_default_qn_map(show_chuyende):
+    m = folium.Map(location=[21.15, 107.2], zoom_start=9, tiles=None, control_scale=True)
+    m.get_root().html.add_child(folium.Element("<style>.leaflet-container { background: #cbe7f5; }</style>"))
+    folium.plugins.Graticule(color="#87b0d9", weight=1, opacity=0.8).add_to(m)
     
-    # Màu biển nhạt (để tách biệt với đất liền)
-    ax.set_facecolor('#cbe7f5')
-    
-    # Lưới tọa độ chuyên nghiệp
-    ax.grid(True, color='#87b0d9', linestyle='-', linewidth=0.8)
-    ax.set_axisbelow(True) # Đưa lưới xuống dưới cùng
-    ax.tick_params(direction='in', top=True, right=True, length=6, colors='black')
-    
-    # Đổ nền trắng cho phần đất liền bên ngoài (che biển)
-    if os.path.exists(SHP_MASK_PATH):
-        try:
+    try:
+        if os.path.exists(SHP_MASK_PATH):
             vn_shape = gpd.read_file(SHP_MASK_PATH)
             if vn_shape.crs and vn_shape.crs.to_epsg() != 4326: vn_shape.to_crs(epsg=4326, inplace=True)
-            vn_shape.plot(ax=ax, facecolor='#ffffff', edgecolor='#cccccc', linewidth=0.5)
-        except: pass
-        
-    try:
-        if os.path.exists(GDB_NEN_PATH):
-            mask_shape = gpd.read_file(GDB_NEN_PATH)
-            if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: mask_shape.to_crs(epsg=4326, inplace=True)
+            folium.GeoJson(vn_shape, name="Đất liền (Việt Nam)", style_function=lambda x: {'fillColor': '#ffffff', 'color': '#cccccc', 'weight': 0.5, 'fillOpacity': 1.0}).add_to(m)
             
-            # Tô màu nền vàng nhạt cho tỉnh Quảng Ninh (giống màu trong hình)
-            mask_shape.plot(ax=ax, facecolor='#ffffb3', edgecolor='black', linewidth=1.2)
-            
-            # Căn chỉnh kích thước bản đồ vừa khít khu vực Quảng Ninh
-            minx, miny, maxx, maxy = mask_shape.total_bounds
-            pad_x = (maxx - minx) * 0.05
-            pad_y = (maxy - miny) * 0.05
-            ax.set_xlim(minx - pad_x, maxx + pad_x)
-            ax.set_ylim(miny - pad_y, maxy + pad_y)
-            
-        if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
-            chuyende_shape = gpd.read_file(GDB_CHUYENDE_PATH)
-            if chuyende_shape.crs and chuyende_shape.crs.to_epsg() != 4326: chuyende_shape.to_crs(epsg=4326, inplace=True)
-            # Lớp chuyên đề (đường line viền đỏ/xanh)
-            chuyende_shape.plot(ax=ax, edgecolor='#e41a1c', facecolor='none', linewidth=0.8)
-    except Exception:
-        pass
-        
-    ax.set_title("Bản đồ nền Quảng Ninh", fontsize=18, fontweight='bold', pad=15)
-    ax.set_xlabel("Kinh độ", fontsize=12)
-    ax.set_ylabel("Vĩ độ", fontsize=12)
-    ax.ticklabel_format(useOffset=False, style='plain')
-    
-    return fig
-
-
-def get_default_qn_map(show_chuyende):
-    m = folium.Map(location=[21.15, 107.2], zoom_start=9, tiles="CartoDB positron")
-    try:
         if os.path.exists(GDB_NEN_PATH):
             nen_shape = gpd.read_file(GDB_NEN_PATH)
             if nen_shape.crs and nen_shape.crs.to_epsg() != 4326: 
@@ -537,8 +495,8 @@ def get_default_qn_map(show_chuyende):
             m.fit_bounds([[miny, minx], [maxy, maxx]])
             
             folium.GeoJson(
-                nen_shape, name="Ranh giới (nen.gdb)",
-                style_function=lambda x: {'fillColor': 'transparent', 'color': 'black', 'weight': 1.5}
+                nen_shape, name="Nền Quảng Ninh",
+                style_function=lambda x: {'fillColor': '#ffffb3', 'color': 'black', 'weight': 1.2, 'fillOpacity': 1.0}
             ).add_to(m)
 
         if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
@@ -547,7 +505,7 @@ def get_default_qn_map(show_chuyende):
                 chuyende_shape.to_crs(epsg=4326, inplace=True)
             folium.GeoJson(
                 chuyende_shape, name="Lớp Chuyên Đề (chuyende.gdb)",
-                style_function=lambda x: {'fillColor': 'blue', 'color': 'blue', 'weight': 1, 'fillOpacity': 0.2},
+                style_function=lambda x: {'fillColor': 'transparent', 'color': '#e41a1c', 'weight': 1.5, 'fillOpacity': 0},
                 show=True
             ).add_to(m)
         
@@ -610,23 +568,44 @@ def run_qn_folium_interpolation(input_df, title_text, cmap_name, num_bins, custo
     buf.seek(0)
     img_base64 = base64.b64encode(buf.read()).decode()
 
-    m = folium.Map(location=[(miny + maxy) / 2, (minx + maxx) / 2], tiles="CartoDB positron")
-    m.fit_bounds([[miny, minx], [maxy, maxx]])
-    
-    folium.raster_layers.ImageOverlay(image=f"data:image/png;base64,{img_base64}", bounds=[[miny, minx], [maxy, maxx]], opacity=0.75, name=title_text, interactive=False).add_to(m)
+    # THIẾT LẬP BẢN ĐỒ TƯƠNG TÁC THEO CHUẨN GIS MỚI
+    m = folium.Map(location=[(miny + maxy) / 2, (minx + maxx) / 2], tiles=None, control_scale=True)
+    m.get_root().html.add_child(folium.Element("<style>.leaflet-container { background: #cbe7f5; }</style>"))
+    folium.plugins.Graticule(color="#87b0d9", weight=1, opacity=0.8).add_to(m)
 
+    # Đất liền VN (Nền trắng che biển)
+    if os.path.exists(SHP_MASK_PATH):
+        try:
+            vn_shape = gpd.read_file(SHP_MASK_PATH)
+            if vn_shape.crs and vn_shape.crs.to_epsg() != 4326: vn_shape.to_crs(epsg=4326, inplace=True)
+            folium.GeoJson(vn_shape, name="Đất liền (Việt Nam)", style_function=lambda x: {'fillColor': '#ffffff', 'color': '#cccccc', 'weight': 0.5, 'fillOpacity': 1.0}).add_to(m)
+        except: pass
+
+    # Quảng Ninh Base (Nền Vàng)
     folium.GeoJson(
-        mask_shape, name="Ranh giới (nen.gdb)",
-        style_function=lambda x: {'fillColor': 'transparent', 'color': 'black', 'weight': 1.5}
+        mask_shape, name="Nền Quảng Ninh",
+        style_function=lambda x: {'fillColor': '#ffffb3', 'color': 'black', 'weight': 1.2, 'fillOpacity': 1.0}
+    ).add_to(m)
+    
+    # Kết quả nội suy
+    folium.raster_layers.ImageOverlay(
+        image=f"data:image/png;base64,{img_base64}", bounds=[[miny, minx], [maxy, maxx]], opacity=1.0, name=title_text, interactive=False
     ).add_to(m)
 
+    # Lưới Viền Đen ngoài cùng để rõ nét
+    folium.GeoJson(
+        mask_shape, name="Ranh giới Quảng Ninh",
+        style_function=lambda x: {'fillColor': 'transparent', 'color': 'black', 'weight': 1.5, 'fillOpacity': 0}
+    ).add_to(m)
+
+    # Lớp Chuyên Đề
     if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
         try:
             chuyende_shape = gpd.read_file(GDB_CHUYENDE_PATH)
             if chuyende_shape.crs and chuyende_shape.crs.to_epsg() != 4326: chuyende_shape.to_crs(epsg=4326, inplace=True)
             folium.GeoJson(
                 chuyende_shape, name="Lớp Chuyên Đề (chuyende.gdb)",
-                style_function=lambda x: {'fillColor': 'blue', 'color': 'blue', 'weight': 1, 'fillOpacity': 0.2},
+                style_function=lambda x: {'fillColor': 'transparent', 'color': '#e41a1c', 'weight': 1.5, 'fillOpacity': 0},
                 show=True
             ).add_to(m)
         except Exception: pass
@@ -634,32 +613,26 @@ def run_qn_folium_interpolation(input_df, title_text, cmap_name, num_bins, custo
     colormap_branca = cm.StepColormap(colors=[mcolors.to_hex(cmap(norm(val))) for val in custom_levels[:-1]], vmin=custom_levels[0], vmax=custom_levels[-1], index=custom_levels, caption=title_text)
     m.add_child(colormap_branca)
     folium.LayerControl().add_to(m)
+    m.fit_bounds([[miny, minx], [maxy, maxx]])
 
-    # --- TẠO BẢN ĐỒ TĨNH CHUẨN GIS (KẾT QUẢ NỘI SUY) ---
+    # --- KHỞI TẠO BẢN ĐỒ TĨNH ĐỂ CHO PHÉP DOWNLOAD (Không hiển thị ra UI) ---
     fig, ax = plt.subplots(figsize=(14, 10))
-    ax.set_facecolor('#cbe7f5') # Nền biển xanh nhạt
-    
-    ax.grid(True, color='#87b0d9', linestyle='-', linewidth=0.8) # Lưới tọa độ
+    ax.set_facecolor('#cbe7f5')
+    ax.grid(True, color='#87b0d9', linestyle='-', linewidth=0.8)
     ax.set_axisbelow(True)
     ax.tick_params(direction='in', top=True, right=True, length=6, colors='black')
     
-    # Nền đất liền màu trắng (che màu xanh biển bên ngoài Quảng Ninh)
     if os.path.exists(SHP_MASK_PATH):
         try:
             vn_shape = gpd.read_file(SHP_MASK_PATH)
             if vn_shape.crs and vn_shape.crs.to_epsg() != 4326: vn_shape.to_crs(epsg=4326, inplace=True)
             vn_shape.plot(ax=ax, facecolor='#ffffff', edgecolor='#cccccc', linewidth=0.5)
         except: pass
-
+        
     ax.set_title(title_text, fontsize=18, fontweight='bold', pad=15)
-    
-    # Lớp kết quả nội suy
     im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower', aspect='auto')
-    
-    # Ranh giới đậm Quảng Ninh
     mask_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.5)
     
-    # Lớp Chuyên đề
     if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
         try:
             chuyende_shape = gpd.read_file(GDB_CHUYENDE_PATH)
@@ -671,12 +644,10 @@ def run_qn_folium_interpolation(input_df, title_text, cmap_name, num_bins, custo
     cbar.set_ticks(custom_levels)
     cbar.set_ticklabels([f"{val:.1f}" for val in custom_levels])
     
-    # Khung Zoom vừa khít
     pad_x = (maxx - minx) * 0.05
     pad_y = (maxy - miny) * 0.05
     ax.set_xlim(minx - pad_x, maxx + pad_x)
     ax.set_ylim(miny - pad_y, maxy + pad_y)
-    
     ax.ticklabel_format(useOffset=False, style='plain')
     ax.set_xlabel("Kinh độ", fontsize=12)
     ax.set_ylabel("Vĩ độ", fontsize=12)
@@ -1168,14 +1139,12 @@ def main():
 
             if st.session_state['folium_map_obj'] and st.session_state['folium_fig_obj']:
                 st.success("Tạo bản đồ Quảng Ninh thành công!")
+                st.markdown("### 🗺️ Bản đồ Kết quả (Định dạng GIS Chuẩn)")
                 
-                st.markdown("### 🗺️ Bản đồ Tương tác (Folium)")
-                st_folium(st.session_state['folium_map_obj'], width=None, height=600, use_container_width=True)
+                # Hiển thị DUY NHẤT bản đồ phong cách GIS (có thể thu phóng, tương tác)
+                st_folium(st.session_state['folium_map_obj'], width=None, height=750, use_container_width=True)
                 
                 st.markdown("---")
-                st.markdown("### 🖼️ Bản đồ Tĩnh (GIS Format)")
-                st.pyplot(st.session_state['folium_fig_obj'], use_container_width=True)
-                
                 st.markdown("### 📥 Tải bản vẽ tĩnh")
                 col_dl1, col_dl2 = st.columns([1, 3])
                 with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_qn_folium")
@@ -1186,16 +1155,12 @@ def main():
                     st.write(""); st.write("")
                     st.download_button(label=f"⬇️ Tải Bản đồ Quảng Ninh ({fmt.upper()})", data=buf, file_name=f"ban_do_quangninh.{fmt}", mime=f"image/{fmt}", key="dl_btn_qn_folium")
             else: 
-                st.info("👈 Bản đồ nền Quảng Ninh mặc định. Vui lòng cấu hình dữ liệu và nhấn 'VẼ BẢN ĐỒ QUẢNG NINH' để xem kết quả nội suy.")
+                st.info("👈 Vui lòng cấu hình dữ liệu và nhấn 'VẼ BẢN ĐỒ QUẢNG NINH' để xem kết quả nội suy.")
+                st.markdown("### 🗺️ Bản đồ Nền (Định dạng GIS Chuẩn)")
                 
-                st.markdown("### 🗺️ Bản đồ Tương tác (Folium)")
+                # Hiển thị bản đồ nền phong cách GIS
                 default_map = get_default_qn_map(show_chuyende)
-                st_folium(default_map, width=None, height=600, use_container_width=True)
-                
-                st.markdown("---")
-                st.markdown("### 🖼️ Bản đồ Tĩnh (GIS Format)")
-                default_static_map = get_default_qn_static_map(show_chuyende)
-                st.pyplot(default_static_map, use_container_width=True)
+                st_folium(default_map, width=None, height=750, use_container_width=True)
 
     elif topic == "Dự báo điểm (KMA)":
         if st.session_state.get('logged_in_role') != 'admin':
