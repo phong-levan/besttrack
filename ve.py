@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.colors import LinearSegmentedColormap, Normalize, BoundaryNorm
 import geopandas as gpd
+import fiona
 from shapely.geometry import Point, box, Polygon, mapping
 from shapely.prepared import prep
 from shapely.ops import unary_union
@@ -44,6 +45,10 @@ SHP_DISP_PATH = os.path.join("shp", "vungmoi.shp")
 GDB_NEN_PATH = os.path.join("shp", "nen.gdb")
 GDB_CHUYENDE_PATH = os.path.join("shp", "chuyende.gdb")
 
+# --- FIX PHẠM VI (BOUNDING BOX) QUẢNG NINH ---
+QN_MINX, QN_MAXX = 106.4, 108.1
+QN_MINY, QN_MAXY = 20.5, 21.7
+
 # --- ĐỊNH NGHĨA ICON PATHS ---
 ICON_PATHS = {
     "vungthap_daqua": os.path.join(ICON_DIR, 'vungthapdaqua.png'),
@@ -60,7 +65,6 @@ ICON_PATHS = {
 LINK_WEATHEROBS = "https://weatherobs.com/"
 LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
 
-# --- HÀM TẠO LINK KMA DYNAMIC ---
 def get_kma_url():
     now_utc = datetime.utcnow()
     check_time = now_utc - timedelta(hours=5)
@@ -117,7 +121,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. HÀM XỬ LÝ LOGIC
+# 3. HÀM XỬ LÝ LOGIC CHUNG
 # ==============================================================================
 @st.cache_data(ttl=300) 
 def get_rainviewer_ts():
@@ -145,96 +149,6 @@ def normalize_columns(df):
     df = df.rename(columns={k:v for k,v in rename.items() if k in df.columns})
     return df
 
-def densify_track(df, step_km=10):
-    new_rows = []
-    if len(df) < 2: return df
-    for i in range(len(df) - 1):
-        p1, p2 = df.iloc[i], df.iloc[i+1]
-        dist = 6371 * 2 * asin(sqrt(sin(radians(p2['lat']-p1['lat'])/2)**2 + cos(radians(p1['lat']))*cos(radians(p2['lat']))*sin(radians(p2['lon']-p1['lon'])/2)**2))
-        steps = max(1, int(np.ceil(dist / step_km)))
-        for j in range(steps):
-            f = j / steps
-            row = p1.copy()
-            row['lat'] = p1['lat'] + (p2['lat'] - p1['lat']) * f
-            row['lon'] = p1['lon'] + (p2['lon'] - p1['lon']) * f
-            for col in ['r6', 'r10', 'rc']:
-                if col in p1 and col in p2: row[col] = p1.get(col, 0)*(1-f) + p2.get(col, 0)*f
-            new_rows.append(row)
-    new_rows.append(df.iloc[-1])
-    return pd.DataFrame(new_rows)
-
-def generate_circle_polygon(lat, lon, radius_km, n_points=36):
-    coords = []
-    if radius_km <= 0: return None
-    lat_rad = radians(lat)
-    for i in range(n_points):
-        theta = (i / n_points) * (2 * pi)
-        dy = (radius_km * cos(theta)) / 111.32
-        dx = (radius_km * sin(theta)) / (111.32 * cos(lat_rad))
-        coords.append((lon + dx, lat + dy))
-    return Polygon(coords)
-
-def create_storm_swaths(dense_df):
-    polys = {'r6': [], 'r10': [], 'rc': []}
-    for _, row in dense_df.iterrows():
-        for r, key in [(row.get('r6',0), 'r6'), (row.get('r10',0), 'r10'), (row.get('rc',0), 'rc')]:
-            if r > 0:
-                poly = generate_circle_polygon(row['lat'], row['lon'], r)
-                if poly: polys[key].append(poly)
-    u = {k: unary_union(v) if v else None for k, v in polys.items()}
-    f_rc = u['rc']
-    f_r10 = u['r10'].difference(u['rc']) if u['r10'] and u['rc'] else u['r10']
-    f_r6 = u['r6'].difference(u['r10']) if u['r6'] and u['r10'] else u['r6']
-    return f_r6, f_r10, f_rc
-
-def get_icon_name(row):
-    wind_speed = row.get('bf', 0) 
-    w = row.get('wind_km/h', 0)
-    if pd.isna(wind_speed) or wind_speed == 0:
-        if w > 0:
-            if w < 34: wind_speed = 5
-            elif w < 64: wind_speed = 7
-            elif w < 100: wind_speed = 10
-            else: wind_speed = 12
-    status = 'daqua' if 'quá khứ' in str(row.get('status_raw','')).lower() or 'past' in str(row.get('status_raw','')).lower() else 'dubao'
-    if pd.isna(wind_speed): return f"vungthap_{status}"
-    if wind_speed < 6:      return f"vungthap_{status}"
-    if wind_speed < 8:      return f"atnd_{status}"
-    if wind_speed <= 11:    return f"bnd_{status}"
-    return f"sieubao_{status}"
-
-def create_info_table(df, title):
-    if df.empty: return ""
-    if 'status_raw' in df.columns:
-        cur = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
-        fut = df[df['status_raw'].astype(str).str.contains("dự báo|forecast", case=False, na=False)]
-        display_df = pd.concat([cur, fut]).head(8)
-    else:
-        display_df = df.sort_values('dt', ascending=False).groupby('name').head(1)
-        cur = display_df 
-
-    subtitle = "(Đang cập nhật)"
-    try:
-        target_row = cur.iloc[0] if not cur.empty else (display_df.iloc[0] if not display_df.empty else None)
-        if target_row is not None:
-            if 'hour_explicit' in target_row and pd.notna(target_row['hour_explicit']): subtitle = f"Tin phát lúc {int(target_row['hour_explicit'])}h30"
-            elif 'dt' in target_row and pd.notna(target_row['dt']): subtitle = f"Tin phát lúc {target_row['dt'].hour}h30"
-    except: subtitle = "(Dữ liệu cập nhật từ Besttrack)"
-    
-    rows = ""
-    for _, r in display_df.iterrows():
-        t = r.get('datetime_str', r.get('dt'))
-        if not isinstance(t, str): t = t.strftime('%d/%m %Hh')
-        w = r.get('wind_km/h', 0)
-        bf = r.get('bf', 0)
-        if (pd.isna(bf) or bf == 0) and w > 0:
-             if w < 34: bf = 6
-             elif w < 64: bf = 8
-             elif w < 100: bf = 10
-             else: bf = 12
-        rows += f"<tr><td>{t}</td><td>{r.get('lon',0):.1f}E</td><td>{r.get('lat',0):.1f}N</td><td>{f'Cấp {int(bf)}' if bf>0 else '-'}</td><td>{f'{int(r.get('pressure',0))}' if r.get('pressure',0)>0 else '-'}</td></tr>"
-    return textwrap.dedent(f"""<div class="info-box"><div class="info-title">{title}</div><div class="info-subtitle">{subtitle}</div><table><thead><tr><th>Ngày-Giờ</th><th>Kinh độ</th><th>Vĩ độ</th><th>Cấp gió</th><th>Pmin (hPa)</th></tr></thead><tbody>{rows}</tbody></table></div>""")
-
 def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
     tree = cKDTree(np.column_stack([xi, yi]))
     dists, idxs = tree.query(query_xy, k=min(k, xi.size))
@@ -252,104 +166,6 @@ def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
         out[rest] = (w * zi[nn]).sum(axis=1) / w.sum(axis=1)
     return out
 
-def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
-    minx, maxx, miny, maxy = 101.8, 115.0, 8.0, 23.9
-    GRID_N, SIGMA, IDW_POWER, KNN = 1000, 1.5, 3.0, 12
-
-    if data_type == 'rain':
-        vmin, vmax = 0, 1400
-        levels_for_ticks = np.arange(0, 1450, 100)
-        colors = ['#FFFFFF', '#A0E6FF', '#00FF00', '#FFFF00', '#FFA500', '#FF0000', '#800080', '#4B0082']
-        cmap = LinearSegmentedColormap.from_list('rain_smooth', colors, N=512)
-        cmap.set_under(colors[0]); cmap.set_over(colors[-1])
-        unit_label = "Lượng mưa (mm)"
-    else: 
-        vmin, vmax = 0.0, 40.0
-        levels_for_ticks = list(range(0, 42, 4))
-        colors = [(0.0, '#FFFFFF'), (0.1, '#D0F0FF'), (0.2, '#00A0FF'), (0.4, '#00FF00'), (0.6, '#FFFF00'), (0.75, '#FFA500'), (0.9, '#FF0000'), (1.0, '#8B0000')]
-        cmap = LinearSegmentedColormap.from_list("custom_smooth_temp", colors, N=256)
-        unit_label = "Nhiệt độ (°C)"
-
-    norm = Normalize(vmin=vmin, vmax=vmax)
-    input_df.columns = input_df.columns.str.lower().str.strip()
-    if not all(c in input_df.columns for c in ['lon', 'lat', 'value']): return None, "File thiếu cột bắt buộc."
-    valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
-    if valid.empty: return None, "Dữ liệu trống."
-
-    x_pts, y_pts, z_pts = valid['lon'].to_numpy(), valid['lat'].to_numpy(), valid['value'].to_numpy()
-    edge_points = pd.DataFrame({'lon': [minx, minx, maxx, maxx, (minx + maxx)/2], 'lat': [miny, maxy, miny, maxy, (miny + maxy)/2], 'value': [float(np.nanmean(z_pts))] * 5})
-    aug = pd.concat([valid[['lon', 'lat', 'value']], edge_points], ignore_index=True)
-    xi, yi, zi = aug['lon'].to_numpy(), aug['lat'].to_numpy(), aug['value'].to_numpy()
-
-    gx, gy = np.meshgrid(np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N))
-    grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
-    gv = idw_knn(xi, yi, zi, grid_xy, k=KNN, power=IDW_POWER).reshape(gx.shape)
-    if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
-
-    mask_shape = disp_shape = None
-    if os.path.exists(SHP_MASK_PATH):
-        try:
-            mask_shape = gpd.read_file(SHP_MASK_PATH)
-            if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: mask_shape.to_crs(epsg=4326, inplace=True)
-        except Exception as e: return None, f"Lỗi đọc Mask Shapefile: {e}"
-    else:
-        mask_shape = gpd.GeoDataFrame({'geometry': [box(minx, miny, maxx, maxy)]}, crs='EPSG:4326')
-
-    if os.path.exists(SHP_DISP_PATH):
-        try:
-            disp_shape = gpd.read_file(SHP_DISP_PATH)
-            if disp_shape.crs and disp_shape.crs.to_epsg() != 4326: disp_shape.to_crs(epsg=4326, inplace=True)
-        except Exception: pass
-    else: disp_shape = mask_shape
-
-    if mask_shape is not None:
-        prep_shape = prep(mask_shape.unary_union)
-        mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
-        gv_masked = np.where(mask_flat, gv, np.nan)
-    else: gv_masked = gv
-
-    fig, ax = plt.subplots(figsize=(14, 10)) 
-    ax.set_title(title_text if title_text else f'Bản đồ {unit_label}', fontsize=16)
-    if disp_shape is not None: disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
-    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower', aspect='auto')
-    cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.7, pad=0.02, extend='both')
-    cbar.set_label(unit_label, fontsize=12)
-    cbar.set_ticks(levels_for_ticks)
-    cbar.set_ticklabels([str(l) for l in levels_for_ticks])
-    ax.set_xlim(minx, maxx); ax.set_ylim(miny, maxy); ax.ticklabel_format(useOffset=False, style='plain')
-    return fig, None
-
-def generate_single_province_fig(cache, prov_name, title_text):
-    mask_shape = cache.get('mask_shape')
-    shape_col = cache.get('shape_col', "")
-    
-    if mask_shape is None or not shape_col or shape_col not in mask_shape.columns: return None
-        
-    prov_shape = mask_shape[mask_shape[shape_col] == prov_name]
-    if prov_shape.empty: return None
-
-    p_minx, p_miny, p_maxx, p_maxy = prov_shape.total_bounds
-    pad_x, pad_y = (p_maxx - p_minx) * 0.1, (p_maxy - p_miny) * 0.1
-    p_minx -= pad_x; p_maxx += pad_x; p_miny -= pad_y; p_maxy += pad_y
-    
-    grid_xy = np.column_stack([cache['gx'].ravel(), cache['gy'].ravel()])
-    prep_shape = prep(prov_shape.unary_union)
-    mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(cache['gx'].shape)
-    gv_masked = np.where(mask_flat, cache['gv'], np.nan)
-    
-    fig, ax = plt.subplots(figsize=(10, 10))
-    ax.set_title(f"{title_text}\n(Khu vực: {prov_name})", fontsize=16)
-    prov_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.5)
-    im = ax.imshow(gv_masked, extent=[cache['minx'], cache['maxx'], cache['miny'], cache['maxy']], cmap=cache['cmap'], norm=cache['norm'], interpolation='bilinear', origin='lower', aspect='auto')
-    ax.set_xlim(p_minx, p_maxx); ax.set_ylim(p_miny, p_maxy)
-    
-    cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.7, pad=0.02)
-    cbar.set_ticks(cache['custom_levels'])
-    cbar.set_ticklabels([f"{val:.1f}" for val in cache['custom_levels']])
-    ax.ticklabel_format(useOffset=False, style='plain')
-    ax.set_xlabel("Kinh độ"); ax.set_ylabel("Vĩ độ")
-    return fig
-
 def get_lat_lon_columns(df_nc):
     lat_candidates = ['lat', 'latitude', 'y', 'lat_0', 'nav_lat', 'ycoord', 'y_coord']
     lon_candidates = ['lon', 'longitude', 'x', 'lon_0', 'nav_lon', 'xcoord', 'x_coord']
@@ -359,9 +175,235 @@ def get_lat_lon_columns(df_nc):
     
     if not lat_col: lat_col = next((c for c in df_nc.columns if 'lat' in str(c).lower()), None)
     if not lon_col: lon_col = next((c for c in df_nc.columns if 'lon' in str(c).lower()), None)
-        
     return lat_col, lon_col
 
+# ==============================================================================
+# HÀM HỖ TRỢ XỬ LÝ LỚP GDB CHO QUẢNG NINH
+# ==============================================================================
+def add_gdb_layers_to_folium(m, gdb_path, is_chuyende=False):
+    """ Đọc toàn bộ các layer từ GDB và ép style chuẩn GIS lên bản đồ tương tác """
+    try:
+        layers = fiona.listlayers(gdb_path)
+        bbox = box(QN_MINX, QN_MINY, QN_MAXX, QN_MAXY)
+        for layer in layers:
+            gdf = gpd.read_file(gdb_path, layer=layer)
+            if gdf.empty: continue
+            if gdf.crs and gdf.crs.to_epsg() != 4326:
+                gdf.to_crs(epsg=4326, inplace=True)
+            
+            # Cắt gọn theo khung để zoom mượt mà
+            gdf = gpd.clip(gdf, bbox)
+            if gdf.empty: continue
+            
+            # Đơn giản hóa vector một chút để tối ưu trình duyệt
+            gdf.geometry = gdf.geometry.simplify(0.0001)
+
+            if is_chuyende:
+                color = '#ff0000' # Màu đỏ cho chuyên đề
+                weight = 1.5
+                fill = 'transparent'
+                fill_op = 0
+            else:
+                lname = layer.lower()
+                color = 'gray'
+                weight = 0.8
+                fill = 'transparent'
+                fill_op = 0
+
+                # Nhận diện tự động các lớp dựa vào tên chuẩn GIS
+                if gdf.geom_type.iloc[0] in ['Polygon', 'MultiPolygon']:
+                    fill = '#ffffff'
+                    fill_op = 1.0
+                    color = '#cccccc'
+                    weight = 0.5
+                    if any(k in lname for k in ['thuy', 'song', 'ho', 'nuoc', 'bien']):
+                        fill = '#cbe7f5'
+                        color = '#00aaff'
+                else:
+                    if any(k in lname for k in ['thuy', 'song', 'ho', 'nuoc', 'bien']):
+                        color = '#00aaff'
+                        weight = 1.0
+                    elif any(k in lname for k in ['giao', 'duong']):
+                        color = '#000000' # Đen cho giao thông
+                        weight = 1.0
+                    elif any(k in lname for k in ['dia', 'dongmuc', 'contour']):
+                        color = '#ffd700' # Vàng cho đường đồng mức
+                        weight = 0.6
+                    elif any(k in lname for k in ['ranh', 'hanhchinh', 'bien']):
+                        color = '#800080' # Tím cho ranh giới
+                        weight = 1.5
+
+            folium.GeoJson(
+                gdf,
+                name=f"{'Chuyên đề' if is_chuyende else 'Nền'} - {layer}",
+                style_function=lambda x, c=color, w=weight, f=fill, fo=fill_op: {'fillColor': f, 'color': c, 'weight': w, 'fillOpacity': fo},
+                show=True
+            ).add_to(m)
+    except Exception as e: pass
+
+def plot_gdb_layers_to_ax(ax, gdb_path, is_chuyende=False):
+    """ Hàm vẽ tương ứng cho file ảnh tĩnh tải về """
+    try:
+        layers = fiona.listlayers(gdb_path)
+        bbox = box(QN_MINX, QN_MINY, QN_MAXX, QN_MAXY)
+        for layer in layers:
+            gdf = gpd.read_file(gdb_path, layer=layer)
+            if gdf.empty: continue
+            if gdf.crs and gdf.crs.to_epsg() != 4326:
+                gdf.to_crs(epsg=4326, inplace=True)
+            
+            gdf = gpd.clip(gdf, bbox)
+            if gdf.empty: continue
+
+            if is_chuyende:
+                gdf.plot(ax=ax, edgecolor='#ff0000', facecolor='none', linewidth=1.5, linestyle='--')
+            else:
+                lname = layer.lower()
+                if gdf.geom_type.iloc[0] in ['Polygon', 'MultiPolygon']:
+                    if any(k in lname for k in ['thuy', 'song', 'ho', 'nuoc']):
+                        gdf.plot(ax=ax, facecolor='#cbe7f5', edgecolor='#00aaff', linewidth=0.5)
+                    else:
+                        gdf.plot(ax=ax, facecolor='#ffffff', edgecolor='#cccccc', linewidth=0.5)
+                else:
+                    if any(k in lname for k in ['thuy', 'song', 'ho', 'nuoc']):
+                        gdf.plot(ax=ax, edgecolor='#00aaff', linewidth=1.0)
+                    elif any(k in lname for k in ['giao', 'duong']):
+                        gdf.plot(ax=ax, edgecolor='#000000', linewidth=1.0)
+                    elif any(k in lname for k in ['dia', 'dongmuc', 'contour']):
+                        gdf.plot(ax=ax, edgecolor='#ffd700', linewidth=0.6)
+                    elif any(k in lname for k in ['ranh', 'hanhchinh', 'bien']):
+                        gdf.plot(ax=ax, edgecolor='#800080', linewidth=1.5)
+                    else:
+                        gdf.plot(ax=ax, edgecolor='gray', linewidth=0.5)
+    except Exception as e: pass
+
+# ==============================================================================
+# QUẢNG NINH LOGIC
+# ==============================================================================
+def get_default_qn_map(show_chuyende):
+    m = folium.Map(location=[(QN_MINY + QN_MAXY) / 2, (QN_MINX + QN_MAXX) / 2], zoom_start=9, tiles=None, control_scale=True)
+    m.get_root().html.add_child(folium.Element("<style>.leaflet-container { background: #cbe7f5; }</style>")) # Biển xanh
+    folium.plugins.Graticule(color="#87b0d9", weight=1, opacity=0.8).add_to(m) # Lưới tọa độ
+    m.fit_bounds([[QN_MINY, QN_MINX], [QN_MAXY, QN_MAXX]])
+    
+    if os.path.exists(GDB_NEN_PATH):
+        add_gdb_layers_to_folium(m, GDB_NEN_PATH, is_chuyende=False)
+    if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
+        add_gdb_layers_to_folium(m, GDB_CHUYENDE_PATH, is_chuyende=True)
+        
+    folium.LayerControl().add_to(m)
+    return m
+
+def get_default_qn_static_map(show_chuyende):
+    fig, ax = plt.subplots(figsize=(14, 10))
+    ax.set_facecolor('#cbe7f5')
+    ax.grid(True, color='#87b0d9', linestyle='-', linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.tick_params(direction='in', top=True, right=True, length=6, colors='black')
+    
+    if os.path.exists(GDB_NEN_PATH):
+        plot_gdb_layers_to_ax(ax, GDB_NEN_PATH, is_chuyende=False)
+    if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
+        plot_gdb_layers_to_ax(ax, GDB_CHUYENDE_PATH, is_chuyende=True)
+        
+    ax.set_xlim(QN_MINX, QN_MAXX)
+    ax.set_ylim(QN_MINY, QN_MAXY)
+    ax.set_xlabel("Kinh độ", fontsize=12)
+    ax.set_ylabel("Vĩ độ", fontsize=12)
+    ax.ticklabel_format(useOffset=False, style='plain')
+    return fig
+
+def run_qn_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, show_chuyende):
+    input_df.columns = input_df.columns.str.lower().str.strip()
+    if not all(c in input_df.columns for c in ['lon', 'lat', 'value']): return None, None, None, "File thiếu cột bắt buộc."
+    valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
+    if valid.empty: return None, None, None, "Dữ liệu trống."
+
+    minx, maxx, miny, maxy = QN_MINX, QN_MAXX, QN_MINY, QN_MAXY
+    
+    x_pts, y_pts, z_pts = valid['lon'].to_numpy(), valid['lat'].to_numpy(), valid['value'].to_numpy()
+    GRID_N, SIGMA = 800, 1.0
+    gx, gy = np.meshgrid(np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N))
+    grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
+    gv = idw_knn(x_pts, y_pts, z_pts, grid_xy, k=12, power=3.0).reshape(gx.shape)
+    if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
+
+    # Tìm một mask shape hợp lý để cắt nếu có
+    mask_shape = None
+    if os.path.exists(GDB_NEN_PATH):
+        try:
+            for layer in fiona.listlayers(GDB_NEN_PATH):
+                gdf = gpd.read_file(GDB_NEN_PATH, layer=layer)
+                if not gdf.empty and gdf.geom_type.iloc[0] in ['Polygon', 'MultiPolygon']:
+                    if gdf.crs and gdf.crs.to_epsg() != 4326: gdf.to_crs(epsg=4326, inplace=True)
+                    mask_shape = gdf
+                    break
+        except: pass
+    if mask_shape is None:
+        mask_shape = gpd.GeoDataFrame({'geometry': [box(minx, miny, maxx, maxy)]}, crs='EPSG:4326')
+
+    prep_shape = prep(mask_shape.unary_union)
+    mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
+    gv_masked = np.where(mask_flat, gv, np.nan)
+
+    cmap = plt.get_cmap(cmap_name)
+    if custom_levels is not None and len(custom_levels) > 1:
+        custom_levels = sorted(list(set(custom_levels)))
+        norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
+    else:
+        vmin_val, vmax_val = np.nanmin(gv_masked), np.nanmax(gv_masked)
+        if np.isnan(vmin_val): vmin_val, vmax_val = 0, 1
+        custom_levels = np.linspace(vmin_val, vmax_val, num_bins + 1)
+        norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
+
+    rgba = cmap(norm(gv_masked))
+    rgba[np.isnan(gv_masked)] = [0, 0, 0, 0]
+    rgba_folium = np.flipud(rgba)
+
+    buf = io.BytesIO()
+    plt.imsave(buf, rgba_folium, format='png')
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode()
+
+    # XÂY DỰNG BẢN ĐỒ TƯƠNG TÁC (FOLIUM GIS)
+    m = folium.Map(location=[(miny + maxy) / 2, (minx + maxx) / 2], tiles=None, control_scale=True)
+    m.get_root().html.add_child(folium.Element("<style>.leaflet-container { background: #cbe7f5; }</style>"))
+    folium.plugins.Graticule(color="#87b0d9", weight=1, opacity=0.8).add_to(m)
+    m.fit_bounds([[miny, minx], [maxy, maxx]])
+
+    if os.path.exists(GDB_NEN_PATH):
+        add_gdb_layers_to_folium(m, GDB_NEN_PATH, is_chuyende=False)
+        
+    folium.raster_layers.ImageOverlay(
+        image=f"data:image/png;base64,{img_base64}", bounds=[[miny, minx], [maxy, maxx]], opacity=0.8, name=title_text, interactive=False
+    ).add_to(m)
+
+    if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
+        add_gdb_layers_to_folium(m, GDB_CHUYENDE_PATH, is_chuyende=True)
+
+    colormap_branca = cm.StepColormap(colors=[mcolors.to_hex(cmap(norm(val))) for val in custom_levels[:-1]], vmin=custom_levels[0], vmax=custom_levels[-1], index=custom_levels, caption=title_text)
+    m.add_child(colormap_branca)
+    folium.LayerControl().add_to(m)
+
+    # TẠO HÌNH TĨNH CHO DOWNLOAD
+    fig = get_default_qn_static_map(show_chuyende)
+    ax = fig.gca()
+    ax.set_title(title_text, fontsize=18, fontweight='bold', pad=15)
+    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower', aspect='auto')
+    cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.7, pad=0.02)
+    cbar.set_ticks(custom_levels)
+    cbar.set_ticklabels([f"{val:.1f}" for val in custom_levels])
+
+    cache_dict = {
+        'gv': gv, 'gx': gx, 'gy': gy, 'minx': minx, 'maxx': maxx, 'miny': miny, 'maxy': maxy,
+        'cmap': cmap, 'norm': norm, 'custom_levels': custom_levels, 'mask_shape': mask_shape
+    }
+
+    return m, fig, cache_dict, None
+
+# ==============================================================================
+# HÀM CŨ CỦA NỘI SUY LINH TINH
+# ==============================================================================
 def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
     shape_col = shape_col or ""
     input_df.columns = input_df.columns.str.lower().str.strip()
@@ -474,190 +516,103 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
 
     return m, fig, cache_dict, None
 
+def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
+    minx, maxx, miny, maxy = 101.8, 115.0, 8.0, 23.9
+    GRID_N, SIGMA, IDW_POWER, KNN = 1000, 1.5, 3.0, 12
 
-def get_default_qn_map(show_chuyende):
-    m = folium.Map(location=[21.15, 107.2], zoom_start=9, tiles=None, control_scale=True)
-    m.get_root().html.add_child(folium.Element("<style>.leaflet-container { background: #cbe7f5; }</style>"))
-    folium.plugins.Graticule(color="#87b0d9", weight=1, opacity=0.8).add_to(m)
-    
-    try:
-        if os.path.exists(SHP_MASK_PATH):
-            vn_shape = gpd.read_file(SHP_MASK_PATH)
-            if vn_shape.crs and vn_shape.crs.to_epsg() != 4326: vn_shape.to_crs(epsg=4326, inplace=True)
-            folium.GeoJson(vn_shape, name="Đất liền (Việt Nam)", style_function=lambda x: {'fillColor': '#ffffff', 'color': '#cccccc', 'weight': 0.5, 'fillOpacity': 1.0}).add_to(m)
-            
-        if os.path.exists(GDB_NEN_PATH):
-            nen_shape = gpd.read_file(GDB_NEN_PATH)
-            if nen_shape.crs and nen_shape.crs.to_epsg() != 4326: 
-                nen_shape.to_crs(epsg=4326, inplace=True)
-            
-            minx, miny, maxx, maxy = nen_shape.total_bounds
-            m.fit_bounds([[miny, minx], [maxy, maxx]])
-            
-            folium.GeoJson(
-                nen_shape, name="Nền Quảng Ninh",
-                style_function=lambda x: {'fillColor': '#ffffb3', 'color': 'black', 'weight': 1.2, 'fillOpacity': 1.0}
-            ).add_to(m)
+    if data_type == 'rain':
+        vmin, vmax = 0, 1400
+        levels_for_ticks = np.arange(0, 1450, 100)
+        colors = ['#FFFFFF', '#A0E6FF', '#00FF00', '#FFFF00', '#FFA500', '#FF0000', '#800080', '#4B0082']
+        cmap = LinearSegmentedColormap.from_list('rain_smooth', colors, N=512)
+        cmap.set_under(colors[0]); cmap.set_over(colors[-1])
+        unit_label = "Lượng mưa (mm)"
+    else: 
+        vmin, vmax = 0.0, 40.0
+        levels_for_ticks = list(range(0, 42, 4))
+        colors = [(0.0, '#FFFFFF'), (0.1, '#D0F0FF'), (0.2, '#00A0FF'), (0.4, '#00FF00'), (0.6, '#FFFF00'), (0.75, '#FFA500'), (0.9, '#FF0000'), (1.0, '#8B0000')]
+        cmap = LinearSegmentedColormap.from_list("custom_smooth_temp", colors, N=256)
+        unit_label = "Nhiệt độ (°C)"
 
-        if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
-            chuyende_shape = gpd.read_file(GDB_CHUYENDE_PATH)
-            if chuyende_shape.crs and chuyende_shape.crs.to_epsg() != 4326: 
-                chuyende_shape.to_crs(epsg=4326, inplace=True)
-            folium.GeoJson(
-                chuyende_shape, name="Lớp Chuyên Đề (chuyende.gdb)",
-                style_function=lambda x: {'fillColor': 'transparent', 'color': '#e41a1c', 'weight': 1.5, 'fillOpacity': 0},
-                show=True
-            ).add_to(m)
-        
-        folium.LayerControl().add_to(m)
-    except Exception as e:
-        pass
-    return m
-
-
-def run_qn_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, show_chuyende):
+    norm = Normalize(vmin=vmin, vmax=vmax)
     input_df.columns = input_df.columns.str.lower().str.strip()
-    if not all(c in input_df.columns for c in ['lon', 'lat', 'value']): return None, None, None, "File thiếu cột bắt buộc."
+    if not all(c in input_df.columns for c in ['lon', 'lat', 'value']): return None, "File thiếu cột bắt buộc."
     valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
-    if valid.empty: return None, None, None, "Dữ liệu trống."
+    if valid.empty: return None, "Dữ liệu trống."
 
-    if not os.path.exists(GDB_NEN_PATH): return None, None, None, "Không tìm thấy file nen.gdb. Vui lòng kiểm tra lại cấu trúc thư mục."
-    
-    try:
-        mask_shape = gpd.read_file(GDB_NEN_PATH)
-        if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: mask_shape.to_crs(epsg=4326, inplace=True)
-    except Exception as e: return None, None, None, f"Lỗi đọc {GDB_NEN_PATH}: {e}"
-
-    minx, miny, maxx, maxy = mask_shape.total_bounds
-    
-    if np.isnan(minx) or minx == maxx or miny == maxy:
-        return None, None, None, "Dữ liệu ranh giới (nen.gdb) không hợp lệ hoặc thiếu tọa độ."
-    
     x_pts, y_pts, z_pts = valid['lon'].to_numpy(), valid['lat'].to_numpy(), valid['value'].to_numpy()
-    GRID_N, SIGMA = 800, 1.0
+    edge_points = pd.DataFrame({'lon': [minx, minx, maxx, maxx, (minx + maxx)/2], 'lat': [miny, maxy, miny, maxy, (miny + maxy)/2], 'value': [float(np.nanmean(z_pts))] * 5})
+    aug = pd.concat([valid[['lon', 'lat', 'value']], edge_points], ignore_index=True)
+    xi, yi, zi = aug['lon'].to_numpy(), aug['lat'].to_numpy(), aug['value'].to_numpy()
+
     gx, gy = np.meshgrid(np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N))
     grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
-    gv = idw_knn(x_pts, y_pts, z_pts, grid_xy, k=12, power=3.0).reshape(gx.shape)
+    gv = idw_knn(xi, yi, zi, grid_xy, k=KNN, power=IDW_POWER).reshape(gx.shape)
     if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
 
-    shape_union = mask_shape.unary_union
-    if shape_union.is_empty:
-        mask_flat = np.ones(gx.shape, dtype=bool)
-    else:
-        prep_shape = prep(shape_union)
-        mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
-        
-    gv_masked = np.where(mask_flat, gv, np.nan)
-
-    cmap = plt.get_cmap(cmap_name)
-    if custom_levels is not None and len(custom_levels) > 1:
-        custom_levels = sorted(list(set(custom_levels)))
-        norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
-    else:
-        vmin_val, vmax_val = np.nanmin(gv_masked), np.nanmax(gv_masked)
-        if np.isnan(vmin_val): vmin_val, vmax_val = 0, 1
-        custom_levels = np.linspace(vmin_val, vmax_val, num_bins + 1)
-        norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
-
-    rgba = cmap(norm(gv_masked))
-    rgba[np.isnan(gv_masked)] = [0, 0, 0, 0]
-    rgba_folium = np.flipud(rgba)
-
-    buf = io.BytesIO()
-    plt.imsave(buf, rgba_folium, format='png')
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode()
-
-    # THIẾT LẬP BẢN ĐỒ TƯƠNG TÁC THEO CHUẨN GIS MỚI
-    m = folium.Map(location=[(miny + maxy) / 2, (minx + maxx) / 2], tiles=None, control_scale=True)
-    m.get_root().html.add_child(folium.Element("<style>.leaflet-container { background: #cbe7f5; }</style>"))
-    folium.plugins.Graticule(color="#87b0d9", weight=1, opacity=0.8).add_to(m)
-
-    # Đất liền VN (Nền trắng che biển)
+    mask_shape = disp_shape = None
     if os.path.exists(SHP_MASK_PATH):
         try:
-            vn_shape = gpd.read_file(SHP_MASK_PATH)
-            if vn_shape.crs and vn_shape.crs.to_epsg() != 4326: vn_shape.to_crs(epsg=4326, inplace=True)
-            folium.GeoJson(vn_shape, name="Đất liền (Việt Nam)", style_function=lambda x: {'fillColor': '#ffffff', 'color': '#cccccc', 'weight': 0.5, 'fillOpacity': 1.0}).add_to(m)
-        except: pass
+            mask_shape = gpd.read_file(SHP_MASK_PATH)
+            if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: mask_shape.to_crs(epsg=4326, inplace=True)
+        except Exception as e: return None, f"Lỗi đọc Mask Shapefile: {e}"
+    else:
+        mask_shape = gpd.GeoDataFrame({'geometry': [box(minx, miny, maxx, maxy)]}, crs='EPSG:4326')
 
-    # Quảng Ninh Base (Nền Vàng)
-    folium.GeoJson(
-        mask_shape, name="Nền Quảng Ninh",
-        style_function=lambda x: {'fillColor': '#ffffb3', 'color': 'black', 'weight': 1.2, 'fillOpacity': 1.0}
-    ).add_to(m)
-    
-    # Kết quả nội suy
-    folium.raster_layers.ImageOverlay(
-        image=f"data:image/png;base64,{img_base64}", bounds=[[miny, minx], [maxy, maxx]], opacity=1.0, name=title_text, interactive=False
-    ).add_to(m)
-
-    # Lưới Viền Đen ngoài cùng để rõ nét
-    folium.GeoJson(
-        mask_shape, name="Ranh giới Quảng Ninh",
-        style_function=lambda x: {'fillColor': 'transparent', 'color': 'black', 'weight': 1.5, 'fillOpacity': 0}
-    ).add_to(m)
-
-    # Lớp Chuyên Đề
-    if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
+    if os.path.exists(SHP_DISP_PATH):
         try:
-            chuyende_shape = gpd.read_file(GDB_CHUYENDE_PATH)
-            if chuyende_shape.crs and chuyende_shape.crs.to_epsg() != 4326: chuyende_shape.to_crs(epsg=4326, inplace=True)
-            folium.GeoJson(
-                chuyende_shape, name="Lớp Chuyên Đề (chuyende.gdb)",
-                style_function=lambda x: {'fillColor': 'transparent', 'color': '#e41a1c', 'weight': 1.5, 'fillOpacity': 0},
-                show=True
-            ).add_to(m)
+            disp_shape = gpd.read_file(SHP_DISP_PATH)
+            if disp_shape.crs and disp_shape.crs.to_epsg() != 4326: disp_shape.to_crs(epsg=4326, inplace=True)
         except Exception: pass
+    else: disp_shape = mask_shape
 
-    colormap_branca = cm.StepColormap(colors=[mcolors.to_hex(cmap(norm(val))) for val in custom_levels[:-1]], vmin=custom_levels[0], vmax=custom_levels[-1], index=custom_levels, caption=title_text)
-    m.add_child(colormap_branca)
-    folium.LayerControl().add_to(m)
-    m.fit_bounds([[miny, minx], [maxy, maxx]])
+    if mask_shape is not None:
+        prep_shape = prep(mask_shape.unary_union)
+        mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
+        gv_masked = np.where(mask_flat, gv, np.nan)
+    else: gv_masked = gv
 
-    # --- KHỞI TẠO BẢN ĐỒ TĨNH ĐỂ CHO PHÉP DOWNLOAD (Không hiển thị ra UI) ---
-    fig, ax = plt.subplots(figsize=(14, 10))
-    ax.set_facecolor('#cbe7f5')
-    ax.grid(True, color='#87b0d9', linestyle='-', linewidth=0.8)
-    ax.set_axisbelow(True)
-    ax.tick_params(direction='in', top=True, right=True, length=6, colors='black')
-    
-    if os.path.exists(SHP_MASK_PATH):
-        try:
-            vn_shape = gpd.read_file(SHP_MASK_PATH)
-            if vn_shape.crs and vn_shape.crs.to_epsg() != 4326: vn_shape.to_crs(epsg=4326, inplace=True)
-            vn_shape.plot(ax=ax, facecolor='#ffffff', edgecolor='#cccccc', linewidth=0.5)
-        except: pass
-        
-    ax.set_title(title_text, fontsize=18, fontweight='bold', pad=15)
+    fig, ax = plt.subplots(figsize=(14, 10)) 
+    ax.set_title(title_text if title_text else f'Bản đồ {unit_label}', fontsize=16)
+    if disp_shape is not None: disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
     im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower', aspect='auto')
-    mask_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.5)
-    
-    if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
-        try:
-            chuyende_shape = gpd.read_file(GDB_CHUYENDE_PATH)
-            if chuyende_shape.crs and chuyende_shape.crs.to_epsg() != 4326: chuyende_shape.to_crs(epsg=4326, inplace=True)
-            chuyende_shape.plot(ax=ax, edgecolor='#e41a1c', facecolor='none', linewidth=0.8)
-        except: pass
+    cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.7, pad=0.02, extend='both')
+    cbar.set_label(unit_label, fontsize=12)
+    cbar.set_ticks(levels_for_ticks)
+    cbar.set_ticklabels([str(l) for l in levels_for_ticks])
+    ax.set_xlim(minx, maxx); ax.set_ylim(miny, maxy); ax.ticklabel_format(useOffset=False, style='plain')
+    return fig, None
 
+def generate_single_province_fig(cache, prov_name, title_text):
+    mask_shape = cache.get('mask_shape')
+    shape_col = cache.get('shape_col', "")
+    
+    if mask_shape is None or not shape_col or shape_col not in mask_shape.columns: return None
+        
+    prov_shape = mask_shape[mask_shape[shape_col] == prov_name]
+    if prov_shape.empty: return None
+
+    p_minx, p_miny, p_maxx, p_maxy = prov_shape.total_bounds
+    pad_x, pad_y = (p_maxx - p_minx) * 0.1, (p_maxy - p_miny) * 0.1
+    p_minx -= pad_x; p_maxx += pad_x; p_miny -= pad_y; p_maxy += pad_y
+    
+    grid_xy = np.column_stack([cache['gx'].ravel(), cache['gy'].ravel()])
+    prep_shape = prep(prov_shape.unary_union)
+    mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(cache['gx'].shape)
+    gv_masked = np.where(mask_flat, cache['gv'], np.nan)
+    
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.set_title(f"{title_text}\n(Khu vực: {prov_name})", fontsize=16)
+    prov_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.5)
+    im = ax.imshow(gv_masked, extent=[cache['minx'], cache['maxx'], cache['miny'], cache['maxy']], cmap=cache['cmap'], norm=cache['norm'], interpolation='bilinear', origin='lower', aspect='auto')
+    ax.set_xlim(p_minx, p_maxx); ax.set_ylim(p_miny, p_maxy)
+    
     cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.7, pad=0.02)
-    cbar.set_ticks(custom_levels)
-    cbar.set_ticklabels([f"{val:.1f}" for val in custom_levels])
-    
-    pad_x = (maxx - minx) * 0.05
-    pad_y = (maxy - miny) * 0.05
-    ax.set_xlim(minx - pad_x, maxx + pad_x)
-    ax.set_ylim(miny - pad_y, maxy + pad_y)
+    cbar.set_ticks(cache['custom_levels'])
+    cbar.set_ticklabels([f"{val:.1f}" for val in cache['custom_levels']])
     ax.ticklabel_format(useOffset=False, style='plain')
-    ax.set_xlabel("Kinh độ", fontsize=12)
-    ax.set_ylabel("Vĩ độ", fontsize=12)
-    
-    cache_dict = {
-        'gv': gv, 'gx': gx, 'gy': gy, 'minx': minx, 'maxx': maxx, 'miny': miny, 'maxy': maxy,
-        'cmap': cmap, 'norm': norm, 'custom_levels': custom_levels, 'mask_shape': mask_shape
-    }
-
-    return m, fig, cache_dict, None
+    ax.set_xlabel("Kinh độ"); ax.set_ylabel("Vĩ độ")
+    return fig
 
 # ==============================================================================
 # 4. MAIN APP
@@ -1137,11 +1092,10 @@ def main():
                     except Exception as e: st.error(f"❌ Lỗi Xử lý Dữ liệu: {e}")
                 else: st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
 
+            # CHỈ HIỂN THỊ DUY NHẤT 1 BẢN ĐỒ INTERACTIVE (STYLE GIS CHUẨN)
             if st.session_state['folium_map_obj'] and st.session_state['folium_fig_obj']:
                 st.success("Tạo bản đồ Quảng Ninh thành công!")
-                st.markdown("### 🗺️ Bản đồ Kết quả (Định dạng GIS Chuẩn)")
-                
-                # Hiển thị DUY NHẤT bản đồ phong cách GIS (có thể thu phóng, tương tác)
+                st.markdown("### 🗺️ Bản đồ Kết quả (Zoom mượt)")
                 st_folium(st.session_state['folium_map_obj'], width=None, height=750, use_container_width=True)
                 
                 st.markdown("---")
@@ -1155,10 +1109,8 @@ def main():
                     st.write(""); st.write("")
                     st.download_button(label=f"⬇️ Tải Bản đồ Quảng Ninh ({fmt.upper()})", data=buf, file_name=f"ban_do_quangninh.{fmt}", mime=f"image/{fmt}", key="dl_btn_qn_folium")
             else: 
-                st.info("👈 Vui lòng cấu hình dữ liệu và nhấn 'VẼ BẢN ĐỒ QUẢNG NINH' để xem kết quả nội suy.")
-                st.markdown("### 🗺️ Bản đồ Nền (Định dạng GIS Chuẩn)")
-                
-                # Hiển thị bản đồ nền phong cách GIS
+                st.info("👈 Bản đồ nền tĩnh chuẩn GIS. Vui lòng cấu hình dữ liệu và nhấn 'VẼ BẢN ĐỒ QUẢNG NINH' để xem kết quả nội suy.")
+                st.markdown("### 🗺️ Bản đồ Nền (Zoom mượt)")
                 default_map = get_default_qn_map(show_chuyende)
                 st_folium(default_map, width=None, height=750, use_container_width=True)
 
