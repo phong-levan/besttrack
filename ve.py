@@ -459,6 +459,38 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     return m, fig, cache_dict, None
 
 
+def get_default_qn_map(show_chuyende):
+    m = folium.Map(location=[21.15, 107.2], zoom_start=9, tiles="CartoDB positron")
+    try:
+        if os.path.exists(GDB_NEN_PATH):
+            nen_shape = gpd.read_file(GDB_NEN_PATH)
+            if nen_shape.crs and nen_shape.crs.to_epsg() != 4326: 
+                nen_shape.to_crs(epsg=4326, inplace=True)
+            
+            minx, miny, maxx, maxy = nen_shape.total_bounds
+            m.fit_bounds([[miny, minx], [maxy, maxx]])
+            
+            folium.GeoJson(
+                nen_shape, name="Ranh giới (nen.gdb)",
+                style_function=lambda x: {'fillColor': 'transparent', 'color': 'black', 'weight': 1.5}
+            ).add_to(m)
+
+        if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
+            chuyende_shape = gpd.read_file(GDB_CHUYENDE_PATH)
+            if chuyende_shape.crs and chuyende_shape.crs.to_epsg() != 4326: 
+                chuyende_shape.to_crs(epsg=4326, inplace=True)
+            folium.GeoJson(
+                chuyende_shape, name="Lớp Chuyên Đề (chuyende.gdb)",
+                style_function=lambda x: {'fillColor': 'blue', 'color': 'blue', 'weight': 1, 'fillOpacity': 0.2},
+                show=True
+            ).add_to(m)
+        
+        folium.LayerControl().add_to(m)
+    except Exception as e:
+        pass
+    return m
+
+
 def run_qn_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, show_chuyende):
     input_df.columns = input_df.columns.str.lower().str.strip()
     if not all(c in input_df.columns for c in ['lon', 'lat', 'value']): return None, None, None, "File thiếu cột bắt buộc."
@@ -1053,7 +1085,10 @@ def main():
                 with col_dl2:
                     st.write(""); st.write("")
                     st.download_button(label=f"⬇️ Tải Bản đồ Quảng Ninh ({fmt.upper()})", data=buf, file_name=f"ban_do_quangninh.{fmt}", mime=f"image/{fmt}", key="dl_btn_qn_folium")
-            else: st.info("👈 Vui lòng cấu hình dữ liệu và nhấn 'VẼ BẢN ĐỒ QUẢNG NINH'.")
+            else: 
+                st.info("👈 Bản đồ nền Quảng Ninh mặc định. Vui lòng cấu hình dữ liệu và nhấn 'VẼ BẢN ĐỒ QUẢNG NINH' để xem kết quả nội suy.")
+                default_map = get_default_qn_map(show_chuyende)
+                st_folium(default_map, width=None, height=800, use_container_width=True)
 
     elif topic == "Dự báo điểm (KMA)":
         if st.session_state.get('logged_in_role') != 'admin':
