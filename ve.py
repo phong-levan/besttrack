@@ -35,9 +35,13 @@ warnings.filterwarnings("ignore")
 ICON_DIR = "icon"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# --- CẤU HÌNH ĐƯỜNG DẪN SHAPEFILE CỐ ĐỊNH ---
+# --- CẤU HÌNH ĐƯỜNG DẪN SHAPEFILE ---
 SHP_MASK_PATH = os.path.join("shp", "vn34tinh.shp")
 SHP_DISP_PATH = os.path.join("shp", "vungmoi.shp")
+
+# --- ĐƯỜNG DẪN DỮ LIỆU ĐỀ TÀI QUẢNG NINH ---
+GDB_NEN_PATH = "nen.gdb"
+GDB_CHUYENDE_PATH = "chuyende.gdb"
 
 # --- ĐỊNH NGHĨA ICON PATHS ---
 ICON_PATHS = {
@@ -318,8 +322,7 @@ def generate_single_province_fig(cache, prov_name, title_text):
     mask_shape = cache.get('mask_shape')
     shape_col = cache.get('shape_col', "")
     
-    if mask_shape is None or not shape_col or shape_col not in mask_shape.columns:
-        return None
+    if mask_shape is None or not shape_col or shape_col not in mask_shape.columns: return None
         
     prov_shape = mask_shape[mask_shape[shape_col] == prov_name]
     if prov_shape.empty: return None
@@ -369,18 +372,11 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
             if disp_shape.crs and disp_shape.crs.to_epsg() != 4326: disp_shape.to_crs(epsg=4326, inplace=True)
         except Exception: pass
     
-    # -------------------------------------------------------------
-    # BỔ SUNG YÊU CẦU: CẮT KHUNG VÀ ZOOM KHI FIX TỌA ĐỘ
-    # -------------------------------------------------------------
     if custom_bounds:
         minx, maxx, miny, maxy = custom_bounds['minx'], custom_bounds['maxx'], custom_bounds['miny'], custom_bounds['maxy']
         bbox_poly = box(minx, miny, maxx, maxy)
-        
-        # Cắt Shapefile theo đúng giới hạn hình chữ nhật (không hiển thị cả nước nữa)
-        if not mask_shape.empty:
-            mask_shape = gpd.clip(mask_shape, bbox_poly)
-        if disp_shape is not None and not disp_shape.empty:
-            disp_shape = gpd.clip(disp_shape, bbox_poly)
+        if not mask_shape.empty: mask_shape = gpd.clip(mask_shape, bbox_poly)
+        if disp_shape is not None and not disp_shape.empty: disp_shape = gpd.clip(disp_shape, bbox_poly)
     else:
         minx, miny, maxx, maxy = mask_shape.total_bounds
         minx -= 0.5; maxx += 0.5; miny -= 0.5; maxy += 0.5
@@ -394,7 +390,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
 
     shape_union = mask_shape.unary_union
     if shape_union.is_empty:
-        # Nếu cắt bỏ hết phần đất, nội suy hiện đầy khung lưới biển
         mask_flat = np.ones(gx.shape, dtype=bool)
     else:
         prep_shape = prep(shape_union)
@@ -408,7 +403,7 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
         norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
     else:
         vmin_val, vmax_val = np.nanmin(gv_masked), np.nanmax(gv_masked)
-        if np.isnan(vmin_val): vmin_val, vmax_val = 0, 1 # Xử lý lỗi nếu ngoài biển
+        if np.isnan(vmin_val): vmin_val, vmax_val = 0, 1 
         custom_levels = np.linspace(vmin_val, vmax_val, num_bins + 1)
         norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
 
@@ -427,10 +422,6 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     img_base64 = base64.b64encode(buf.read()).decode()
 
     m = folium.Map(location=[(miny + maxy) / 2, (minx + maxx) / 2], tiles="CartoDB positron")
-    
-    # -------------------------------------------------------------
-    # Ép Folium phải fit (zoom vào) đúng vị trí của Bounding Box
-    # -------------------------------------------------------------
     m.fit_bounds([[miny, minx], [maxy, maxx]])
     
     folium.raster_layers.ImageOverlay(image=f"data:image/png;base64,{img_base64}", bounds=[[miny, minx], [maxy, maxx]], opacity=0.75, name=title_text, interactive=False).add_to(m)
@@ -467,6 +458,108 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
 
     return m, fig, cache_dict, None
 
+
+def run_qn_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, show_chuyende):
+    input_df.columns = input_df.columns.str.lower().str.strip()
+    if not all(c in input_df.columns for c in ['lon', 'lat', 'value']): return None, None, None, "File thiếu cột bắt buộc."
+    valid = input_df.dropna(subset=['lon', 'lat', 'value']).copy()
+    if valid.empty: return None, None, None, "Dữ liệu trống."
+
+    if not os.path.exists(GDB_NEN_PATH): return None, None, None, "Không tìm thấy file nen.gdb. Vui lòng kiểm tra lại cấu trúc thư mục."
+    
+    try:
+        mask_shape = gpd.read_file(GDB_NEN_PATH)
+        if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: mask_shape.to_crs(epsg=4326, inplace=True)
+    except Exception as e: return None, None, None, f"Lỗi đọc {GDB_NEN_PATH}: {e}"
+
+    minx, miny, maxx, maxy = mask_shape.total_bounds
+    
+    x_pts, y_pts, z_pts = valid['lon'].to_numpy(), valid['lat'].to_numpy(), valid['value'].to_numpy()
+    GRID_N, SIGMA = 800, 1.0
+    gx, gy = np.meshgrid(np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N))
+    grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
+    gv = idw_knn(x_pts, y_pts, z_pts, grid_xy, k=12, power=3.0).reshape(gx.shape)
+    if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
+
+    shape_union = mask_shape.unary_union
+    if shape_union.is_empty:
+        mask_flat = np.ones(gx.shape, dtype=bool)
+    else:
+        prep_shape = prep(shape_union)
+        mask_flat = np.fromiter((prep_shape.contains(Point(px, py)) for px, py in grid_xy), count=grid_xy.shape[0], dtype=bool).reshape(gx.shape)
+        
+    gv_masked = np.where(mask_flat, gv, np.nan)
+
+    cmap = plt.get_cmap(cmap_name)
+    if custom_levels is not None and len(custom_levels) > 1:
+        custom_levels = sorted(list(set(custom_levels)))
+        norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
+    else:
+        vmin_val, vmax_val = np.nanmin(gv_masked), np.nanmax(gv_masked)
+        if np.isnan(vmin_val): vmin_val, vmax_val = 0, 1
+        custom_levels = np.linspace(vmin_val, vmax_val, num_bins + 1)
+        norm = BoundaryNorm(custom_levels, ncolors=cmap.N, extend='both')
+
+    rgba = cmap(norm(gv_masked))
+    rgba[np.isnan(gv_masked)] = [0, 0, 0, 0]
+    rgba_folium = np.flipud(rgba)
+
+    buf = io.BytesIO()
+    plt.imsave(buf, rgba_folium, format='png')
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode()
+
+    m = folium.Map(location=[(miny + maxy) / 2, (minx + maxx) / 2], tiles="CartoDB positron")
+    m.fit_bounds([[miny, minx], [maxy, maxx]])
+    
+    folium.raster_layers.ImageOverlay(image=f"data:image/png;base64,{img_base64}", bounds=[[miny, minx], [maxy, maxx]], opacity=0.75, name=title_text, interactive=False).add_to(m)
+
+    folium.GeoJson(
+        mask_shape, name="Ranh giới (nen.gdb)",
+        style_function=lambda x: {'fillColor': 'transparent', 'color': 'black', 'weight': 1.5}
+    ).add_to(m)
+
+    if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
+        try:
+            chuyende_shape = gpd.read_file(GDB_CHUYENDE_PATH)
+            if chuyende_shape.crs and chuyende_shape.crs.to_epsg() != 4326: chuyende_shape.to_crs(epsg=4326, inplace=True)
+            folium.GeoJson(
+                chuyende_shape, name="Lớp Chuyên Đề (chuyende.gdb)",
+                style_function=lambda x: {'fillColor': 'blue', 'color': 'blue', 'weight': 1, 'fillOpacity': 0.2},
+                show=True
+            ).add_to(m)
+        except Exception: pass
+
+    colormap_branca = cm.StepColormap(colors=[mcolors.to_hex(cmap(norm(val))) for val in custom_levels[:-1]], vmin=custom_levels[0], vmax=custom_levels[-1], index=custom_levels, caption=title_text)
+    m.add_child(colormap_branca)
+    folium.LayerControl().add_to(m)
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.set_title(title_text, fontsize=16)
+    mask_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.5)
+    
+    if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
+        try:
+            chuyende_shape = gpd.read_file(GDB_CHUYENDE_PATH)
+            if chuyende_shape.crs and chuyende_shape.crs.to_epsg() != 4326: chuyende_shape.to_crs(epsg=4326, inplace=True)
+            chuyende_shape.plot(ax=ax, edgecolor='blue', facecolor='none', linewidth=1.0, linestyle='--')
+        except: pass
+
+    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower')
+    cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.7, pad=0.02)
+    cbar.set_ticks(custom_levels)
+    cbar.set_ticklabels([f"{val:.1f}" for val in custom_levels])
+    ax.set_xlim(minx, maxx); ax.set_ylim(miny, maxy)
+    ax.ticklabel_format(useOffset=False, style='plain')
+    ax.set_xlabel("Kinh độ"); ax.set_ylabel("Vĩ độ")
+    
+    cache_dict = {
+        'gv': gv, 'gx': gx, 'gy': gy, 'minx': minx, 'maxx': maxx, 'miny': miny, 'maxy': maxy,
+        'cmap': cmap, 'norm': norm, 'custom_levels': custom_levels, 'mask_shape': mask_shape
+    }
+
+    return m, fig, cache_dict, None
+
 # ==============================================================================
 # 4. MAIN APP
 # ==============================================================================
@@ -475,11 +568,11 @@ def main():
     if 'folium_map_obj' not in st.session_state: st.session_state['folium_map_obj'] = None
     if 'folium_fig_obj' not in st.session_state: st.session_state['folium_fig_obj'] = None
     if 'interp_cache' not in st.session_state: st.session_state['interp_cache'] = None
-    if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
+    if 'logged_in_role' not in st.session_state: st.session_state['logged_in_role'] = None
 
     with st.sidebar:
         st.title("Dữ liệu thời tiết")
-        topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)"])
+        topic = st.radio("CHỌN CHẾ ĐỘ:", ["Bản đồ Bão", "Ảnh mây vệ tinh", "Dữ liệu quan trắc", "Dự báo điểm (KMA)", "Đề Tài Quảng Ninh"])
         st.markdown("---")
         
         final_df = pd.DataFrame()
@@ -491,10 +584,12 @@ def main():
         title_interpol = ""
         data_file_interpol = None
         btn_run_interpol = False
+        btn_run_qn = False
         custom_bounds_dict = None
+        show_chuyende = False
 
         if topic == "Dữ liệu quan trắc":
-            if st.session_state['logged_in']:
+            if st.session_state.get('logged_in_role') == 'admin':
                 obs_mode = st.radio("Chọn nguồn dữ liệu:", ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ", "Nội suy lượng mưa", "Nội suy linh tinh"])
                 
                 if obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
@@ -604,14 +699,91 @@ def main():
 
                 st.markdown("---")
                 if st.button("🔒 Đăng xuất", key="logout_obs_sidebar"):
-                    st.session_state['logged_in'] = False
+                    st.session_state['logged_in_role'] = None
                     st.rerun()
 
         if topic == "Dự báo điểm (KMA)":
-            if st.session_state['logged_in']:
+            if st.session_state.get('logged_in_role') == 'admin':
                 st.markdown("---")
                 if st.button("🔒 Đăng xuất", key="logout_kma_sidebar"):
-                    st.session_state['logged_in'] = False
+                    st.session_state['logged_in_role'] = None
+                    st.rerun()
+                    
+        if topic == "Đề Tài Quảng Ninh":
+            if st.session_state.get('logged_in_role') == 'quangninh':
+                st.markdown("---")
+                st.markdown("### 🛠️ NỘI SUY QUẢNG NINH")
+                title_interpol = st.text_input("Tiêu đề bản đồ:", value="Bản đồ Quảng Ninh", key="qn_title")
+                data_file_interpol = st.file_uploader("Chọn file số liệu:", type=['xlsx', 'csv', 'nc'], key="qn_data_up")
+                
+                nc_var_selected = None
+                nc_time_idx = None
+                
+                if data_file_interpol and data_file_interpol.name.endswith('.nc'):
+                    try:
+                        tmp_path = "qn_sidebar_check.nc"
+                        with open(tmp_path, "wb") as f: f.write(data_file_interpol.getvalue())
+                        ds_tmp = None
+                        for eng in ['netcdf4', 'scipy', 'h5netcdf', None]:
+                            try:
+                                ds_tmp = xr.open_dataset(tmp_path, engine=eng)
+                                break
+                            except: pass
+                        
+                        if ds_tmp is None:
+                            st.error("Không thể đọc định dạng NetCDF này. Vui lòng kiểm tra lại file của bạn.")
+                        else:
+                            vars_list = list(ds_tmp.data_vars.keys())
+                            if vars_list: nc_var_selected = st.selectbox("📌 Chọn biến dữ liệu (Variable):", vars_list, key="qn_var")
+                            time_dim = next((d for d in ds_tmp.dims if d.lower() in ['time', 't', 'valid_time']), None)
+                            
+                            if time_dim:
+                                time_values = ds_tmp[time_dim].values
+                                if np.issubdtype(time_values.dtype, np.datetime64):
+                                    time_options = [pd.to_datetime(str(t)).strftime("%Y-%m-%d %H:%M:%S") for t in time_values]
+                                else:
+                                    time_options = [str(t) for t in time_values]
+                                selected_time_str = st.selectbox("⏳ Chọn thời gian (Time Step):", time_options, key="qn_time")
+                                nc_time_idx = time_options.index(selected_time_str)
+                            else: st.info("File NetCDF không có dimension thời gian (Time).")
+                            ds_tmp.close()
+
+                        if os.path.exists(tmp_path):
+                            try: os.remove(tmp_path)
+                            except: pass
+                        data_file_interpol.seek(0)
+                    except Exception as e: st.error(f"Lỗi đọc file NetCDF: {e}")
+                
+                st.markdown("**1. Cấu hình màu & Ngưỡng**")
+                cmap_list = plt.colormaps()
+                default_cmap_idx = cmap_list.index('jet') if 'jet' in cmap_list else 0
+                cmap_option = st.selectbox("Chọn thang màu (Colormap):", cmap_list, index=default_cmap_idx, key="qn_cmap")
+                
+                fig_cmap, ax_cmap = plt.subplots(figsize=(3, 0.2))
+                fig_cmap.subplots_adjust(top=1, bottom=0, left=0, right=1)
+                gradient = np.linspace(0, 1, 256).reshape(1, -1)
+                ax_cmap.imshow(gradient, aspect='auto', cmap=cmap_option)
+                ax_cmap.set_axis_off()
+                st.pyplot(fig_cmap)
+
+                threshold_type = st.radio("Cách chia ngưỡng:", ["Tự động (Số lớp)", "Tùy chỉnh (Nhập tay)"], key="qn_thresh_type")
+                num_bins, custom_levels = 10, None
+                if threshold_type == "Tự động (Số lớp)":
+                    num_bins = st.number_input("Số lượng ngưỡng chia:", min_value=2, max_value=50, value=10, key="qn_bins")
+                else:
+                    custom_levels_str = st.text_input("Nhập các ngưỡng (cách nhau bằng dấu phẩy):", "0, 10, 20, 30, 40, 50", key="qn_custom_bins")
+                    try: custom_levels = [float(x.strip()) for x in custom_levels_str.split(',') if x.strip()]
+                    except: st.error("Lỗi định dạng. Vui lòng nhập số.")
+                
+                st.markdown("**2. Lớp Chuyên Đề**")
+                show_chuyende = st.checkbox("Bật lớp Chuyên đề (chuyende.gdb)", value=False)
+                
+                st.markdown("---")
+                btn_run_qn = st.button("🚀 VẼ BẢN ĐỒ QUẢNG NINH", type="primary", use_container_width=True)
+
+                st.markdown("---")
+                if st.button("🔒 Đăng xuất", key="logout_qn_sidebar"):
+                    st.session_state['logged_in_role'] = None
                     st.rerun()
 
         if topic == "Bản đồ Bão":
@@ -657,15 +829,15 @@ def main():
         components.iframe("https://embed.windy.com/embed2.html?lat=16.0&lon=114.0&detailLat=16.0&detailLon=114.0&width=1000&height=1000&zoom=5&level=surface&overlay=satellite&product=satellite&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1")
     
     elif topic == "Dữ liệu quan trắc":
-        if not st.session_state['logged_in']:
+        if st.session_state.get('logged_in_role') != 'admin':
             st.title("🔐 Đăng nhập Hệ thống")
-            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
+            st.info("Vui lòng đăng nhập quyền KTTV để truy cập Dữ liệu Quan trắc.")
             with st.form("login_form_common"):
                 user_input = st.text_input("Tên đăng nhập")
                 pass_input = st.text_input("Mật khẩu", type="password")
                 if st.form_submit_button("Đăng nhập"):
                     if user_input == "admin" and pass_input == "kttv@2026":
-                        st.session_state['logged_in'] = True
+                        st.session_state['logged_in_role'] = 'admin'
                         st.success("Đăng nhập thành công!")
                         st.rerun()
                     else: st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
@@ -673,7 +845,7 @@ def main():
             if "WeatherObs" in obs_mode:
                 st.markdown(f'<div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_WEATHEROBS}" style="width: calc(100% + 19px); height: 1000px; position: absolute; top: -50px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
             elif "Gió tự động" in obs_mode:
-                 st.markdown(f'<div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_WIND_AUTO}" style="width: calc(100% + 19px); height: 1200px; position: absolute; top: -75px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="overflow: hidden; width: 100%; height: 95vh; position: relative; border: 1px solid #ddd;"><iframe src="{LINK_WIND_AUTO}" style="width: calc(100% + 19px); height: 1200px; position: absolute; top: -75px; left: 0px; border: none;" allow="fullscreen"></iframe></div>', unsafe_allow_html=True)
             elif obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
                 if btn_run_interpol:
                     if data_file_interpol:
@@ -804,16 +976,95 @@ def main():
                                         st.download_button(label=f"⬇️ Tải ảnh Tỉnh {final_dl_prov} ({fmt_prov.upper()})", data=buf_prov, file_name=f"ban_do_{final_dl_prov}.{fmt_prov}", mime=f"image/{fmt_prov}", key="dl_btn_prov")
                 else: st.info("👈 Vui lòng cấu hình dữ liệu, chọn màu, ngưỡng, tọa độ và nhấn 'VẼ BẢN ĐỒ TƯƠNG TÁC'.")
 
+    elif topic == "Đề Tài Quảng Ninh":
+        if st.session_state.get('logged_in_role') != 'quangninh':
+            st.title("🔐 Đăng nhập Đề Tài Quảng Ninh")
+            st.info("Vui lòng đăng nhập để truy cập công cụ nội suy Quảng Ninh.")
+            with st.form("login_form_qn"):
+                user_input = st.text_input("Tên đăng nhập")
+                pass_input = st.text_input("Mật khẩu", type="password")
+                if st.form_submit_button("Đăng nhập"):
+                    if user_input == "quangninh2026" and pass_input == "p310":
+                        st.session_state['logged_in_role'] = 'quangninh'
+                        st.success("Đăng nhập thành công!")
+                        st.rerun()
+                    else: st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
+        else:
+            if btn_run_qn:
+                if data_file_interpol:
+                    try:
+                        if data_file_interpol.name.endswith('.nc'):
+                            tmp_path = "qn_run_check.nc"
+                            with open(tmp_path, "wb") as f: f.write(data_file_interpol.getvalue())
+                            ds = None
+                            for eng in ['netcdf4', 'scipy', 'h5netcdf', None]:
+                                try:
+                                    ds = xr.open_dataset(tmp_path, engine=eng)
+                                    break
+                                except: pass
+                            
+                            if ds is None:
+                                st.error("Không thể đọc file NetCDF. Vui lòng đảm bảo file không bị hỏng.")
+                                df_in = pd.DataFrame()
+                            else:
+                                time_dim = next((d for d in ds.dims if d.lower() in ['time', 't', 'valid_time']), None)
+                                if time_dim and nc_time_idx is not None: ds = ds.isel({time_dim: nc_time_idx})
+                                var_name = nc_var_selected if nc_var_selected else list(ds.data_vars.keys())[0]
+                                df_nc = ds[var_name].to_dataframe().reset_index()
+                                lat_col = next((c for c in df_nc.columns if c.lower() in ['lat', 'latitude', 'y']), None)
+                                lon_col = next((c for c in df_nc.columns if c.lower() in ['lon', 'longitude', 'x']), None)
+                                
+                                if lat_col and lon_col:
+                                    df_in = df_nc.rename(columns={lat_col: 'lat', lon_col: 'lon', var_name: 'value'})
+                                    df_in = df_in[['lon', 'lat', 'value']].dropna()
+                                else:
+                                    st.error("Không tìm thấy biến tọa độ lat/lon thông dụng.")
+                                    df_in = pd.DataFrame()
+                                ds.close()
+                            if os.path.exists(tmp_path):
+                                try: os.remove(tmp_path)
+                                except: pass
+                            data_file_interpol.seek(0)
+                        else:
+                            df_in = pd.read_csv(data_file_interpol) if data_file_interpol.name.endswith('.csv') else pd.read_excel(data_file_interpol)
+                        
+                        if not df_in.empty:
+                            with st.spinner("Đang xử lý nội suy dữ liệu Đề tài Quảng Ninh..."):
+                                m_map, m_fig, m_cache, err = run_qn_folium_interpolation(df_in, title_interpol, cmap_option, num_bins, custom_levels, show_chuyende)
+                                if err: st.error(f"❌ Lỗi: {err}")
+                                else: 
+                                    st.session_state['folium_map_obj'] = m_map
+                                    st.session_state['folium_fig_obj'] = m_fig
+                                    st.session_state['interp_cache'] = m_cache
+                    except Exception as e: st.error(f"❌ Lỗi Xử lý Dữ liệu: {e}")
+                else: st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
+
+            if st.session_state['folium_map_obj']:
+                st.success("Tạo bản đồ Quảng Ninh thành công!")
+                st_folium(st.session_state['folium_map_obj'], width=None, height=800, use_container_width=True)
+                
+                st.markdown("---")
+                st.markdown("### 📥 Tải bản vẽ tĩnh")
+                col_dl1, col_dl2 = st.columns([1, 3])
+                with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_qn_folium")
+                buf = io.BytesIO()
+                st.session_state['folium_fig_obj'].savefig(buf, format=fmt, dpi=300, bbox_inches='tight')
+                buf.seek(0)
+                with col_dl2:
+                    st.write(""); st.write("")
+                    st.download_button(label=f"⬇️ Tải Bản đồ Quảng Ninh ({fmt.upper()})", data=buf, file_name=f"ban_do_quangninh.{fmt}", mime=f"image/{fmt}", key="dl_btn_qn_folium")
+            else: st.info("👈 Vui lòng cấu hình dữ liệu và nhấn 'VẼ BẢN ĐỒ QUẢNG NINH'.")
+
     elif topic == "Dự báo điểm (KMA)":
-        if not st.session_state['logged_in']:
+        if st.session_state.get('logged_in_role') != 'admin':
             st.title("🔐 Đăng nhập Hệ thống")
-            st.info("Vui lòng đăng nhập để truy cập Dữ liệu Quan trắc & Dự báo KMA.")
+            st.info("Vui lòng đăng nhập quyền KTTV để truy cập Dự báo KMA.")
             with st.form("login_form_common_kma"):
                 user_input = st.text_input("Tên đăng nhập")
                 pass_input = st.text_input("Mật khẩu", type="password")
                 if st.form_submit_button("Đăng nhập"):
                     if user_input == "admin" and pass_input == "kttv@2026":
-                        st.session_state['logged_in'] = True
+                        st.session_state['logged_in_role'] = 'admin'
                         st.success("Đăng nhập thành công!")
                         st.rerun()
                     else: st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
