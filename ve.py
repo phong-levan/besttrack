@@ -349,6 +349,18 @@ def generate_single_province_fig(cache, prov_name, title_text):
     ax.set_xlabel("Kinh độ"); ax.set_ylabel("Vĩ độ")
     return fig
 
+def get_lat_lon_columns(df_nc):
+    lat_candidates = ['lat', 'latitude', 'y', 'lat_0', 'nav_lat', 'ycoord', 'y_coord']
+    lon_candidates = ['lon', 'longitude', 'x', 'lon_0', 'nav_lon', 'xcoord', 'x_coord']
+    
+    lat_col = next((c for c in df_nc.columns if str(c).lower().strip() in lat_candidates), None)
+    lon_col = next((c for c in df_nc.columns if str(c).lower().strip() in lon_candidates), None)
+    
+    if not lat_col: lat_col = next((c for c in df_nc.columns if 'lat' in str(c).lower()), None)
+    if not lon_col: lon_col = next((c for c in df_nc.columns if 'lon' in str(c).lower()), None)
+        
+    return lat_col, lon_col
+
 def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bins, custom_levels, selected_provinces, shape_col, custom_bounds=None):
     shape_col = shape_col or ""
     input_df.columns = input_df.columns.str.lower().str.strip()
@@ -462,6 +474,57 @@ def run_interactive_folium_interpolation(input_df, title_text, cmap_name, num_bi
     return m, fig, cache_dict, None
 
 
+# HÀM MỚI: TẠO BẢN ĐỒ NỀN TĨNH THEO CHUẨN GIS
+def get_default_qn_static_map(show_chuyende):
+    fig, ax = plt.subplots(figsize=(14, 10))
+    
+    # Màu biển nhạt (để tách biệt với đất liền)
+    ax.set_facecolor('#cbe7f5')
+    
+    # Lưới tọa độ chuyên nghiệp
+    ax.grid(True, color='#87b0d9', linestyle='-', linewidth=0.8)
+    ax.set_axisbelow(True) # Đưa lưới xuống dưới cùng
+    ax.tick_params(direction='in', top=True, right=True, length=6, colors='black')
+    
+    # Đổ nền trắng cho phần đất liền bên ngoài (che biển)
+    if os.path.exists(SHP_MASK_PATH):
+        try:
+            vn_shape = gpd.read_file(SHP_MASK_PATH)
+            if vn_shape.crs and vn_shape.crs.to_epsg() != 4326: vn_shape.to_crs(epsg=4326, inplace=True)
+            vn_shape.plot(ax=ax, facecolor='#ffffff', edgecolor='#cccccc', linewidth=0.5)
+        except: pass
+        
+    try:
+        if os.path.exists(GDB_NEN_PATH):
+            mask_shape = gpd.read_file(GDB_NEN_PATH)
+            if mask_shape.crs and mask_shape.crs.to_epsg() != 4326: mask_shape.to_crs(epsg=4326, inplace=True)
+            
+            # Tô màu nền vàng nhạt cho tỉnh Quảng Ninh (giống màu trong hình)
+            mask_shape.plot(ax=ax, facecolor='#ffffb3', edgecolor='black', linewidth=1.2)
+            
+            # Căn chỉnh kích thước bản đồ vừa khít khu vực Quảng Ninh
+            minx, miny, maxx, maxy = mask_shape.total_bounds
+            pad_x = (maxx - minx) * 0.05
+            pad_y = (maxy - miny) * 0.05
+            ax.set_xlim(minx - pad_x, maxx + pad_x)
+            ax.set_ylim(miny - pad_y, maxy + pad_y)
+            
+        if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
+            chuyende_shape = gpd.read_file(GDB_CHUYENDE_PATH)
+            if chuyende_shape.crs and chuyende_shape.crs.to_epsg() != 4326: chuyende_shape.to_crs(epsg=4326, inplace=True)
+            # Lớp chuyên đề (đường line viền đỏ/xanh)
+            chuyende_shape.plot(ax=ax, edgecolor='#e41a1c', facecolor='none', linewidth=0.8)
+    except Exception:
+        pass
+        
+    ax.set_title("Bản đồ nền Quảng Ninh", fontsize=18, fontweight='bold', pad=15)
+    ax.set_xlabel("Kinh độ", fontsize=12)
+    ax.set_ylabel("Vĩ độ", fontsize=12)
+    ax.ticklabel_format(useOffset=False, style='plain')
+    
+    return fig
+
+
 def get_default_qn_map(show_chuyende):
     m = folium.Map(location=[21.15, 107.2], zoom_start=9, tiles="CartoDB positron")
     try:
@@ -572,24 +635,51 @@ def run_qn_folium_interpolation(input_df, title_text, cmap_name, num_bins, custo
     m.add_child(colormap_branca)
     folium.LayerControl().add_to(m)
 
-    fig, ax = plt.subplots(figsize=(10, 10))
-    ax.set_title(title_text, fontsize=16)
+    # --- TẠO BẢN ĐỒ TĨNH CHUẨN GIS (KẾT QUẢ NỘI SUY) ---
+    fig, ax = plt.subplots(figsize=(14, 10))
+    ax.set_facecolor('#cbe7f5') # Nền biển xanh nhạt
+    
+    ax.grid(True, color='#87b0d9', linestyle='-', linewidth=0.8) # Lưới tọa độ
+    ax.set_axisbelow(True)
+    ax.tick_params(direction='in', top=True, right=True, length=6, colors='black')
+    
+    # Nền đất liền màu trắng (che màu xanh biển bên ngoài Quảng Ninh)
+    if os.path.exists(SHP_MASK_PATH):
+        try:
+            vn_shape = gpd.read_file(SHP_MASK_PATH)
+            if vn_shape.crs and vn_shape.crs.to_epsg() != 4326: vn_shape.to_crs(epsg=4326, inplace=True)
+            vn_shape.plot(ax=ax, facecolor='#ffffff', edgecolor='#cccccc', linewidth=0.5)
+        except: pass
+
+    ax.set_title(title_text, fontsize=18, fontweight='bold', pad=15)
+    
+    # Lớp kết quả nội suy
+    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower', aspect='auto')
+    
+    # Ranh giới đậm Quảng Ninh
     mask_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.5)
     
+    # Lớp Chuyên đề
     if show_chuyende and os.path.exists(GDB_CHUYENDE_PATH):
         try:
             chuyende_shape = gpd.read_file(GDB_CHUYENDE_PATH)
             if chuyende_shape.crs and chuyende_shape.crs.to_epsg() != 4326: chuyende_shape.to_crs(epsg=4326, inplace=True)
-            chuyende_shape.plot(ax=ax, edgecolor='blue', facecolor='none', linewidth=1.0, linestyle='--')
+            chuyende_shape.plot(ax=ax, edgecolor='#e41a1c', facecolor='none', linewidth=0.8)
         except: pass
 
-    im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower', aspect='auto')
     cbar = plt.colorbar(im, ax=ax, extend='both', shrink=0.7, pad=0.02)
     cbar.set_ticks(custom_levels)
     cbar.set_ticklabels([f"{val:.1f}" for val in custom_levels])
-    ax.set_xlim(minx, maxx); ax.set_ylim(miny, maxy)
+    
+    # Khung Zoom vừa khít
+    pad_x = (maxx - minx) * 0.05
+    pad_y = (maxy - miny) * 0.05
+    ax.set_xlim(minx - pad_x, maxx + pad_x)
+    ax.set_ylim(miny - pad_y, maxy + pad_y)
+    
     ax.ticklabel_format(useOffset=False, style='plain')
-    ax.set_xlabel("Kinh độ"); ax.set_ylabel("Vĩ độ")
+    ax.set_xlabel("Kinh độ", fontsize=12)
+    ax.set_ylabel("Vĩ độ", fontsize=12)
     
     cache_dict = {
         'gv': gv, 'gx': gx, 'gy': gy, 'minx': minx, 'maxx': maxx, 'miny': miny, 'maxy': maxy,
@@ -935,14 +1025,13 @@ def main():
                                     var_name = nc_var_selected if nc_var_selected else list(ds.data_vars.keys())[0]
                                     df_nc = ds[var_name].to_dataframe().reset_index()
                                     
-                                    lat_col = next((c for c in df_nc.columns if c.lower() in ['lat', 'latitude', 'y']), None)
-                                    lon_col = next((c for c in df_nc.columns if c.lower() in ['lon', 'longitude', 'x']), None)
+                                    lat_col, lon_col = get_lat_lon_columns(df_nc)
                                     
                                     if lat_col and lon_col:
                                         df_in = df_nc.rename(columns={lat_col: 'lat', lon_col: 'lon', var_name: 'value'})
                                         df_in = df_in[['lon', 'lat', 'value']].dropna()
                                     else:
-                                        st.error("Không tìm thấy các biến tọa độ lat/lon thông dụng trong file NetCDF.")
+                                        st.error(f"Không tìm thấy biến tọa độ. Các cột trong file: {list(df_nc.columns)}")
                                         df_in = pd.DataFrame()
                                     ds.close()
 
@@ -1049,14 +1138,14 @@ def main():
                                 if time_dim and nc_time_idx is not None: ds = ds.isel({time_dim: nc_time_idx})
                                 var_name = nc_var_selected if nc_var_selected else list(ds.data_vars.keys())[0]
                                 df_nc = ds[var_name].to_dataframe().reset_index()
-                                lat_col = next((c for c in df_nc.columns if c.lower() in ['lat', 'latitude', 'y']), None)
-                                lon_col = next((c for c in df_nc.columns if c.lower() in ['lon', 'longitude', 'x']), None)
+                                
+                                lat_col, lon_col = get_lat_lon_columns(df_nc)
                                 
                                 if lat_col and lon_col:
                                     df_in = df_nc.rename(columns={lat_col: 'lat', lon_col: 'lon', var_name: 'value'})
                                     df_in = df_in[['lon', 'lat', 'value']].dropna()
                                 else:
-                                    st.error("Không tìm thấy biến tọa độ lat/lon thông dụng.")
+                                    st.error(f"Không tìm thấy biến tọa độ. Các cột trong file: {list(df_nc.columns)}")
                                     df_in = pd.DataFrame()
                                 ds.close()
                             if os.path.exists(tmp_path):
@@ -1077,11 +1166,16 @@ def main():
                     except Exception as e: st.error(f"❌ Lỗi Xử lý Dữ liệu: {e}")
                 else: st.toast("Vui lòng upload file dữ liệu trước!", icon="⚠️")
 
-            if st.session_state['folium_map_obj']:
+            if st.session_state['folium_map_obj'] and st.session_state['folium_fig_obj']:
                 st.success("Tạo bản đồ Quảng Ninh thành công!")
-                st_folium(st.session_state['folium_map_obj'], width=None, height=800, use_container_width=True)
+                
+                st.markdown("### 🗺️ Bản đồ Tương tác (Folium)")
+                st_folium(st.session_state['folium_map_obj'], width=None, height=600, use_container_width=True)
                 
                 st.markdown("---")
+                st.markdown("### 🖼️ Bản đồ Tĩnh (GIS Format)")
+                st.pyplot(st.session_state['folium_fig_obj'], use_container_width=True)
+                
                 st.markdown("### 📥 Tải bản vẽ tĩnh")
                 col_dl1, col_dl2 = st.columns([1, 3])
                 with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_qn_folium")
@@ -1093,8 +1187,15 @@ def main():
                     st.download_button(label=f"⬇️ Tải Bản đồ Quảng Ninh ({fmt.upper()})", data=buf, file_name=f"ban_do_quangninh.{fmt}", mime=f"image/{fmt}", key="dl_btn_qn_folium")
             else: 
                 st.info("👈 Bản đồ nền Quảng Ninh mặc định. Vui lòng cấu hình dữ liệu và nhấn 'VẼ BẢN ĐỒ QUẢNG NINH' để xem kết quả nội suy.")
+                
+                st.markdown("### 🗺️ Bản đồ Tương tác (Folium)")
                 default_map = get_default_qn_map(show_chuyende)
-                st_folium(default_map, width=None, height=800, use_container_width=True)
+                st_folium(default_map, width=None, height=600, use_container_width=True)
+                
+                st.markdown("---")
+                st.markdown("### 🖼️ Bản đồ Tĩnh (GIS Format)")
+                default_static_map = get_default_qn_static_map(show_chuyende)
+                st.pyplot(default_static_map, use_container_width=True)
 
     elif topic == "Dự báo điểm (KMA)":
         if st.session_state.get('logged_in_role') != 'admin':
