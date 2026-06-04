@@ -233,7 +233,7 @@ def create_info_table(df, title):
     return textwrap.dedent(f"""<div class="info-box"><div class="info-title">{title}</div><div class="info-subtitle">{subtitle}</div><table><thead><tr><th>Ngày-Giờ</th><th>Kinh độ</th><th>Vĩ độ</th><th>Cấp gió</th><th>Pmin (hPa)</th></tr></thead><tbody>{rows}</tbody></table></div>""")
 
 def generate_storm_static_fig(df, title_text, bounds=None):
-    fig, ax = plt.subplots(figsize=(14, 10))
+    fig, ax = plt.subplots(figsize=(14, 10)) # 14x10 inches
     
     if bounds:
         minx, maxx, miny, maxy = bounds['minx'], bounds['maxx'], bounds['miny'], bounds['maxy']
@@ -247,25 +247,25 @@ def generate_storm_static_fig(df, title_text, bounds=None):
     ax.set_xlim(minx, maxx)
     ax.set_ylim(miny, maxy)
     
-    # Grid lines (Chế độ tọa độ)
-    ax.grid(True, linestyle='--', color='gray', alpha=0.5)
+    # Bật lưới tọa độ nền
+    ax.grid(True, linestyle='--', color='gray', alpha=0.4, zorder=1)
     
-    # Base Map
+    # Đọc nền bản đồ ranh giới
     if os.path.exists(SHP_MASK_PATH):
         try:
             mask = gpd.read_file(SHP_MASK_PATH)
             if mask.crs and mask.crs.to_epsg() != 4326: mask.to_crs(epsg=4326, inplace=True)
-            mask.plot(ax=ax, color='#e6e6e6', edgecolor='white', linewidth=0.5)
+            mask.plot(ax=ax, color='#f2f2f2', edgecolor='white', linewidth=0.6, zorder=2)
         except: pass
     if os.path.exists(SHP_DISP_PATH):
         try:
             disp = gpd.read_file(SHP_DISP_PATH)
             if disp.crs and disp.crs.to_epsg() != 4326: disp.to_crs(epsg=4326, inplace=True)
-            disp.plot(ax=ax, facecolor='none', edgecolor='#333333', linewidth=1.0)
+            disp.plot(ax=ax, facecolor='none', edgecolor='#444444', linewidth=1.0, zorder=2)
         except: pass
         
-    ax.set_xlabel("Kinh độ", fontsize=12)
-    ax.set_ylabel("Vĩ độ", fontsize=12)
+    ax.set_xlabel("Kinh độ (E)", fontsize=12)
+    ax.set_ylabel("Vĩ độ (N)", fontsize=12)
     
     if not df.empty:
         groups = df['storm_no'].unique() if 'storm_no' in df.columns else [None]
@@ -275,30 +275,30 @@ def generate_storm_static_fig(df, title_text, bounds=None):
             f6, f10, fc = create_storm_swaths(dense)
             
             if f6 and not f6.is_empty:
-                gpd.GeoSeries([f6]).plot(ax=ax, color='pink', alpha=0.4)
+                gpd.GeoSeries([f6]).plot(ax=ax, color='#FFC0CB', alpha=0.5, zorder=3)
             if f10 and not f10.is_empty:
-                gpd.GeoSeries([f10]).plot(ax=ax, color='tomato', alpha=0.5)
+                gpd.GeoSeries([f10]).plot(ax=ax, color='#FF6347', alpha=0.6, zorder=3)
             if fc and not fc.is_empty:
-                gpd.GeoSeries([fc]).plot(ax=ax, color='lightgreen', alpha=0.6)
+                gpd.GeoSeries([fc]).plot(ax=ax, color='#90EE90', alpha=0.7, zorder=3)
                 
-            ax.plot(sub['lon'], sub['lat'], color='black', linewidth=2, zorder=3)
+            ax.plot(sub['lon'], sub['lat'], color='black', linewidth=2, zorder=4)
             
             for _, r in sub.iterrows():
                 is_past = 'quá khứ' in str(r.get('status_raw','')).lower() or 'past' in str(r.get('status_raw','')).lower()
                 m_color = 'black' if is_past else 'red'
                 ax.plot(r['lon'], r['lat'], marker='o', markersize=8, color=m_color, markeredgecolor='white', zorder=5)
 
-    # Legends (Chú thích)
+    # Chú thích góc phải y hệt như hình
     legend_elements = [
-        Patch(facecolor='pink', edgecolor='none', alpha=0.6, label='Vùng có gió mạnh lớn hơn cấp 6'),
-        Patch(facecolor='tomato', edgecolor='none', alpha=0.6, label='Vùng có gió mạnh lớn hơn cấp 10'),
-        Patch(facecolor='lightgreen', edgecolor='none', alpha=0.6, label='Vùng tâm bão, ATNĐ có thể đi qua'),
-        Line2D([0], [0], marker='o', color='w', label='Vị trí tâm bão/ATNĐ đã đi qua', markerfacecolor='black', markersize=10),
-        Line2D([0], [0], marker='o', color='w', label='Vị trí tâm bão/ATNĐ hiện tại, dự báo', markerfacecolor='red', markersize=10)
+        Patch(facecolor='#FFC0CB', edgecolor='none', label='Vùng có gió mạnh lớn hơn cấp 6'),
+        Patch(facecolor='#FF6347', edgecolor='none', label='Vùng có gió mạnh lớn hơn cấp 10'),
+        Patch(facecolor='#90EE90', edgecolor='none', label='Vùng tâm bão, ATNĐ, vùng thấp có thể đi qua'),
+        Line2D([0], [0], marker='o', color='w', label='Vị trí tâm siêu bão, bão, ATNĐ, vùng thấp đã đi qua', markerfacecolor='black', markersize=10),
+        Line2D([0], [0], marker='o', color='w', label='Vị trí tâm siêu bão, bão, ATNĐ, vùng thấp hiện tại, dự báo', markerfacecolor='red', markersize=10)
     ]
-    ax.legend(handles=legend_elements, loc='upper right', title="Chú Thích", title_fontsize='12', fontsize='10', framealpha=0.9)
+    ax.legend(handles=legend_elements, loc='upper right', title="Chú Thích", title_fontsize='12', fontsize='10', framealpha=0.95, zorder=6)
     
-    # Information Table (Thông tin y như ảnh)
+    # Bảng số liệu biểu diễn tọa độ thông tin
     if not df.empty:
         if 'status_raw' in df.columns:
             cur = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
@@ -326,24 +326,24 @@ def generate_storm_static_fig(df, title_text, bounds=None):
                     f"Cấp {int(bf)}" if bf>0 else "-",
                     f"{int(r.get('pressure',0))}" if r.get('pressure',0)>0 else "-"
                 ])
-            col_labels = ['Ngày-Giờ', 'Kinh độ', 'Vĩ độ', 'Cấp gió', 'Pmin(hPa)']
+            col_labels = ['Ngày-Giờ', 'Kinh độ', 'Vĩ độ', 'Cấp gió', 'Pmin (hPa)']
             
             table = ax.table(cellText=cell_text, colLabels=col_labels, loc='center right',
-                             bbox=[0.60, 0.40, 0.38, 0.28], cellLoc='center')
+                             bbox=[0.58, 0.35, 0.40, 0.28], cellLoc='center', zorder=6)
             table.auto_set_font_size(False)
             table.set_fontsize(10)
-            table.scale(1, 1.6)
+            table.scale(1, 1.5)
             
             for (row, col), cell in table.get_celld().items():
-                if row == 0: cell.set_text_props(weight='bold')
+                if row == 0: cell.set_text_props(weight='bold', backgroundcolor='#f2f2f2')
             
             subtitle = "(Đang cập nhật)"
             target_row = display_df.iloc[0]
             if 'hour_explicit' in target_row and pd.notna(target_row['hour_explicit']):
                 subtitle = f"Tin phát lúc {int(target_row['hour_explicit'])}h30"
                 
-            fig.text(0.79, 0.70, title_text, ha="center", fontsize=14, fontweight='bold')
-            fig.text(0.79, 0.68, subtitle, ha="center", fontsize=11, style='italic')
+            fig.text(0.78, 0.67, title_text, ha="center", fontsize=14, fontweight='bold', zorder=7)
+            fig.text(0.78, 0.64, subtitle, ha="center", fontsize=11, style='italic', zorder=7)
 
     return fig
 
@@ -584,6 +584,7 @@ def main():
     if 'folium_fig_obj' not in st.session_state: st.session_state['folium_fig_obj'] = None
     if 'interp_cache' not in st.session_state: st.session_state['interp_cache'] = None
     if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
+    if 'storm_fig_obj' not in st.session_state: st.session_state['storm_fig_obj'] = None # Lưu Object ảnh tĩnh bão
 
     with st.sidebar:
         st.title("Dữ liệu thời tiết")
@@ -732,7 +733,7 @@ def main():
             dashboard_title = st.text_input("Tiêu đề bảng thông tin:", value=default_title)
             active_mode = storm_opt
             
-            show_grid = st.checkbox("🌐 Hiển thị Lưới tọa độ", value=True)
+            show_grid = st.checkbox("🌐 Hiển thị Lưới tọa độ nền", value=True)
             
             if "Hiện trạng" in storm_opt:
                 if st.checkbox("Hiển thị lớp Dữ liệu", value=True):
@@ -825,11 +826,11 @@ def main():
                     col_dl1, col_dl2 = st.columns([1, 3])
                     with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_static")
                     buf = io.BytesIO()
-                    st.session_state['interpol_fig'].savefig(buf, format=fmt, dpi=300, bbox_inches='tight')
+                    st.session_state['interpol_fig'].savefig(buf, format=fmt, dpi=100, bbox_inches='tight')
                     buf.seek(0)
                     with col_dl2:
                         st.write(""); st.write("")
-                        st.download_button(label=f"⬇️ Tải ảnh về ({fmt.upper()})", data=buf, file_name=f"ban_do_tinh.{fmt}", mime=f"image/{fmt}", key="dl_btn_static")
+                        st.download_button(label=f"⬇️ Tải ảnh về ({fmt.upper()})", data=buf.getvalue(), file_name=f"ban_do_tinh.{fmt}", mime=f"image/{fmt}" if fmt=="png" else "application/pdf", key="dl_btn_static")
                 else: st.info("👈 Vui lòng cấu hình và nhấn nút 'VẼ BẢN ĐỒ' ở thanh menu bên trái.")
 
             elif obs_mode == "Nội suy linh tinh":
@@ -895,11 +896,11 @@ def main():
                     col_dl1, col_dl2 = st.columns([1, 3])
                     with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_folium")
                     buf = io.BytesIO()
-                    st.session_state['folium_fig_obj'].savefig(buf, format=fmt, dpi=300, bbox_inches='tight')
+                    st.session_state['folium_fig_obj'].savefig(buf, format=fmt, dpi=100, bbox_inches='tight')
                     buf.seek(0)
                     with col_dl2:
                         st.write(""); st.write("")
-                        st.download_button(label=f"⬇️ Tải Toàn bộ ({fmt.upper()})", data=buf, file_name=f"ban_do_tong.{fmt}", mime=f"image/{fmt}", key="dl_btn_folium")
+                        st.download_button(label=f"⬇️ Tải Toàn bộ ({fmt.upper()})", data=buf.getvalue(), file_name=f"ban_do_tong.{fmt}", mime=f"image/{fmt}" if fmt=="png" else "application/pdf", key="dl_btn_folium")
 
                     cache = st.session_state.get('interp_cache')
                     if cache and cache.get('mask_shape') is not None and not cache['mask_shape'].empty:
@@ -929,11 +930,11 @@ def main():
                                     col_p1, col_p2 = st.columns([1, 3])
                                     with col_p1: fmt_prov = st.selectbox("Định dạng ảnh:", ["png", "pdf"], key="fmt_prov")
                                     buf_prov = io.BytesIO()
-                                    prov_fig.savefig(buf_prov, format=fmt_prov, dpi=300, bbox_inches='tight')
+                                    prov_fig.savefig(buf_prov, format=fmt_prov, dpi=100, bbox_inches='tight')
                                     buf_prov.seek(0)
                                     with col_p2:
                                         st.write(""); st.write("")
-                                        st.download_button(label=f"⬇️ Tải ảnh Tỉnh {final_dl_prov} ({fmt_prov.upper()})", data=buf_prov, file_name=f"ban_do_{final_dl_prov}.{fmt_prov}", mime=f"image/{fmt_prov}", key="dl_btn_prov")
+                                        st.download_button(label=f"⬇️ Tải ảnh Tỉnh {final_dl_prov} ({fmt_prov.upper()})", data=buf_prov.getvalue(), file_name=f"ban_do_{final_dl_prov}.{fmt_prov}", mime=f"image/{fmt_prov}" if fmt_prov=="png" else "application/pdf", key="dl_btn_prov")
                 else: st.info("👈 Vui lòng cấu hình dữ liệu, chọn màu, ngưỡng, tọa độ và nhấn 'VẼ BẢN ĐỒ TƯƠNG TÁC'.")
 
     elif topic == "Dự báo điểm (KMA)":
@@ -970,13 +971,12 @@ def main():
         ts = get_rainviewer_ts()
         if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
 
-        # Draw Graticules (Lưới Tọa độ)
         if show_grid:
             grid_fg = folium.FeatureGroup(name="🌐 Lưới Tọa độ", show=True)
             for lat in range(0, 45, 5):
-                folium.PolyLine([[lat, 90], [lat, 140]], color='gray', weight=1, dash_array='4, 4', opacity=0.5).add_to(grid_fg)
+                folium.PolyLine([[lat, 90], [lat, 140]], color='gray', weight=1, dash_array='4, 4', opacity=0.4).add_to(grid_fg)
             for lon in range(90, 145, 5):
-                folium.PolyLine([[0, lon], [45, lon]], color='gray', weight=1, dash_array='4, 4', opacity=0.5).add_to(grid_fg)
+                folium.PolyLine([[0, lon], [45, lon]], color='gray', weight=1, dash_array='4, 4', opacity=0.4).add_to(grid_fg)
             grid_fg.add_to(m)
 
         fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
@@ -1021,28 +1021,42 @@ def main():
         
         st_folium(m, width=None, height=800, use_container_width=True)
 
+        # --- MODULE TRÍCH XUẤT ẢNH TĨNH AN TOÀN (KHÔNG BỊ LỒNG NÚT) ---
         if show_widgets and not final_df.empty:
             st.markdown("---")
             st.markdown("### 📥 Tải bản đồ Bão (Ảnh tĩnh có chú thích và bảng tin y như hình gốc)")
+            
             if st.button("🚀 Trích xuất Bản đồ Bão tĩnh", type="primary"):
                 with st.spinner("Đang xây dựng bản vẽ tĩnh chuyên nghiệp..."):
-                    fig_storm = generate_storm_static_fig(final_df, dashboard_title, storm_bounds_dict if use_storm_bounds else None)
-                    st.pyplot(fig_storm)
-                    
-                    col_dl1, col_dl2 = st.columns([1, 3])
-                    with col_dl1: fmt_storm = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_storm")
-                    buf_storm = io.BytesIO()
-                    fig_storm.savefig(buf_storm, format=fmt_storm, dpi=300, bbox_inches='tight')
-                    buf_storm.seek(0)
-                    with col_dl2:
-                        st.write(""); st.write("")
-                        st.download_button(
-                            label=f"⬇️ Tải bản đồ ({fmt_storm.upper()})",
-                            data=buf_storm, 
-                            file_name=f"ban_do_bao_tinh.{fmt_storm}", 
-                            mime=f"image/{fmt_storm}", 
-                            key="dl_btn_storm"
-                        )
+                    st.session_state['storm_fig_obj'] = generate_storm_static_fig(final_df, dashboard_title, storm_bounds_dict if use_storm_bounds else None)
+            
+            # Khối render và tải nằm ngoài cấu trúc IF của nút bấm gốc -> Chống sập trạng thái Streamlit
+            if st.session_state['storm_fig_obj'] is not None:
+                st.pyplot(st.session_state['storm_fig_obj'])
+                
+                col_dl1, col_dl2 = st.columns([1, 3])
+                with col_dl1: 
+                    fmt_storm = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_storm")
+                
+                buf_storm = io.BytesIO()
+                if fmt_storm == "png":
+                    # Kích thước biểu đồ gốc (14x10 inches) x dpi=100 => Chiều cao ảnh đầu ra đạt chuẩn chính xác 1000px
+                    st.session_state['storm_fig_obj'].savefig(buf_storm, format="png", dpi=100, bbox_inches='tight')
+                    mime_type = "image/png"
+                else:
+                    st.session_state['storm_fig_obj'].savefig(buf_storm, format="pdf", bbox_inches='tight')
+                    mime_type = "application/pdf"
+                
+                buf_storm.seek(0)
+                with col_dl2:
+                    st.write(""); st.write("")
+                    st.download_button(
+                        label=f"⬇️ Tải bản đồ ({fmt_storm.upper()})",
+                        data=buf_storm.getvalue(), # Sử dụng dữ liệu Bytes an toàn hoàn toàn
+                        file_name=f"ban_do_bao_tinh.{fmt_storm}", 
+                        mime=mime_type, 
+                        key="dl_btn_storm"
+                    )
 
 if __name__ == "__main__":
     main()
