@@ -299,7 +299,7 @@ def generate_storm_static_fig(df, title_text, bounds=None):
                 m_color = 'black' if is_past else 'red'
                 ax.plot(r['lon'], r['lat'], marker='o', markersize=8, color=m_color, markeredgecolor='white', zorder=5)
 
-    # Khối chú thích (Đã sửa lỗi ép kiểu dữ liệu từ Chuỗi sang Số nguyên)
+    # Khối chú thích
     legend_elements = [
         Patch(facecolor='#FFC0CB', edgecolor='none', label='Vùng có gió mạnh lớn hơn cấp 6'),
         Patch(facecolor='#FF6347', edgecolor='none', label='Vùng có gió mạnh lớn hơn cấp 10'),
@@ -307,7 +307,9 @@ def generate_storm_static_fig(df, title_text, bounds=None):
         Line2D([0], [0], marker='o', color='w', label='Tâm bão/ATNĐ đã đi qua', markerfacecolor='black', markersize=10),
         Line2D([0], [0], marker='o', color='w', label='Tâm bão/ATNĐ hiện tại, dự báo', markerfacecolor='red', markersize=10)
     ]
-    ax.legend(handles=legend_elements, loc='upper right', title="Chú Thích", title_fontsize=12, fontsize=10, framealpha=0.95, zorder=6)
+    # SỬA LỖI Ở ĐÂY: Loại bỏ tham số `zorder=6` ra khỏi hàm khởi tạo ax.legend, dùng set_zorder()
+    leg = ax.legend(handles=legend_elements, loc='upper right', title="Chú Thích", title_fontsize=12, fontsize=10, framealpha=0.95)
+    leg.set_zorder(6)
     
     # Bảng số liệu biểu diễn thông tin bão khẩn cấp
     if not df.empty:
