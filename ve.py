@@ -16,7 +16,6 @@ import matplotlib.colors as mcolors
 from matplotlib.colors import LinearSegmentedColormap, Normalize, BoundaryNorm
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
-import gpd
 import geopandas as gpd
 from shapely.geometry import Point, box, Polygon, mapping
 from shapely.prepared import prep
