@@ -11,7 +11,6 @@ import streamlit.components.v1 as components
 from math import radians, sin, cos, asin, sqrt, pi
 import warnings
 import textwrap
-import matplotlib.subplots
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.colors import LinearSegmentedColormap, Normalize, BoundaryNorm
