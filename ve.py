@@ -233,39 +233,50 @@ def create_info_table(df, title):
     return textwrap.dedent(f"""<div class="info-box"><div class="info-title">{title}</div><div class="info-subtitle">{subtitle}</div><table><thead><tr><th>Ngày-Giờ</th><th>Kinh độ</th><th>Vĩ độ</th><th>Cấp gió</th><th>Pmin (hPa)</th></tr></thead><tbody>{rows}</tbody></table></div>""")
 
 def generate_storm_static_fig(df, title_text, bounds=None):
-    fig, ax = plt.subplots(figsize=(14, 10)) # 14x10 inches
+    # Cố định tỷ lệ khung viền 12x10 giống hệt như tính năng Nội suy linh tinh
+    fig, ax = plt.subplots(figsize=(12, 10)) 
     
     if bounds:
         minx, maxx, miny, maxy = bounds['minx'], bounds['maxx'], bounds['miny'], bounds['maxy']
+        bbox_poly = box(minx, miny, maxx, maxy)
     else:
         if not df.empty:
             minx, maxx = df['lon'].min() - 5, df['lon'].max() + 5
             miny, maxy = df['lat'].min() - 5, df['lat'].max() + 5
         else:
             minx, maxx, miny, maxy = 100.0, 120.0, 5.0, 25.0
+        bbox_poly = box(minx, miny, maxx, maxy)
             
     ax.set_xlim(minx, maxx)
     ax.set_ylim(miny, maxy)
     
-    # Bật lưới tọa độ nền
+    # Hiển thị tiêu đề chính lớn ở viền trên khung ảnh
+    ax.set_title(title_text if title_text else "BẢN ĐỒ QUỸ ĐẠO BÃO", fontsize=16, fontweight='bold', pad=20)
+    
+    # Bật lưới tọa độ nền nét đứt
     ax.grid(True, linestyle='--', color='gray', alpha=0.4, zorder=1)
     
-    # Đọc nền bản đồ ranh giới
+    # Đọc và cắt lớp nền bản đồ gọn gàng theo Bounding Box đã chọn (gpd.clip)
     if os.path.exists(SHP_MASK_PATH):
         try:
             mask = gpd.read_file(SHP_MASK_PATH)
             if mask.crs and mask.crs.to_epsg() != 4326: mask.to_crs(epsg=4326, inplace=True)
-            mask.plot(ax=ax, color='#f2f2f2', edgecolor='white', linewidth=0.6, zorder=2)
+            mask = gpd.clip(mask, bbox_poly)
+            if not mask.empty:
+                mask.plot(ax=ax, color='#f2f2f2', edgecolor='white', linewidth=0.6, zorder=1)
         except: pass
     if os.path.exists(SHP_DISP_PATH):
         try:
             disp = gpd.read_file(SHP_DISP_PATH)
             if disp.crs and disp.crs.to_epsg() != 4326: disp.to_crs(epsg=4326, inplace=True)
-            disp.plot(ax=ax, facecolor='none', edgecolor='#444444', linewidth=1.0, zorder=2)
+            disp = gpd.clip(disp, bbox_poly)
+            if not disp.empty:
+                disp.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=1.0, zorder=2)
         except: pass
         
-    ax.set_xlabel("Kinh độ (E)", fontsize=12)
-    ax.set_ylabel("Vĩ độ (N)", fontsize=12)
+    ax.set_xlabel("Kinh độ", fontsize=12)
+    ax.set_ylabel("Vĩ độ", fontsize=12)
+    ax.ticklabel_format(useOffset=False, style='plain') # Đồng bộ loại bỏ hiển thị offset tọa độ
     
     if not df.empty:
         groups = df['storm_no'].unique() if 'storm_no' in df.columns else [None]
@@ -288,17 +299,17 @@ def generate_storm_static_fig(df, title_text, bounds=None):
                 m_color = 'black' if is_past else 'red'
                 ax.plot(r['lon'], r['lat'], marker='o', markersize=8, color=m_color, markeredgecolor='white', zorder=5)
 
-    # Chú thích góc phải y hệt như hình
+    # Khối chú thích (Đã sửa lỗi ép kiểu dữ liệu từ Chuỗi sang Số nguyên)
     legend_elements = [
         Patch(facecolor='#FFC0CB', edgecolor='none', label='Vùng có gió mạnh lớn hơn cấp 6'),
         Patch(facecolor='#FF6347', edgecolor='none', label='Vùng có gió mạnh lớn hơn cấp 10'),
-        Patch(facecolor='#90EE90', edgecolor='none', label='Vùng tâm bão, ATNĐ, vùng thấp có thể đi qua'),
-        Line2D([0], [0], marker='o', color='w', label='Vị trí tâm siêu bão, bão, ATNĐ, vùng thấp đã đi qua', markerfacecolor='black', markersize=10),
-        Line2D([0], [0], marker='o', color='w', label='Vị trí tâm siêu bão, bão, ATNĐ, vùng thấp hiện tại, dự báo', markerfacecolor='red', markersize=10)
+        Patch(facecolor='#90EE90', edgecolor='none', label='Vùng tâm bão, ATNĐ có thể đi qua'),
+        Line2D([0], [0], marker='o', color='w', label='Tâm bão/ATNĐ đã đi qua', markerfacecolor='black', markersize=10),
+        Line2D([0], [0], marker='o', color='w', label='Tâm bão/ATNĐ hiện tại, dự báo', markerfacecolor='red', markersize=10)
     ]
-    ax.legend(handles=legend_elements, loc='upper right', title="Chú Thích", title_fontsize='12', fontsize='10', framealpha=0.95, zorder=6)
+    ax.legend(handles=legend_elements, loc='upper right', title="Chú Thích", title_fontsize=12, fontsize=10, framealpha=0.95, zorder=6)
     
-    # Bảng số liệu biểu diễn tọa độ thông tin
+    # Bảng số liệu biểu diễn thông tin bão khẩn cấp
     if not df.empty:
         if 'status_raw' in df.columns:
             cur = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
@@ -326,7 +337,7 @@ def generate_storm_static_fig(df, title_text, bounds=None):
                     f"Cấp {int(bf)}" if bf>0 else "-",
                     f"{int(r.get('pressure',0))}" if r.get('pressure',0)>0 else "-"
                 ])
-            col_labels = ['Ngày-Giờ', 'Kinh độ', 'Vĩ độ', 'Cấp gió', 'Pmin (hPa)']
+            col_labels = ['Ngày-Giờ', 'Kinh độ', 'Vĩ độ', 'Cấp gió', 'Pmin(hPa)']
             
             table = ax.table(cellText=cell_text, colLabels=col_labels, loc='center right',
                              bbox=[0.58, 0.35, 0.40, 0.28], cellLoc='center', zorder=6)
@@ -337,13 +348,12 @@ def generate_storm_static_fig(df, title_text, bounds=None):
             for (row, col), cell in table.get_celld().items():
                 if row == 0: cell.set_text_props(weight='bold', backgroundcolor='#f2f2f2')
             
+            # Thời điểm phát tin hiển thị tinh tế dưới dạng subtitle
             subtitle = "(Đang cập nhật)"
             target_row = display_df.iloc[0]
             if 'hour_explicit' in target_row and pd.notna(target_row['hour_explicit']):
                 subtitle = f"Tin phát lúc {int(target_row['hour_explicit'])}h30"
-                
-            fig.text(0.78, 0.67, title_text, ha="center", fontsize=14, fontweight='bold', zorder=7)
-            fig.text(0.78, 0.64, subtitle, ha="center", fontsize=11, style='italic', zorder=7)
+            ax.text(0.5, 1.01, subtitle, transform=ax.transAxes, ha="center", va="bottom", fontsize=11, style='italic', color='gray')
 
     return fig
 
@@ -584,7 +594,7 @@ def main():
     if 'folium_fig_obj' not in st.session_state: st.session_state['folium_fig_obj'] = None
     if 'interp_cache' not in st.session_state: st.session_state['interp_cache'] = None
     if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
-    if 'storm_fig_obj' not in st.session_state: st.session_state['storm_fig_obj'] = None # Lưu Object ảnh tĩnh bão
+    if 'storm_fig_obj' not in st.session_state: st.session_state['storm_fig_obj'] = None
 
     with st.sidebar:
         st.title("Dữ liệu thời tiết")
@@ -1021,7 +1031,7 @@ def main():
         
         st_folium(m, width=None, height=800, use_container_width=True)
 
-        # --- MODULE TRÍCH XUẤT ẢNH TĨNH AN TOÀN (KHÔNG BỊ LỒNG NÚT) ---
+        # --- MODULE TRÍCH XUẤT ẢNH TĨNH AN TOÀN (KHÔNG BỊ LỒNG NÚT BẤM) ---
         if show_widgets and not final_df.empty:
             st.markdown("---")
             st.markdown("### 📥 Tải bản đồ Bão (Ảnh tĩnh có chú thích và bảng tin y như hình gốc)")
@@ -1030,7 +1040,7 @@ def main():
                 with st.spinner("Đang xây dựng bản vẽ tĩnh chuyên nghiệp..."):
                     st.session_state['storm_fig_obj'] = generate_storm_static_fig(final_df, dashboard_title, storm_bounds_dict if use_storm_bounds else None)
             
-            # Khối render và tải nằm ngoài cấu trúc IF của nút bấm gốc -> Chống sập trạng thái Streamlit
+            # Khối render hiển thị biểu đồ đồ họa tĩnh nằm ngoài khối IF điều kiện gốc
             if st.session_state['storm_fig_obj'] is not None:
                 st.pyplot(st.session_state['storm_fig_obj'])
                 
@@ -1040,7 +1050,7 @@ def main():
                 
                 buf_storm = io.BytesIO()
                 if fmt_storm == "png":
-                    # Kích thước biểu đồ gốc (14x10 inches) x dpi=100 => Chiều cao ảnh đầu ra đạt chuẩn chính xác 1000px
+                    # Kích thước khung trục 12x10 inches kết hợp dpi=100 => Chiều cao ảnh xuất ra chính xác đạt 1000px (1200x1000px)
                     st.session_state['storm_fig_obj'].savefig(buf_storm, format="png", dpi=100, bbox_inches='tight')
                     mime_type = "image/png"
                 else:
@@ -1052,7 +1062,7 @@ def main():
                     st.write(""); st.write("")
                     st.download_button(
                         label=f"⬇️ Tải bản đồ ({fmt_storm.upper()})",
-                        data=buf_storm.getvalue(), # Sử dụng dữ liệu Bytes an toàn hoàn toàn
+                        data=buf_storm.getvalue(), # Chuyển đổi luồng byte an toàn, chống xuất tệp 0-byte
                         file_name=f"ban_do_bao_tinh.{fmt_storm}", 
                         mime=mime_type, 
                         key="dl_btn_storm"
