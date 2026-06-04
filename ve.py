@@ -16,6 +16,7 @@ import matplotlib.colors as mcolors
 from matplotlib.colors import LinearSegmentedColormap, Normalize, BoundaryNorm
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+import gpd
 import geopandas as gpd
 from shapely.geometry import Point, box, Polygon, mapping
 from shapely.prepared import prep
@@ -233,8 +234,11 @@ def create_info_table(df, title):
     return textwrap.dedent(f"""<div class="info-box"><div class="info-title">{title}</div><div class="info-subtitle">{subtitle}</div><table><thead><tr><th>Ngày-Giờ</th><th>Kinh độ</th><th>Vĩ độ</th><th>Cấp gió</th><th>Pmin (hPa)</th></tr></thead><tbody>{rows}</tbody></table></div>""")
 
 def generate_storm_static_fig(df, title_text, bounds=None):
-    # Cố định tỷ lệ khung viền 12x10 giống hệt như tính năng Nội suy linh tinh
+    # Cố định khung viền tỉ lệ 12x10 inch tương tự biểu đồ Nội suy
     fig, ax = plt.subplots(figsize=(12, 10)) 
+    
+    # Ép màu nền đại dương sang gam màu xám xanh nhạt nhã nhặn như CartoDB Positron
+    ax.set_facecolor('#edf3f5')
     
     if bounds:
         minx, maxx, miny, maxy = bounds['minx'], bounds['maxx'], bounds['miny'], bounds['maxy']
@@ -250,20 +254,17 @@ def generate_storm_static_fig(df, title_text, bounds=None):
     ax.set_xlim(minx, maxx)
     ax.set_ylim(miny, maxy)
     
-    # Hiển thị tiêu đề chính lớn ở viền trên khung ảnh
-    ax.set_title(title_text if title_text else "BẢN ĐỒ QUỸ ĐẠO BÃO", fontsize=16, fontweight='bold', pad=20)
+    # Bật lưới tọa độ mờ tinh tế theo mẫu bản đồ sáng
+    ax.grid(True, linestyle='--', color='#cccccc', alpha=0.5, zorder=1)
     
-    # Bật lưới tọa độ nền nét đứt
-    ax.grid(True, linestyle='--', color='gray', alpha=0.4, zorder=1)
-    
-    # Đọc và cắt lớp nền bản đồ gọn gàng theo Bounding Box đã chọn (gpd.clip)
+    # Đọc nền và cắt gọn gàng theo khung (gpd.clip) ranh giới đất liền sang màu xám trắng thanh lịch
     if os.path.exists(SHP_MASK_PATH):
         try:
             mask = gpd.read_file(SHP_MASK_PATH)
             if mask.crs and mask.crs.to_epsg() != 4326: mask.to_crs(epsg=4326, inplace=True)
             mask = gpd.clip(mask, bbox_poly)
             if not mask.empty:
-                mask.plot(ax=ax, color='#f2f2f2', edgecolor='white', linewidth=0.6, zorder=1)
+                mask.plot(ax=ax, color='#f7f7f5', edgecolor='#e0e0e0', linewidth=0.5, zorder=2)
         except: pass
     if os.path.exists(SHP_DISP_PATH):
         try:
@@ -271,12 +272,12 @@ def generate_storm_static_fig(df, title_text, bounds=None):
             if disp.crs and disp.crs.to_epsg() != 4326: disp.to_crs(epsg=4326, inplace=True)
             disp = gpd.clip(disp, bbox_poly)
             if not disp.empty:
-                disp.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=1.0, zorder=2)
+                disp.plot(ax=ax, facecolor='none', edgecolor='#555555', linewidth=0.8, zorder=3)
         except: pass
         
-    ax.set_xlabel("Kinh độ", fontsize=12)
-    ax.set_ylabel("Vĩ độ", fontsize=12)
-    ax.ticklabel_format(useOffset=False, style='plain') # Đồng bộ loại bỏ hiển thị offset tọa độ
+    ax.set_xlabel("Kinh độ", fontsize=11)
+    ax.set_ylabel("Vĩ độ", fontsize=11)
+    ax.ticklabel_format(useOffset=False, style='plain')
     
     if not df.empty:
         groups = df['storm_no'].unique() if 'storm_no' in df.columns else [None]
@@ -286,32 +287,31 @@ def generate_storm_static_fig(df, title_text, bounds=None):
             f6, f10, fc = create_storm_swaths(dense)
             
             if f6 and not f6.is_empty:
-                gpd.GeoSeries([f6]).plot(ax=ax, color='#FFC0CB', alpha=0.5, zorder=3)
+                gpd.GeoSeries([f6]).plot(ax=ax, color='#ffccd5', alpha=0.5, zorder=4)
             if f10 and not f10.is_empty:
-                gpd.GeoSeries([f10]).plot(ax=ax, color='#FF6347', alpha=0.6, zorder=3)
+                gpd.GeoSeries([f10]).plot(ax=ax, color='#ffb3a7', alpha=0.6, zorder=4)
             if fc and not fc.is_empty:
-                gpd.GeoSeries([fc]).plot(ax=ax, color='#90EE90', alpha=0.7, zorder=3)
+                gpd.GeoSeries([fc]).plot(ax=ax, color='#c1f0c1', alpha=0.6, zorder=4)
                 
-            ax.plot(sub['lon'], sub['lat'], color='black', linewidth=2, zorder=4)
+            ax.plot(sub['lon'], sub['lat'], color='#222222', linewidth=2, zorder=5)
             
             for _, r in sub.iterrows():
                 is_past = 'quá khứ' in str(r.get('status_raw','')).lower() or 'past' in str(r.get('status_raw','')).lower()
-                m_color = 'black' if is_past else 'red'
-                ax.plot(r['lon'], r['lat'], marker='o', markersize=8, color=m_color, markeredgecolor='white', zorder=5)
+                m_color = '#444444' if is_past else '#e60000'
+                ax.plot(r['lon'], r['lat'], marker='o', markersize=6, color=m_color, markeredgecolor='white', markeredgewidth=0.8, zorder=6)
 
-    # Khối chú thích
+    # Khối hộp Chú thích gọn gàng, kích thước vừa vặn (Font 9) như một lớp phủ panel
     legend_elements = [
-        Patch(facecolor='#FFC0CB', edgecolor='none', label='Vùng có gió mạnh lớn hơn cấp 6'),
-        Patch(facecolor='#FF6347', edgecolor='none', label='Vùng có gió mạnh lớn hơn cấp 10'),
-        Patch(facecolor='#90EE90', edgecolor='none', label='Vùng tâm bão, ATNĐ có thể đi qua'),
-        Line2D([0], [0], marker='o', color='w', label='Tâm bão/ATNĐ đã đi qua', markerfacecolor='black', markersize=10),
-        Line2D([0], [0], marker='o', color='w', label='Tâm bão/ATNĐ hiện tại, dự báo', markerfacecolor='red', markersize=10)
+        Patch(facecolor='#ffccd5', edgecolor='none', label='Vùng gió mạnh > cấp 6'),
+        Patch(facecolor='#ffb3a7', edgecolor='none', label='Vùng gió mạnh > cấp 10'),
+        Patch(facecolor='#c1f0c1', edgecolor='none', label='Vùng tâm bão/ATNĐ có thể đi qua'),
+        Line2D([0], [0], marker='o', color='w', label='Tâm đã đi qua', markerfacecolor='#444444', markersize=8),
+        Line2D([0], [0], marker='o', color='w', label='Tâm hiện tại/Dự báo', markerfacecolor='#e60000', markersize=8)
     ]
-    # SỬA LỖI Ở ĐÂY: Loại bỏ tham số `zorder=6` ra khỏi hàm khởi tạo ax.legend, dùng set_zorder()
-    leg = ax.legend(handles=legend_elements, loc='upper right', title="Chú Thích", title_fontsize=12, fontsize=10, framealpha=0.95)
-    leg.set_zorder(6)
+    leg = ax.legend(handles=legend_elements, loc='upper right', title="Chú Thích", title_fontsize=11, fontsize=9, framealpha=0.92, facecolor='white', edgecolor='#dddddd')
+    leg.set_zorder(10) # Tách biệt zorder độc lập để sửa triệt để lỗi cũ
     
-    # Bảng số liệu biểu diễn thông tin bão khẩn cấp
+    # Bảng số liệu thông tin dạng panel mini nằm ở góc phải
     if not df.empty:
         if 'status_raw' in df.columns:
             cur = df[df['status_raw'].astype(str).str.contains("hiện tại|current", case=False, na=False)]
@@ -334,28 +334,36 @@ def generate_storm_static_fig(df, title_text, bounds=None):
                      else: bf = 12
                 cell_text.append([
                     t,
-                    f"{r.get('lon',0):.1f}E",
-                    f"{r.get('lat',0):.1f}N",
+                    f"{r.get('lon',0):.1f}°E",
+                    f"{r.get('lat',0):.1f}°N",
                     f"Cấp {int(bf)}" if bf>0 else "-",
                     f"{int(r.get('pressure',0))}" if r.get('pressure',0)>0 else "-"
                 ])
             col_labels = ['Ngày-Giờ', 'Kinh độ', 'Vĩ độ', 'Cấp gió', 'Pmin(hPa)']
             
-            table = ax.table(cellText=cell_text, colLabels=col_labels, loc='center right',
-                             bbox=[0.58, 0.35, 0.40, 0.28], cellLoc='center', zorder=6)
+            table = ax.table(cellText=cell_text, colLabels=col_labels, loc='lower right',
+                             bbox=[0.62, 0.03, 0.36, 0.22], cellLoc='center', zorder=10)
             table.auto_set_font_size(False)
-            table.set_fontsize(10)
-            table.scale(1, 1.5)
+            table.set_fontsize(9)
+            table.scale(1, 1.2)
             
             for (row, col), cell in table.get_celld().items():
-                if row == 0: cell.set_text_props(weight='bold', backgroundcolor='#f2f2f2')
+                cell.set_facecolor('white')
+                cell.set_edgecolor('#cccccc')
+                if row == 0: 
+                    cell.set_text_props(weight='bold', color='#333333')
+                    cell.set_facecolor('#f8f9fa')
             
-            # Thời điểm phát tin hiển thị tinh tế dưới dạng subtitle
+            # Đưa Tiêu đề và Phụ đề vào khung nhãn bo tròn góc trên bên trái 
             subtitle = "(Đang cập nhật)"
             target_row = display_df.iloc[0]
             if 'hour_explicit' in target_row and pd.notna(target_row['hour_explicit']):
                 subtitle = f"Tin phát lúc {int(target_row['hour_explicit'])}h30"
-            ax.text(0.5, 1.01, subtitle, transform=ax.transAxes, ha="center", va="bottom", fontsize=11, style='italic', color='gray')
+                
+            title_box_text = f"{title_text}\n{subtitle}"
+            ax.text(0.02, 0.98, title_box_text, transform=ax.transAxes, ha="left", va="top",
+                    fontsize=12, fontweight='bold', color='#333333',
+                    bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='#dddddd', alpha=0.92, zorder=10))
 
     return fig
 
