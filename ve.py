@@ -37,12 +37,10 @@ warnings.filterwarnings("ignore")
 ICON_DIR = "icon"
 CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 
-# --- CẤU HÌNH ĐƯỜNG DẪN SHAPEFILE CỐ ĐỊNH ---
 SHP_MASK_PATH = os.path.join("shp", "vn34tinh.shp")
 SHP_DISP_PATH = os.path.join("shp", "vungmoi.shp")
-SHP_XA_PATH   = os.path.join("shp", "final.shp")      # <-- Lớp ranh giới xã
+SHP_XA_PATH   = os.path.join("shp", "final.shp")
 
-# --- ĐỊNH NGHĨA ICON PATHS ---
 ICON_PATHS = {
     "vungthap_daqua": os.path.join(ICON_DIR, 'vungthapdaqua.png'),
     "atnd_daqua": os.path.join(ICON_DIR, 'atnddaqua.PNG'),
@@ -54,11 +52,9 @@ ICON_PATHS = {
     "sieubao_dubao": os.path.join(ICON_DIR, 'sieubao.PNG')
 }
 
-# --- DANH SÁCH LINK WEB ---
 LINK_WEATHEROBS = "https://weatherobs.com/"
 LINK_WIND_AUTO = "https://kttvtudong.net/kttv"
 
-# --- HÀM TẠO LINK KMA DYNAMIC ---
 def get_kma_url():
     now_utc = datetime.utcnow()
     check_time = now_utc - timedelta(hours=5)
@@ -74,6 +70,9 @@ COLOR_TEXT = "#333333"
 COLOR_ACCENT = "#007bff"
 COLOR_BORDER = "#dee2e6"
 SIDEBAR_WIDTH = "300px"
+
+# --- Màu nền biển ---
+SEA_COLOR = "#b8d9ed"
 
 st.set_page_config(
     page_title="Hệ thống giám sát",
@@ -115,7 +114,74 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. HÀM XỬ LÝ LOGIC
+# 3. HÀM HỖ TRỢ NHÃN BIỂN ĐÔNG
+# ==============================================================================
+def add_bien_dong_label(ax, minx, maxx, miny, maxy):
+    """
+    Thêm nhãn 'BIỂN ĐÔNG' vào vùng biển trên ảnh tĩnh matplotlib.
+    Tự động tính vị trí dựa theo extent của bản đồ.
+    """
+    # Tính kích thước extent
+    dx = maxx - minx
+    dy = maxy - miny
+
+    # Danh sách các vị trí biển Đông tiêu chuẩn (lon, lat)
+    # Chọn vị trí nằm ngoài đất liền VN (phía đông, đông nam)
+    candidates = [
+        # Biển Đông phía đông Quảng Ninh / Bắc Bộ
+        (108.05, 20.85),
+        # Biển Đông phía đông Trung Bộ
+        (109.3,  15.5),
+        # Biển Đông phía nam / Đông Nam Bộ
+        (110.0,  11.5),
+        # Biển Đông phía đông bắc tổng thể
+        (111.5,  17.0),
+    ]
+
+    # Chọn candidate nằm trong extent và có khoảng trống đủ
+    placed = False
+    for (lon_c, lat_c) in candidates:
+        # Điều kiện: nằm trong bbox với margin
+        margin_x = dx * 0.05
+        margin_y = dy * 0.05
+        if (minx + margin_x < lon_c < maxx - margin_x and
+                miny + margin_y < lat_c < maxy - margin_y):
+            fontsize = max(8, min(14, int(dx * 2.2)))
+            ax.text(
+                lon_c, lat_c, "BIỂN\nĐÔNG",
+                fontsize=fontsize,
+                fontweight='bold',
+                color='#1a5276',
+                alpha=0.75,
+                ha='center', va='center',
+                fontstyle='italic',
+                zorder=1,
+                bbox=dict(boxstyle='round,pad=0.3', facecolor=SEA_COLOR,
+                          edgecolor='#5dade2', alpha=0.5, linewidth=0.8)
+            )
+            placed = True
+            break
+
+    # Fallback: đặt ở góc phải giữa nếu không tìm được vị trí phù hợp
+    if not placed:
+        lon_fb = minx + dx * 0.82
+        lat_fb = miny + dy * 0.45
+        fontsize = max(7, min(13, int(dx * 2.0)))
+        ax.text(
+            lon_fb, lat_fb, "BIỂN\nĐÔNG",
+            fontsize=fontsize,
+            fontweight='bold',
+            color='#1a5276',
+            alpha=0.75,
+            ha='center', va='center',
+            fontstyle='italic',
+            zorder=1,
+            bbox=dict(boxstyle='round,pad=0.3', facecolor=SEA_COLOR,
+                      edgecolor='#5dade2', alpha=0.5, linewidth=0.8)
+        )
+
+# ==============================================================================
+# 4. HÀM XỬ LÝ LOGIC
 # ==============================================================================
 @st.cache_data(ttl=300)
 def get_rainviewer_ts():
@@ -237,7 +303,8 @@ def create_info_table(df, title):
 
 def generate_storm_static_fig(df, title_text, bounds=None):
     fig, ax = plt.subplots(figsize=(12, 10))
-    ax.set_facecolor('#edf3f5')
+    # ── MÀU NỀN BIỂN ──
+    ax.set_facecolor(SEA_COLOR)
 
     if bounds:
         minx, maxx, miny, maxy = bounds['minx'], bounds['maxx'], bounds['miny'], bounds['maxy']
@@ -270,6 +337,9 @@ def generate_storm_static_fig(df, title_text, bounds=None):
             if not disp.empty:
                 disp.plot(ax=ax, facecolor='none', edgecolor='#555555', linewidth=0.8, zorder=3)
         except: pass
+
+    # ── NHÃN BIỂN ĐÔNG ──
+    add_bien_dong_label(ax, minx, maxx, miny, maxy)
 
     ax.set_xlabel("Kinh độ", fontsize=11)
     ax.set_ylabel("Vĩ độ", fontsize=11)
@@ -434,6 +504,8 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     else: gv_masked = gv
 
     fig, ax = plt.subplots(figsize=(14, 10))
+    # ── MÀU NỀN BIỂN ──
+    ax.set_facecolor(SEA_COLOR)
     ax.set_title(title_text if title_text else f'Bản đồ {unit_label}', fontsize=16)
     if disp_shape is not None: disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=0.5)
     im = ax.imshow(gv_masked, extent=[minx, maxx, miny, maxy], cmap=cmap, norm=norm, interpolation='bilinear', origin='lower')
@@ -442,6 +514,8 @@ def run_interpolation_and_plot(input_df, title_text, data_type='temp'):
     cbar.set_ticks(levels_for_ticks)
     cbar.set_ticklabels([str(l) for l in levels_for_ticks])
     ax.set_xlim(minx, maxx); ax.set_ylim(miny, maxy); ax.ticklabel_format(useOffset=False, style='plain')
+    # ── NHÃN BIỂN ĐÔNG ──
+    add_bien_dong_label(ax, minx, maxx, miny, maxy)
     return fig, None
 
 def generate_single_province_fig(cache, prov_name, title_text):
@@ -464,6 +538,8 @@ def generate_single_province_fig(cache, prov_name, title_text):
     gv_masked = np.where(mask_flat, cache['gv'], np.nan)
 
     fig, ax = plt.subplots(figsize=(10, 10))
+    # ── MÀU NỀN BIỂN ──
+    ax.set_facecolor(SEA_COLOR)
     ax.set_title(f"{title_text}\n(Khu vực: {prov_name})", fontsize=16)
     prov_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.5)
     im = ax.imshow(gv_masked, extent=[cache['minx'], cache['maxx'], cache['miny'], cache['maxy']], cmap=cache['cmap'], norm=cache['norm'], interpolation='bilinear', origin='lower')
@@ -474,6 +550,8 @@ def generate_single_province_fig(cache, prov_name, title_text):
     cbar.set_ticklabels([f"{val:.1f}" for val in cache['custom_levels']])
     ax.ticklabel_format(useOffset=False, style='plain')
     ax.set_xlabel("Kinh độ"); ax.set_ylabel("Vĩ độ")
+    # ── NHÃN BIỂN ĐÔNG ──
+    add_bien_dong_label(ax, p_minx, p_maxx, p_miny, p_maxy)
     return fig
 
 
@@ -485,12 +563,6 @@ def run_interactive_folium_interpolation(
     selected_provinces, shape_col, custom_bounds=None,
     show_xa_layer=False, show_xa_labels=False
 ):
-    """
-    Nội suy IDW → Folium map.
-    Tham số mới:
-        show_xa_layer  : bool – hiển thị lớp ranh giới xã (final.shp)
-        show_xa_labels : bool – hiển thị nhãn tên xã (cột ten_xa)
-    """
     shape_col = shape_col or ""
     input_df.columns = input_df.columns.str.lower().str.strip()
     if not all(c in input_df.columns for c in ['lon', 'lat', 'value']):
@@ -514,7 +586,6 @@ def run_interactive_folium_interpolation(
             if disp_shape.crs and disp_shape.crs.to_epsg() != 4326: disp_shape.to_crs(epsg=4326, inplace=True)
         except Exception: pass
 
-    # ---- Lớp ranh giới xã ----
     xa_shape = None
     if show_xa_layer and os.path.exists(SHP_XA_PATH):
         try:
@@ -582,7 +653,6 @@ def run_interactive_folium_interpolation(
     m = folium.Map(location=[(miny + maxy) / 2, (minx + maxx) / 2], tiles=None)
     m.fit_bounds([[miny, minx], [maxy, maxx]])
 
-    # ---- Các lớp nền (có thể bật/tắt qua LayerControl) ----
     folium.TileLayer('CartoDB positron',   name='🗺️ Nền Sáng (CartoDB)',    overlay=False, control=True, show=True).add_to(m)
     folium.TileLayer('OpenStreetMap',      name='🗺️ OpenStreetMap',          overlay=False, control=True, show=False).add_to(m)
     folium.TileLayer(
@@ -596,14 +666,12 @@ def run_interactive_folium_interpolation(
         overlay=False, control=True, show=False
     ).add_to(m)
 
-    # ---- Lớp nội suy ----
     folium.raster_layers.ImageOverlay(
         image=f"data:image/png;base64,{img_base64}",
         bounds=[[miny, minx], [maxy, maxx]],
         opacity=0.75, name='🎨 Lớp nội suy', interactive=False
     ).add_to(m)
 
-    # ---- Ranh giới vùng/quốc gia ----
     if disp_shape is not None and not disp_shape.empty:
         folium.GeoJson(
             disp_shape, name="🌏 Ranh giới Khu vực/Quốc gia",
@@ -611,7 +679,6 @@ def run_interactive_folium_interpolation(
             interactive=False
         ).add_to(m)
 
-    # ---- Ranh giới tỉnh ----
     tooltip_fields = [shape_col] if shape_col and shape_col in mask_shape.columns else []
     tooltip_aliases = ['Tên Tỉnh: '] if tooltip_fields else []
     if not mask_shape.empty:
@@ -622,13 +689,9 @@ def run_interactive_folium_interpolation(
             tooltip=folium.GeoJsonTooltip(fields=tooltip_fields, aliases=tooltip_aliases) if tooltip_fields else None
         ).add_to(m)
 
-    # ================================================================
-    # LỚP RANH GIỚI XÃ (bật/tắt độc lập)
-    # ================================================================
     if show_xa_layer and xa_shape is not None and not xa_shape.empty:
         xa_col = 'ten_xa' if 'ten_xa' in xa_shape.columns else None
 
-        # Tooltip hiển thị tên xã khi hover
         xa_tooltip = None
         if xa_col:
             xa_tooltip = folium.GeoJsonTooltip(
@@ -643,7 +706,7 @@ def run_interactive_folium_interpolation(
             xa_shape,
             style_function=lambda x: {
                 'fillColor': 'transparent',
-                'color': '#8B4513',   # nâu đất – phân biệt rõ với lớp tỉnh đen
+                'color': '#8B4513',
                 'weight': 0.6,
                 'dashArray': '2, 3'
             },
@@ -653,14 +716,12 @@ def run_interactive_folium_interpolation(
             tooltip=xa_tooltip
         ).add_to(fg_xa)
 
-        # ---- Nhãn tên xã (DivIcon) – chỉ hiển thị khi bật ----
         if show_xa_labels and xa_col:
             fg_xa_labels = folium.FeatureGroup(name="🏷️ Tên Xã", show=True)
             for _, row_xa in xa_shape.iterrows():
                 try:
                     geom = row_xa.geometry
                     if geom is None or geom.is_empty: continue
-                    # Lấy centroid để đặt nhãn
                     cx, cy = geom.centroid.x, geom.centroid.y
                     ten = str(row_xa.get(xa_col, ''))
                     if not ten or ten == 'nan': continue
@@ -680,7 +741,6 @@ def run_interactive_folium_interpolation(
 
         fg_xa.add_to(m)
 
-    # ---- Thanh màu chú thích ----
     colormap_branca = cm.StepColormap(
         colors=[mcolors.to_hex(cmap(norm(val))) for val in custom_levels[:-1]],
         vmin=custom_levels[0], vmax=custom_levels[-1],
@@ -689,8 +749,10 @@ def run_interactive_folium_interpolation(
     m.add_child(colormap_branca)
     folium.LayerControl(position='topleft', collapsed=False).add_to(m)
 
-    # ---- Ảnh tĩnh matplotlib (để tải về) ----
+    # ── ẢNH TĨNH MATPLOTLIB (TẢI VỀ) – CÓ NỀN BIỂN & NHÃN BIỂN ĐÔNG ──
     fig, ax = plt.subplots(figsize=(12, 10))
+    # ── MÀU NỀN BIỂN ──
+    ax.set_facecolor(SEA_COLOR)
     ax.set_title(title_text, fontsize=16)
     if disp_shape is not None and not disp_shape.empty:
         disp_shape.boundary.plot(ax=ax, edgecolor='black', linewidth=1.0)
@@ -719,12 +781,14 @@ def run_interactive_folium_interpolation(
     ax.set_xlim(minx, maxx); ax.set_ylim(miny, maxy)
     ax.ticklabel_format(useOffset=False, style='plain')
     ax.set_xlabel("Kinh độ"); ax.set_ylabel("Vĩ độ")
+    # ── NHÃN BIỂN ĐÔNG ──
+    add_bien_dong_label(ax, minx, maxx, miny, maxy)
 
     return m, fig, cache_dict, None
 
 
 # ==============================================================================
-# 4. MAIN APP
+# 5. MAIN APP
 # ==============================================================================
 def main():
     if 'interpol_fig' not in st.session_state: st.session_state['interpol_fig'] = None
@@ -754,7 +818,6 @@ def main():
         storm_bounds_dict = None
         show_grid = False
 
-        # ---- Biến mới cho lớp xã ----
         show_xa_layer  = False
         show_xa_labels = False
         nc_var_selected = None
@@ -862,9 +925,6 @@ def main():
                         multi_provs = st.multiselect("Hoặc chọn thủ công nhiều Tỉnh:", province_list)
                         selected_provinces = [quick_prov] if quick_prov != "-- Tất cả Tỉnh --" else multi_provs
 
-                    # ============================================================
-                    # MỤC 3 – LỚP RANH GIỚI XÃ (MỚI)
-                    # ============================================================
                     st.markdown("**3. Lớp ranh giới Xã**")
                     xa_shp_exists = os.path.exists(SHP_XA_PATH)
                     if not xa_shp_exists:
@@ -882,9 +942,6 @@ def main():
                             help="Hiển thị nhãn tên xã trên bản đồ (có thể làm chậm nếu nhiều xã)"
                         )
 
-                    # ============================================================
-                    # MỤC 4 – CẮT CÚP TỌA ĐỘ
-                    # ============================================================
                     st.markdown("**4. Cắt cúp theo Tọa độ**")
                     use_custom_bounds = st.checkbox("✂️ Giới hạn tải & hiển thị theo Tọa độ", value=False)
                     if use_custom_bounds:
