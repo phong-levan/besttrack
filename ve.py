@@ -1007,7 +1007,7 @@ def main():
                     col_dl1, col_dl2 = st.columns([1, 3])
                     with col_dl1: fmt = st.selectbox("Định dạng:", ["png", "pdf"], key="fmt_static")
                     buf = io.BytesIO()
-                    st.session_state['interpol_fig'].savefig(buf, format=fmt, dpi=100, bbox_inches='tight')
+                    st.session_state['interpol_fig'].savefig(buf, format=fmt, dpi=1000, bbox_inches='tight')
                     buf.seek(0)
                     with col_dl2:
                         st.write(""); st.write("")
