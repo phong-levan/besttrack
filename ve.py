@@ -40,7 +40,7 @@ CHUTHICH_IMG = os.path.join(ICON_DIR, "chuthich.PNG")
 # --- CẤU HÌNH ĐƯỜNG DẪN SHAPEFILE CỐ ĐỊNH ---
 SHP_MASK_PATH = os.path.join("shp", "vn34tinh.shp")
 SHP_DISP_PATH = os.path.join("shp", "vungmoi.shp")
-SHP_XA_PATH   = os.path.join("shp", "final.shp")      # <-- Lớp ranh giới xã
+SHP_XA_PATH   = os.path.join("shp", "RG_xa_VN.shp")      # <-- Lớp ranh giới xã
 
 # --- ĐỊNH NGHĨA ICON PATHS ---
 ICON_PATHS = {
@@ -488,7 +488,7 @@ def run_interactive_folium_interpolation(
     """
     Nội suy IDW → Folium map.
     Tham số mới:
-        show_xa_layer  : bool – hiển thị lớp ranh giới xã (final.shp)
+        show_xa_layer  : bool – hiển thị lớp ranh giới xã (RG_xa_VN.shp)
         show_xa_labels : bool – hiển thị nhãn tên xã (cột ten_xa)
     """
     shape_col = shape_col or ""
@@ -638,7 +638,7 @@ def run_interactive_folium_interpolation(
                 style="font-size:11px; background-color:white; border:1px solid #ccc; padding:4px;"
             )
 
-        fg_xa = folium.FeatureGroup(name="🏘️ Ranh giới Xã (final.shp)", show=True)
+        fg_xa = folium.FeatureGroup(name="🏘️ Ranh giới Xã (RG_xa_VN.shp)", show=True)
         folium.GeoJson(
             xa_shape,
             style_function=lambda x: {
@@ -868,12 +868,12 @@ def main():
                     st.markdown("**3. Lớp ranh giới Xã**")
                     xa_shp_exists = os.path.exists(SHP_XA_PATH)
                     if not xa_shp_exists:
-                        st.caption("⚠️ Chưa tìm thấy `shp/final.shp`.")
+                        st.caption("⚠️ Chưa tìm thấy `shp/RG_xa_VN.shp`.")
                     show_xa_layer = st.checkbox(
                         "🏘️ Hiển thị ranh giới Xã",
                         value=False,
                         disabled=not xa_shp_exists,
-                        help="Tải và vẽ lớp ranh giới xã từ shp/final.shp"
+                        help="Tải và vẽ lớp ranh giới xã từ shp/RG_xa_VN.shp"
                     )
                     if show_xa_layer and xa_shp_exists:
                         show_xa_labels = st.checkbox(
