@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import re
 import folium
 from streamlit_folium import st_folium
 import os
@@ -724,6 +725,683 @@ def run_interactive_folium_interpolation(
 
 
 # ==============================================================================
+# 3b. BỘ GIẢI MÃ ĐIỆN KHÍ TƯỢNG (SYNOP / METAR) - TÍNH NĂNG MỚI
+# Dựa theo QCVN 16:2008/BTNMT - Quy chuẩn kỹ thuật quốc gia về Mã luật khí tượng bề mặt
+# ==============================================================================
+# -*- coding: utf-8 -*-
+"""
+Bộ giải mã điện khí tượng bề mặt (SYNOP / METAR)
+Xây dựng dựa trên QCVN 16:2008/BTNMT - Quy chuẩn kỹ thuật quốc gia
+về Mã luật khí tượng bề mặt.
+"""
+import re
+
+# ------------------------------------------------------------------
+# CÁC BẢNG MÃ (trích từ Phụ lục 2 - QCVN 16:2008/BTNMT)
+# ------------------------------------------------------------------
+
+# Bảng mã 2700 - N/Nh: lượng mây (bát phần / oktas)
+BANG_N = {
+    '0': "Không có mây (trời quang)", '1': "1/10 hoặc ít hơn (gần như quang)",
+    '2': "2/10 - 3/10", '3': "4/10", '4': "5/10", '5': "6/10",
+    '6': "7/10 - 8/10", '7': "9/10 hoặc nhiều hơn nhưng chưa kín trời",
+    '8': "10/10 (kín trời)", '9': "Trời tối do sương mù/hiện tượng khác (không xác định lượng mây)",
+    '/': "Không quan trắc được lượng mây",
+}
+
+# Bảng mã 1600 - h: độ cao chân mây thấp nhất (đơn giản hoá)
+BANG_h = {
+    '0': "0 - 50 m", '1': "50 - 100 m", '2': "100 - 200 m", '3': "200 - 300 m",
+    '4': "300 - 600 m", '5': "600 - 1000 m", '6': "1000 - 1500 m",
+    '7': "1500 - 2000 m", '8': "2000 - 2500 m", '9': "≥ 2500 m hoặc không có mây",
+    '/': "Không xác định được (chân mây thấp hơn mực trạm/bị che khuất)",
+}
+
+# Bảng mã 0200 - a: đặc điểm khuynh hướng khí áp 3 giờ qua
+BANG_a = {
+    '0': "Tăng rồi giảm (khí áp hiện tại bằng hoặc cao hơn 3 giờ trước)",
+    '1': "Tăng rồi giữ nguyên, hoặc tăng chậm dần (khí áp hiện tại cao hơn 3 giờ trước)",
+    '2': "Tăng đều hoặc không đều",
+    '3': "Giảm hoặc giữ nguyên rồi tăng; hoặc tăng nhanh dần",
+    '4': "Giữ nguyên (khí áp không đổi so với 3 giờ trước)",
+    '5': "Giảm rồi tăng (khí áp hiện tại bằng hoặc thấp hơn 3 giờ trước)",
+    '6': "Giảm rồi giữ nguyên, hoặc giảm chậm dần (khí áp hiện tại thấp hơn 3 giờ trước)",
+    '7': "Giảm đều hoặc không đều",
+    '8': "Giữ nguyên hoặc tăng rồi giảm; hoặc giảm nhanh dần",
+}
+
+# Bảng mã 4019 - tR: thời đoạn tính lượng giáng thủy
+BANG_tR = {
+    '0': "không xác định/không kết thúc đúng kỳ quan trắc", '1': "6 giờ", '2': "12 giờ",
+    '3': "18 giờ", '4': "24 giờ", '5': "1 giờ", '6': "2 giờ", '7': "3 giờ",
+    '8': "9 giờ", '9': "15 giờ",
+}
+
+# Bảng mã 0500 - C: loại mây (chung)
+BANG_C = {
+    '0': "Ti (Cirrus, Ci)", '1': "Ti tích (Cirrocumulus, Cc)", '2': "Ti tầng (Cirrostratus, Cs)",
+    '3': "Trung tích (Altocumulus, Ac)", '4': "Trung tầng (Altostratus, As)",
+    '5': "Vũ tầng (Nimbostratus, Ns)", '6': "Tầng tích (Stratocumulus, Sc)",
+    '7': "Tầng (Stratus, St)", '8': "Tích (Cumulus, Cu)", '9': "Vũ tích (Cumulonimbus, Cb)",
+    '/': "Không nhìn thấy mây (trời tối/sương mù/bão cát...)",
+}
+
+# Bảng mã 0513 - CL (rút gọn thuyết minh thông thường)
+BANG_CL = {
+    '0': "Không có mây CL (Sc/St/Cu/Cb)",
+    '1': "Cu dạng dẹt (humilis/fractus), không phải trời xấu",
+    '2': "Cu phát triển vừa/mạnh (mediocris/congestus), có thể kèm Sc",
+    '3': "Cb dạng calvus (đỉnh mờ, chưa có dạng đe rõ)",
+    '4': "Sc hình thành từ Cu tỏa ra (cumulogenitus)",
+    '5': "Sc không phải do Cu tỏa ra",
+    '6': "St dạng màn/lớp, không phải trời xấu",
+    '7': "Mảnh St hoặc Cu trời xấu (dưới As/Ns)",
+    '8': "Cu và Sc không cùng mực chân mây (không do Cu tỏa ra)",
+    '9': "Cb dạng capillatus (có đe rõ, dạng sợi ở đỉnh)",
+    '/': "Không thấy được mây CL (trời tối/sương mù/che khuất)",
+}
+
+# Bảng mã 0515 - CM (rút gọn)
+BANG_CM = {
+    '0': "Không có mây CM (Ac/As/Ns)",
+    '1': "As bán trong suốt (translucidus)",
+    '2': "As dày đặc (opacus) hoặc Ns",
+    '3': "Ac một mực, bán trong suốt",
+    '4': "Ac dạng đám (thấu kính/hình cá), biến đổi hình dạng",
+    '5': "Ac thành dải/nhiều lớp, xâm chiếm dần bầu trời",
+    '6': "Ac hình thành từ Cu/Cb tỏa ra (cumulogenitus)",
+    '7': "Ac ở 2 lớp trở lên, hoặc cùng As/Ns",
+    '8': "Ac dạng castellanus/floccus (sùi hình tháp nhỏ)",
+    '9': "Ac trong bầu trời hỗn độn, nhiều mực cao",
+    '/': "Không thấy được mây CM (trời tối/sương mù/bị che khuất)",
+}
+
+# Bảng mã 0509 - CH (rút gọn)
+BANG_CH = {
+    '0': "Không có mây CH (Ci/Cs)",
+    '1': "Ci dạng tơ sợi/móc câu, chưa xâm chiếm bầu trời",
+    '2': "Ci dày thành đám/bó (có thể là tàn dư đỉnh Cb)",
+    '3': "Ci dày đặc dạng đe (tàn dư đỉnh Cb)",
+    '4': "Ci móc câu/tơ sợi, đang xâm chiếm dần bầu trời",
+    '5': "Ci và/hoặc Cs xâm chiếm dần, chưa quá 45° chân trời",
+    '6': "Ci và/hoặc Cs xâm chiếm dần, đã quá 45° chân trời",
+    '7': "Cs phủ kín toàn bộ bầu trời",
+    '8': "Cs không xâm chiếm dần, không phủ kín trời",
+    '9': "Chủ yếu là Cc",
+    '/': "Không thấy được mây CH (trời tối/sương mù/bị che khuất)",
+}
+
+# Bảng mã 0901 - E: trạng thái mặt đất (không có tuyết/băng)
+BANG_E = {
+    '0': "Mặt đất khô", '1': "Mặt đất ẩm", '2': "Mặt đất ướt (có vũng nước)",
+    '3': "Ngập nước", '4': "Mặt đất đông giá", '5': "Mặt đất có váng băng",
+    '6': "Bụi/cát tơi khô, chưa phủ kín mặt đất", '7': "Lớp bụi/cát tơi mỏng phủ kín mặt đất",
+    '8': "Lớp bụi/cát tơi trung bình hoặc dày phủ kín mặt đất", '9': "Đất cực khô, có khe nứt",
+}
+
+# Bảng mã 0877 - dd: hướng gió (đơn vị chục độ)
+def mota_dd(dd_str):
+    if dd_str == "00": return "Lặng gió (không có hướng)"
+    if dd_str == "99": return "Hướng gió biến đổi"
+    try:
+        deg = int(dd_str) * 10
+        return f"~{deg}°"
+    except Exception:
+        return "Không xác định"
+
+# Bảng mã 4377 - VV: tầm nhìn ngang (mã số -> km)
+def mota_VV(vv_str):
+    try:
+        v = int(vv_str)
+    except Exception:
+        return "Không xác định"
+    if 0 <= v <= 50:
+        return f"{v/10:.1f} km"
+    if v == 56: return "6 km"
+    if 57 <= v <= 80:
+        table_57_80 = {57:7,58:8,59:9,60:10,61:11,62:12,63:13,64:14,65:15,66:16,67:17,68:18,69:19,
+                       70:20,71:21,72:22,73:23,74:24,75:25,76:26,77:27,78:28,79:29,80:30}
+        return f"{table_57_80.get(v,'?')} km"
+    table_81_89 = {81:35,82:40,83:45,84:50,85:55,86:60,87:65,88:70}
+    if v in table_81_89: return f"{table_81_89[v]} km"
+    if v == 89: return "> 70 km"
+    table_90_99 = {90:"< 0,05 km",91:"0,05 km",92:"0,2 km",93:"0,5 km",94:"1 km",
+                   95:"2 km",96:"4 km",97:"10 km",98:"20 km",99:"≥ 50 km"}
+    if v in table_90_99: return table_90_99[v]
+    return "Không dùng"
+
+# Bảng mã 1677 - hshs: độ cao chân lớp/khối mây (chi tiết hơn h)
+def mota_hshs(code_str):
+    try:
+        v = int(code_str)
+    except Exception:
+        return "Không xác định"
+    if 0 <= v <= 49:
+        if v == 0: return "< 30 m"
+        return f"~{v*30} m"
+    table_56_89 = {56:1800,57:2100,58:2400,59:2700,60:3000,61:3300,62:3600,63:3900,64:4200,
+                   65:4500,66:4800,67:5100,68:5400,69:5700,70:6000,71:6300,72:6600,73:6900,
+                   74:7200,75:7500,76:7800,77:8100,78:8400,79:8700,80:9000,81:10500,82:12000,
+                   83:13500,84:15000,85:16500,86:18000,87:19500,88:21000}
+    if v in table_56_89: return f"~{table_56_89[v]} m"
+    if v == 89: return "> 21000 m"
+    table_90_99 = {90:"< 50 m",91:"50 - 100 m",92:"100 - 200 m",93:"200 - 300 m",94:"300 - 600 m",
+                   95:"600 - 1000 m",96:"1000 - 1500 m",97:"1500 - 2000 m",98:"2000 - 2500 m",
+                   99:"≥ 2500 m hoặc không có mây"}
+    if v in table_90_99: return table_90_99[v]
+    return "Không dùng"
+
+# Bảng mã 3590 - RRR: lượng giáng thủy (mm)
+def mota_RRR(rrr_str):
+    if rrr_str == "///": return None, "Không đo được lượng mưa"
+    try:
+        v = int(rrr_str)
+    except Exception:
+        return None, "Không xác định"
+    if v == 0: return 0.0, "Không có giáng thủy"
+    if 1 <= v <= 988: return float(v), f"{v} mm"
+    if v == 989: return None, "≥ 989 mm"
+    if v == 990: return 0.0, "Lượng giáng thủy dạng giọt (< 0,1mm)"
+    if 991 <= v <= 999: return round((v-990)/10.0, 1), f"{(v-990)/10:.1f} mm"
+    return None, "Không xác định"
+
+# Danh sách trạm khí tượng bề mặt Việt Nam (Phụ lục 3, QCVN 16:2008/BTNMT)
+# Số hiệu trạm iii (3 số cuối của biểu số WMO 48iii). Danh sách rút gọn,
+# tra cứu tốt nhất - có thể chưa đầy đủ 100% do định dạng bảng gốc.
+VN_STATIONS = {
+    "800": "Lai Châu", "802": "Sa Pa", "803": "Lào Cai", "805": "Hà Giang",
+    "806": "Sơn La", "807": "Thất Khê", "808": "Cao Bằng", "809": "Bắc Giang",
+    "810": "Bắc Cạn", "811": "Điện Biên", "812": "Tuyên Quang", "813": "Việt Trì",
+    "814": "Vĩnh Yên", "815": "Yên Bái", "816": "Hoài Đức", "817": "Sơn Tây",
+    "818": "Hòa Bình", "820": "Láng (Hà Nội)", "821": "Hà Nam (Phủ Lý)",
+    "822": "Hưng Yên", "823": "Nam Định", "824": "Ninh Bình", "826": "Phù Liễn",
+    "827": "Hải Dương", "828": "Hòn Dấu", "829": "Văn Lý", "830": "Lạng Sơn",
+    "831": "Thái Nguyên", "832": "Nho Quan", "833": "Bãi Cháy", "834": "Cô Tô",
+    "835": "Thái Bình", "836": "Cửa Ông", "837": "Tiên Yên", "838": "Móng Cái",
+    "839": "Bạch Long Vĩ", "840": "Thanh Hóa", "842": "Hồi Xuân", "845": "Vinh",
+    "846": "Hà Tĩnh", "847": "Ba Đồn", "848": "Đồng Hới", "849": "Đông Hà",
+    "852": "Huế", "855": "Đà Nẵng", "860": "Hoàng Sa", "861": "Đắc Tô",
+    "863": "Quảng Ngãi", "864": "An Nhơn", "865": "Kon Tum", "866": "Pleiku",
+    "867": "An Khê", "868": "Ialy", "869": "Eakmat", "870": "Quy Nhơn",
+    "872": "Ayunpa (Cheo Reo)", "873": "Tuy Hòa", "875": "Buôn Ma Thuột",
+    "876": "Eahleo", "877": "Nha Trang", "878": "Buôn Hồ", "879": "Cam Ranh",
+    "880": "Đà Lạt", "881": "Liên Khương", "882": "Đăk Mil", "883": "Phước Long",
+    "884": "Bảo Lộc", "885": "Lăk", "886": "Đak Nông", "887": "Phan Thiết",
+    "888": "La Gi (Hàm Tân)", "889": "Phú Quý (Cù Lao Thu)", "890": "Phan Rang",
+    "892": "Song Tử Tây", "895": "Đồng Phú", "896": "Biên Hòa", "898": "Tây Ninh",
+    "899": "Sở Sao (Thủ Dầu Một)", "900": "Tân Sơn Nhất", "901": "Bến Tre",
+    "902": "Ba Tri", "903": "Vũng Tàu", "904": "Càng Long", "905": "Vị Thanh",
+    "906": "Mộc Hóa", "907": "Rạch Giá", "908": "Cao Lãnh", "909": "Châu Đốc",
+    "910": "Cần Thơ", "911": "Vĩnh Long", "912": "Mỹ Tho", "913": "Sóc Trăng",
+    "914": "Cà Mau", "915": "Bạc Liêu", "916": "Thổ Chu", "917": "Phú Quốc",
+    "918": "Côn Đảo", "919": "Huyền Trân (DK1.7)", "920": "Trường Sa",
+}
+
+def ten_tram_synop(iiiii):
+    """iiiii: biểu số WMO 5 chữ số, ví dụ '48823'."""
+    iiiii = iiiii.strip()
+    if len(iiiii) == 5 and iiiii.startswith("48"):
+        ma = iiiii[2:]
+        ten = VN_STATIONS.get(ma)
+        if ten: return ten
+    return None
+
+# Sân bay Việt Nam thường gặp trong bản tin METAR (mã ICAO)
+VN_AIRPORTS = {
+    "VVNB": "Nội Bài (Hà Nội)", "VVTS": "Tân Sơn Nhất (TP.HCM)",
+    "VVDN": "Đà Nẵng", "VVCR": "Cam Ranh (Khánh Hòa)",
+    "VVDB": "Điện Biên Phủ", "VVCI": "Cát Bi (Hải Phòng)",
+    "VVPQ": "Phú Quốc", "VVCT": "Cần Thơ", "VVCA": "Cà Mau",
+    "VVVH": "Vinh (Nghệ An)", "VVDL": "Liên Khương (Đà Lạt)",
+    "VVPB": "Pleiku", "VVBM": "Buôn Ma Thuột", "VVPC": "Phù Cát (Quy Nhơn)",
+    "VVTH": "Thọ Xuân (Thanh Hóa)", "VVRG": "Rạch Giá", "VVCS": "Côn Đảo",
+    "VVNT": "Nà Sản (Sơn La)", "VVVD": "Vân Đồn (Quảng Ninh)",
+}
+
+
+def _sn_val(sn, magnitude):
+    """Áp dụng dấu (Bảng mã 3845): 0=dương/bằng 0, 1=âm."""
+    if sn == '1':
+        return -magnitude
+    return magnitude
+
+
+def decode_synop(raw):
+    """
+    Giải mã bản tin SYNOP dạng FM12 (AAXX) theo QCVN 16:2008/BTNMT.
+    Trả về (tom_tat: dict, chi_tiet: list[(nhom_goc, dien_giai)], ghi_chu: list[str]).
+    """
+    text = raw.strip().replace("=", " ")
+    tokens = [t for t in re.split(r"\s+", text) if t]
+    if not tokens:
+        return {}, [], ["Bản tin trống."]
+
+    chi_tiet = []
+    ghi_chu = []
+    tom_tat = {}
+
+    idx = 0
+    loai = tokens[idx]; idx += 1
+    if loai not in ("AAXX", "BBXX", "OOXX"):
+        ghi_chu.append(f"Không nhận diện được chỉ báo loại bản tin '{loai}' (cần AAXX/BBXX/OOXX).")
+    chi_tiet.append((loai, {
+        "AAXX": "Bản tin SYNOP từ trạm cố định trên mặt đất (FM12)",
+        "BBXX": "Bản tin SHIP từ trạm trên biển (FM13)",
+        "OOXX": "Bản tin SYNOP MOBIL từ trạm di động trên mặt đất (FM14)",
+    }.get(loai, "Không xác định loại bản tin")))
+    tom_tat["loai_ban_tin"] = loai
+
+    if loai != "AAXX":
+        ghi_chu.append("Công cụ hiện hỗ trợ chi tiết nhất cho bản tin AAXX (trạm cố định trên đất); "
+                        "với BBXX/OOXX một số nhóm đầu (vị trí tàu/trạm di động) có thể chưa được giải mã chi tiết.")
+
+    # Nhóm YYGGiw
+    if idx < len(tokens) and len(tokens[idx]) == 5:
+        g = tokens[idx]; idx += 1
+        yy, gg, iw = g[0:2], g[2:4], g[4]
+        iw_desc = {"0": "ước lượng, đơn vị m/s", "1": "đo bằng máy, đơn vị m/s",
+                   "2": "ước lượng, đơn vị knot", "3": "đo bằng máy, đơn vị knot"}.get(iw, "không xác định")
+        chi_tiet.append((g, f"Ngày {yy}, giờ quan trắc {gg}:00 UTC (giờ quốc tế - GQT); "
+                             f"tốc độ gió {iw_desc}"))
+        tom_tat["ngay"] = yy
+        tom_tat["gio_utc"] = gg
+        tom_tat["don_vi_gio_iw"] = iw
+
+    # Nhóm IIiii - số hiệu trạm
+    if idx < len(tokens) and tokens[idx].isdigit() and len(tokens[idx]) == 5:
+        g = tokens[idx]; idx += 1
+        ten_tram = ten_tram_synop(g)
+        if ten_tram:
+            chi_tiet.append((g, f"Số hiệu trạm WMO: {g} - Trạm {ten_tram}"))
+            tom_tat["tram"] = f"{ten_tram} ({g})"
+        else:
+            chi_tiet.append((g, f"Số hiệu trạm WMO: {g}"))
+            tom_tat["tram"] = g
+
+    # Nhóm iRixhVV
+    if idx < len(tokens) and len(tokens[idx]) == 5:
+        g = tokens[idx]; idx += 1
+        iR, ix, h, vv = g[0], g[1], g[2], g[3:5]
+        chi_tiet.append((g,
+            f"iR={iR} (cách phát báo giáng thủy - Bảng mã 1819); "
+            f"ix={ix} (kiểu trạm/thời tiết hiện tại - Bảng mã 1860); "
+            f"Độ cao chân mây thấp nhất h={h}: {BANG_h.get(h, 'không xác định')}; "
+            f"Tầm nhìn ngang VV={vv}: {mota_VV(vv)}"))
+        tom_tat["tam_nhin"] = mota_VV(vv)
+        tom_tat["do_cao_chan_may_thap_nhat"] = BANG_h.get(h, "?")
+
+    # Nhóm Nddff
+    if idx < len(tokens) and len(tokens[idx]) == 5:
+        g = tokens[idx]; idx += 1
+        n, dd, ff = g[0], g[1:3], g[3:5]
+        don_vi = "knot" if tom_tat.get("don_vi_gio_iw") in ("2", "3") else "m/s"
+        chi_tiet.append((g,
+            f"Tổng lượng mây N={n}: {BANG_N.get(n, 'không xác định')}; "
+            f"Hướng gió dd={dd}: {mota_dd(dd)}; Tốc độ gió ff={ff} {don_vi}"))
+        tom_tat["may_tong_quan"] = BANG_N.get(n, "?")
+        tom_tat["huong_gio"] = mota_dd(dd)
+        tom_tat["toc_do_gio"] = f"{int(ff)} {don_vi}" if ff.isdigit() else ff
+
+    # Các nhóm còn lại của Đoạn 1, Đoạn 2 (222), Đoạn 3 (333), Đoạn 4 (444), Đoạn 5 (555)
+    doan_hien_tai = 1
+    while idx < len(tokens):
+        g = tokens[idx]; idx += 1
+
+        if g in ("222", "333", "444", "555", "999"):
+            doan_hien_tai = int(g[0])
+            chi_tiet.append((g, f"--- Bắt đầu Đoạn {doan_hien_tai} ---"))
+            continue
+
+        if g == "80000":
+            chi_tiet.append((g, "Nhóm báo hiệu bắt đầu các nhóm bổ sung theo quy định khu vực/quốc gia "
+                                 "(nội dung tiếp theo cần tra cứu quy ước riêng, chưa giải mã chi tiết)."))
+            continue
+
+        try:
+            if doan_hien_tai == 1:
+                dg = _giai_ma_doan1(g, tom_tat)
+            elif doan_hien_tai == 3:
+                dg = _giai_ma_doan3(g, tom_tat)
+            else:
+                dg = None
+        except Exception:
+            dg = None
+
+        if dg:
+            chi_tiet.append((g, dg))
+        else:
+            chi_tiet.append((g, "Nhóm chưa được hỗ trợ giải mã chi tiết trong công cụ này (cần tra Phụ lục 2 - QCVN 16:2008/BTNMT)."))
+
+    return tom_tat, chi_tiet, ghi_chu
+
+
+def _giai_ma_doan1(g, tom_tat):
+    d0 = g[0]
+    if d0 == '1' and len(g) == 5:
+        sn, ttt = g[1], g[2:5]
+        val = _sn_val(sn, int(ttt) / 10.0)
+        tom_tat["nhiet_do_khong_khi"] = f"{val:.1f}°C"
+        return f"Nhiệt độ không khí = {val:.1f}°C"
+    if d0 == '2' and len(g) == 5:
+        sn, tdtdtd = g[1], g[2:5]
+        if sn == '9':
+            return f"Độ ẩm tương đối = {int(tdtdtd)}%"
+        val = _sn_val(sn, int(tdtdtd) / 10.0)
+        tom_tat["diem_suong"] = f"{val:.1f}°C"
+        return f"Nhiệt độ điểm sương = {val:.1f}°C"
+    if d0 == '3' and len(g) == 5:
+        pppp = g[1:5]
+        p = int(pppp) / 10.0
+        if p < 500: p += 1000
+        tom_tat["khi_ap_tram"] = f"{p:.1f} hPa"
+        return f"Khí áp mực trạm = {p:.1f} hPa"
+    if d0 == '4' and len(g) == 5:
+        pppp = g[1:5]
+        p = int(pppp) / 10.0
+        if p < 500: p += 1000
+        tom_tat["khi_ap_mbien"] = f"{p:.1f} hPa"
+        return f"Khí áp quy về mực nước biển (QNH tương đương) = {p:.1f} hPa"
+    if d0 == '5' and len(g) == 5:
+        a, ppp = g[1], g[2:5]
+        thaydoi = int(ppp) / 10.0
+        tom_tat["xu_the_khi_ap"] = f"{BANG_a.get(a,'?')}, biến thiên {thaydoi:.1f} hPa/3h"
+        return f"Xu thế khí áp 3 giờ qua: {BANG_a.get(a, 'không xác định')}; biến thiên = {thaydoi:.1f} hPa"
+    if d0 == '6' and len(g) == 5:
+        rrr, tr = g[1:4], g[4]
+        val, mota = mota_RRR(rrr)
+        khoang = BANG_tR.get(tr, "?")
+        tom_tat["giang_thuy"] = f"{mota} (trong {khoang})"
+        return f"Lượng giáng thủy trong {khoang} qua: {mota}"
+    if d0 == '8' and len(g) == 5:
+        nh, cl, cm, ch = g[1], g[2], g[3], g[4]
+        tom_tat["may_ha_trung_cao"] = (f"CL: {BANG_CL.get(cl,'?')}; CM: {BANG_CM.get(cm,'?')}; "
+                                        f"CH: {BANG_CH.get(ch,'?')}")
+        return (f"Lượng mây Nh={nh}: {BANG_N.get(nh, '?')} | "
+                f"Mây tầng thấp CL={cl}: {BANG_CL.get(cl, '?')} | "
+                f"Mây tầng trung CM={cm}: {BANG_CM.get(cm, '?')} | "
+                f"Mây tầng cao CH={ch}: {BANG_CH.get(ch, '?')}")
+    if d0 == '9' and len(g) == 5:
+        gg, gg2 = g[1:3], g[3:5]
+        return f"Giờ quan trắc chính xác: {gg}:{gg2} UTC"
+    return None
+
+
+def _giai_ma_doan3(g, tom_tat):
+    d0 = g[0]
+    if d0 == '0' and len(g) == 5:
+        e, sn, tgtg = g[1], g[2], g[3:5]
+        if e == '/':
+            return "Nhóm 0/ThờiTiết: mặt đất có tuyết/băng phủ (không báo trạng thái mặt đất trần)."
+        val = _sn_val(sn, int(tgtg))
+        return (f"Trạng thái mặt đất lúc quan trắc: {BANG_E.get(e,'?')}; "
+                f"nhiệt độ mặt đất lúc quan trắc = {val}°C")
+    if d0 == '1' and len(g) == 5:
+        sn, txtxtx = g[1], g[2:5]
+        val = _sn_val(sn, int(txtxtx) / 10.0)
+        return f"Nhiệt độ không khí tối cao (12 giờ qua, ban ngày) = {val:.1f}°C"
+    if d0 == '2' and len(g) == 5:
+        sn, tntntn = g[1], g[2:5]
+        val = _sn_val(sn, int(tntntn) / 10.0)
+        tom_tat["nhiet_do_toi_thap"] = f"{val:.1f}°C"
+        return f"Nhiệt độ không khí tối thấp (12 giờ qua, ban đêm) = {val:.1f}°C"
+    if d0 == '3' and len(g) == 5:
+        # Quy ước Việt Nam: nhóm 3Ejjj có dạng 3/SnTgTg
+        if g[1] == '/':
+            sn, tgtg = g[2], g[3:5]
+            val = _sn_val(sn, int(tgtg))
+            tom_tat["nhiet_do_toi_thap_mat_dat"] = f"{val}°C"
+            return f"[Quy ước VN] Nhiệt độ mặt đất tối thấp đêm qua = {val}°C"
+        return "Nhóm 3Ejjj (trạng thái mặt đất có tuyết/băng, khu vực khác VN) - chưa hỗ trợ giải mã chi tiết."
+    if d0 == '5' and len(g) == 5:
+        two = g[0:2]
+        if two == '59':
+            p24 = int(g[2:5]) / 10.0
+            return f"Biến áp mặt đất 24 giờ qua = -{p24:.1f} hPa (giảm so với 24 giờ trước)"
+        if two == '58':
+            p24 = int(g[2:5]) / 10.0
+            return f"Biến áp mặt đất 24 giờ qua = +{p24:.1f} hPa (tăng so với 24 giờ trước)"
+        if g[1] == '5':
+            sss = g[2:5]
+            return f"Tổng số giờ nắng trong ngày = {int(sss)/10:.1f} giờ"
+        return "Nhóm bổ sung 5j1j2j3j4 (Bảng mã 2061) - chưa hỗ trợ giải mã chi tiết cho biến thể này."
+    if d0 == '6' and len(g) == 5:
+        rrr, tr = g[1:4], g[4]
+        val, mota = mota_RRR(rrr)
+        khoang = BANG_tR.get(tr, "?")
+        return f"[Đoạn 3] Lượng giáng thủy trong {khoang} qua: {mota}"
+    if d0 == '7' and len(g) == 5:
+        r24 = g[1:5]
+        if r24 == "0000": return "Lượng mưa 24 giờ trước: không có mưa"
+        if r24 == "9999": return "Lượng mưa 24 giờ trước: dạng giọt (< 0,1mm)"
+        if r24 == "////": return "Lượng mưa 24 giờ trước: không đo được"
+        return f"Lượng mưa 24 giờ trước (tính đến bản tin 12 GQT) = {int(r24)/10:.1f} mm"
+    if d0 == '8' and len(g) == 5:
+        ns, c, hs = g[1], g[2], g[3:5]
+        if ns == '9' and g[2] == '/':
+            return f"Bầu trời bị che khuất; tầm nhìn thẳng đứng ≈ {mota_hshs(g[3:5])}"
+        return (f"Lớp/khối mây: lượng Ns={ns} ({BANG_N.get(ns,'?')}), "
+                f"loại C={c} ({BANG_C.get(c,'?')}), độ cao chân mây ≈ {mota_hshs(hs)}")
+    return None
+
+
+# ------------------------------------------------------------------
+# METAR / SPECI
+# ------------------------------------------------------------------
+
+WW_PHENOMENA = {
+    "DZ": "mưa phùn", "RA": "mưa", "SN": "tuyết", "SG": "hạt tuyết", "IC": "kim băng",
+    "PL": "mưa đá nhỏ", "GR": "mưa đá", "GS": "mưa đá nhỏ/tuyết viên", "UP": "giáng thủy chưa xác định",
+    "BR": "sương mù nhẹ (mù)", "FG": "sương mù", "FU": "khói", "VA": "tro núi lửa",
+    "DU": "bụi lan rộng", "SA": "cát", "HZ": "mù khô (haze)", "PO": "lốc bụi/cát nhỏ",
+    "SQ": "gió giật (squall)", "FC": "vòi rồng/lốc xoáy", "SS": "bão cát", "DS": "bão bụi",
+    "TS": "dông",
+}
+WW_DESCRIPTOR = {
+    "MI": "mỏng/nông", "PR": "cục bộ", "BC": "từng mảng", "DR": "cuốn thấp", "BL": "cuốn cao",
+    "SH": "mưa rào", "TS": "kèm dông", "FZ": "đóng băng",
+}
+WW_INTENSITY = {"-": "nhẹ", "+": "mạnh", "VC": "lân cận sân bay"}
+
+
+def _giai_ma_ww(code):
+    m = re.match(r"^(-|\+|VC)?((?:MI|PR|BC|DR|BL|SH|TS|FZ){0,2})((?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PO|SQ|FC|SS|DS){1,3})$", code)
+    if not m:
+        return None
+    intensity, desc, phen = m.groups()
+    mo_ta_chinh = []
+    if desc:
+        for i in range(0, len(desc), 2):
+            mo_ta_chinh.append(WW_DESCRIPTOR.get(desc[i:i+2], desc[i:i+2]))
+    for i in range(0, len(phen), 2):
+        mo_ta_chinh.append(WW_PHENOMENA.get(phen[i:i+2], phen[i:i+2]))
+    cau = " ".join(mo_ta_chinh)
+    if intensity in ("-", "+"):
+        cau = f"{cau} ({WW_INTENSITY[intensity]})"
+    elif intensity == "VC":
+        cau = f"{cau} (ở lân cận sân bay)"
+    return cau
+
+
+def decode_metar(raw):
+    text = raw.strip()
+    text = text.rstrip("=")
+    tokens = [t for t in re.split(r"\s+", text) if t]
+    if not tokens:
+        return {}, [], ["Bản tin trống."]
+
+    chi_tiet = []
+    ghi_chu = []
+    tom_tat = {}
+    idx = 0
+
+    loai = tokens[idx]
+    if loai in ("METAR", "SPECI"):
+        chi_tiet.append((loai, "Bản tin thời tiết sân bay định kỳ (METAR)" if loai == "METAR"
+                          else "Bản tin thời tiết sân bay đặc biệt chọn lọc (SPECI)"))
+        idx += 1
+    else:
+        ghi_chu.append("Không thấy chỉ báo METAR/SPECI ở đầu bản tin, vẫn thử giải mã phần còn lại.")
+
+    # Trạm
+    if idx < len(tokens) and re.match(r"^[A-Z]{4}$", tokens[idx]):
+        icao = tokens[idx]; idx += 1
+        ten = VN_AIRPORTS.get(icao)
+        if ten:
+            chi_tiet.append((icao, f"Sân bay: {ten} (chỉ số ICAO {icao})"))
+            tom_tat["san_bay"] = f"{ten} ({icao})"
+        else:
+            chi_tiet.append((icao, f"Chỉ số ICAO của sân bay: {icao}"))
+            tom_tat["san_bay"] = icao
+
+    # AUTO
+    if idx < len(tokens) and tokens[idx] == "AUTO":
+        chi_tiet.append(("AUTO", "Bản tin từ trạm quan trắc tự động, không có người can thiệp"))
+        idx += 1
+
+    # Ngày giờ
+    if idx < len(tokens) and re.match(r"^\d{6}Z$", tokens[idx]):
+        g = tokens[idx]; idx += 1
+        dd, hh, mm = g[0:2], g[2:4], g[4:6]
+        chi_tiet.append((g, f"Ngày {dd}, giờ quan trắc {hh}:{mm} UTC"))
+        tom_tat["ngay"] = dd
+        tom_tat["gio_utc"] = f"{hh}:{mm}"
+
+    # Gió
+    if idx < len(tokens):
+        m = re.match(r"^(VRB|\d{3})(\d{2,3})(?:G(\d{2,3}))?(KT|MPS|KMH)$", tokens[idx])
+        if m:
+            g = tokens[idx]; idx += 1
+            ddd, ff, gg, unit = m.groups()
+            if ddd == "VRB":
+                huong = "biến đổi"
+            elif ddd == "000" and int(ff) == 0:
+                huong = None
+            else:
+                huong = f"{ddd}°"
+            if huong is None:
+                mota = "Lặng gió (không có gió)"
+            else:
+                mota = f"Hướng gió {huong}, tốc độ {int(ff)} {unit}"
+            if gg: mota += f", giật {int(gg)} {unit}"
+            chi_tiet.append((g, mota))
+            tom_tat["gio"] = mota
+
+    # Hướng gió biến đổi (dnVdx)
+    if idx < len(tokens) and re.match(r"^\d{3}V\d{3}$", tokens[idx]):
+        g = tokens[idx]; idx += 1
+        d1, d2 = g.split("V")
+        chi_tiet.append((g, f"Hướng gió dao động giữa {d1}° và {d2}°"))
+
+    # Tầm nhìn hoặc CAVOK
+    if idx < len(tokens):
+        if tokens[idx] == "CAVOK":
+            g = tokens[idx]; idx += 1
+            chi_tiet.append((g, "CAVOK: Tầm nhìn ≥10km, không mây dưới 1500m (không Cb), "
+                                 "không hiện tượng thời tiết đáng chú ý"))
+            tom_tat["tam_nhin"] = "≥ 10 km (CAVOK)"
+        elif re.match(r"^\d{4}$", tokens[idx]):
+            g = tokens[idx]; idx += 1
+            if g == "9999":
+                mota = "≥ 10 km"
+            else:
+                mota = f"{int(g)} m"
+            chi_tiet.append((g, f"Tầm nhìn ngang phổ biến: {mota}"))
+            tom_tat["tam_nhin"] = mota
+
+    # RVR (bỏ qua chi tiết, chỉ ghi nhận)
+    while idx < len(tokens) and re.match(r"^R\d{2}[LCR]?/", tokens[idx]):
+        g = tokens[idx]; idx += 1
+        chi_tiet.append((g, "Tầm nhìn đường băng (RVR) - chưa hỗ trợ giải mã chi tiết"))
+
+    # Hiện tượng thời tiết (0-3 nhóm)
+    while idx < len(tokens):
+        mota_ww = _giai_ma_ww(tokens[idx])
+        if mota_ww is None:
+            break
+        g = tokens[idx]; idx += 1
+        chi_tiet.append((g, f"Hiện tượng thời tiết: {mota_ww}"))
+        tom_tat.setdefault("hien_tuong_thoi_tiet", []).append(mota_ww)
+
+    # Mây
+    while idx < len(tokens):
+        g = tokens[idx]
+        if g in ("SKC", "NSC", "NCD", "CLR"):
+            idx += 1
+            mota = {"SKC": "Trời quang (Sky Clear)", "NSC": "Không có mây đáng chú ý (NSC)",
+                    "NCD": "Không quan trắc được mây (trạm tự động, NCD)",
+                    "CLR": "Trời quang (CLR)"}[g]
+            chi_tiet.append((g, mota))
+            tom_tat.setdefault("may", []).append(mota)
+            continue
+        m = re.match(r"^(FEW|SCT|BKN|OVC)(\d{3})(CB|TCU)?$", g)
+        if m:
+            idx += 1
+            amt, hgt, extra = m.groups()
+            amt_desc = {"FEW": "ít (1-2/8)", "SCT": "rải rác (3-4/8)",
+                        "BKN": "nhiều (5-7/8)", "OVC": "phủ kín (8/8)"}[amt]
+            do_cao = int(hgt) * 100
+            extra_desc = ""
+            if extra == "CB": extra_desc = " - mây vũ tích (Cb)"
+            elif extra == "TCU": extra_desc = " - mây tích phát triển mạnh (TCU)"
+            mota = f"Mây {amt_desc} ở độ cao chân mây ~{do_cao} ft{extra_desc}"
+            chi_tiet.append((g, mota))
+            tom_tat.setdefault("may", []).append(mota)
+            continue
+        m = re.match(r"^VV(\d{3}|///)$", g)
+        if m:
+            idx += 1
+            hs = m.group(1)
+            mota = f"Tầm nhìn thẳng đứng ~{int(hs)*100} ft (trời bị che khuất)" if hs != "///" else "Tầm nhìn thẳng đứng: không xác định"
+            chi_tiet.append((g, mota))
+            continue
+        break
+
+    # Nhiệt độ / điểm sương
+    if idx < len(tokens):
+        m = re.match(r"^(M?\d{2})/(M?\d{2})$", tokens[idx])
+        if m:
+            g = tokens[idx]; idx += 1
+            t_raw, td_raw = m.groups()
+            t = -int(t_raw[1:]) if t_raw.startswith("M") else int(t_raw)
+            td = -int(td_raw[1:]) if td_raw.startswith("M") else int(td_raw)
+            chi_tiet.append((g, f"Nhiệt độ không khí = {t}°C, nhiệt độ điểm sương = {td}°C"))
+            tom_tat["nhiet_do"] = f"{t}°C"
+            tom_tat["diem_suong"] = f"{td}°C"
+
+    # Khí áp QNH
+    if idx < len(tokens):
+        m = re.match(r"^Q(\d{4})$", tokens[idx])
+        if m:
+            g = tokens[idx]; idx += 1
+            chi_tiet.append((g, f"Khí áp QNH = {int(m.group(1))} hPa"))
+            tom_tat["khi_ap_qnh"] = f"{int(m.group(1))} hPa"
+        else:
+            m = re.match(r"^A(\d{4})$", tokens[idx])
+            if m:
+                g = tokens[idx]; idx += 1
+                val = int(m.group(1)) / 100.0
+                chi_tiet.append((g, f"Khí áp QNH = {val:.2f} inHg"))
+                tom_tat["khi_ap_qnh"] = f"{val:.2f} inHg"
+
+    # Các phần còn lại: RExx, xu thế (NOSIG/BECMG/TEMPO), RMK...
+    con_lai = tokens[idx:]
+    if con_lai:
+        rest_str = " ".join(con_lai)
+        if "NOSIG" in con_lai:
+            chi_tiet.append(("NOSIG", "Không dự báo có thay đổi đáng kể trong 2 giờ tới"))
+            tom_tat["xu_the"] = "Không đổi (NOSIG)"
+            con_lai.remove("NOSIG")
+        if con_lai and con_lai[0] in ("BECMG", "TEMPO"):
+            chi_tiet.append((" ".join(con_lai), f"Dự báo xu thế ({con_lai[0]}) - chi tiết cần tra cứu thêm"))
+            tom_tat["xu_the"] = f"{con_lai[0]} (xem nhóm gốc)"
+            con_lai = []
+        if con_lai:
+            chi_tiet.append((" ".join(con_lai), "Phần còn lại của bản tin - chưa hỗ trợ giải mã chi tiết"))
+
+    return tom_tat, chi_tiet, ghi_chu
+
+
+# ==============================================================================
 # 4. MAIN APP
 # ==============================================================================
 def main():
@@ -750,6 +1428,10 @@ def main():
         btn_run_interpol = False
         custom_bounds_dict = None
 
+        # ---- Biến mới cho Dịch mã điện ----
+        decode_input_text = ""
+        btn_run_decode = False
+
         use_storm_bounds = False
         storm_bounds_dict = None
         show_grid = False
@@ -767,7 +1449,7 @@ def main():
 
         if topic == "Dữ liệu quan trắc":
             if st.session_state['logged_in']:
-                obs_mode = st.radio("Chọn nguồn dữ liệu:", ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ", "Nội suy lượng mưa", "Nội suy linh tinh"])
+                obs_mode = st.radio("Chọn nguồn dữ liệu:", ["Thời tiết (WeatherObs)", "Gió tự động (KTTV)", "Nội suy nhiệt độ", "Nội suy lượng mưa", "Nội suy linh tinh", "Dịch mã điện"])
 
                 if obs_mode in ["Nội suy nhiệt độ", "Nội suy lượng mưa"]:
                     st.markdown("---")
@@ -895,6 +1577,18 @@ def main():
 
                     st.markdown("---")
                     btn_run_interpol = st.button("🚀 VẼ BẢN ĐỒ TƯƠNG TÁC", type="primary", use_container_width=True)
+
+                elif obs_mode == "Dịch mã điện":
+                    st.markdown("---")
+                    st.markdown("### 🛠️ DỊCH MÃ ĐIỆN (SYNOP / METAR)")
+                    st.caption("Dán một hoặc nhiều bản tin SYNOP (AAXX...) hoặc METAR/SPECI, mỗi bản tin một dòng.")
+                    decode_input_text = st.text_area(
+                        "Nội dung bản tin:",
+                        value="AAXX 06001 48823 12497 71602 10287 20247 30017 40020 53005 60022 85808 333 01028 20275 3/026 59002 82894 85696\nMETAR VVDB 060200Z VRB02KT 9999 FEW007 SCT024 OVC030 25/24 Q1007 NOSIG=",
+                        height=180,
+                        key="decode_input_text"
+                    )
+                    btn_run_decode = st.button("🔎 GIẢI MÃ", type="primary", use_container_width=True)
 
                 st.markdown("---")
                 if st.button("🔒 Đăng xuất", key="logout_obs_sidebar"):
@@ -1122,6 +1816,81 @@ def main():
                                         st.write(""); st.write("")
                                         st.download_button(label=f"⬇️ Tải ảnh Tỉnh {final_dl_prov} ({fmt_prov.upper()})", data=buf_prov.getvalue(), file_name=f"ban_do_{final_dl_prov}.{fmt_prov}", mime=f"image/{fmt_prov}" if fmt_prov=="png" else "application/pdf", key="dl_btn_prov")
                 else: st.info("👈 Vui lòng cấu hình dữ liệu, chọn màu, ngưỡng, tọa độ và nhấn 'VẼ BẢN ĐỒ TƯƠNG TÁC'.")
+
+            elif obs_mode == "Dịch mã điện":
+                st.markdown("## 📡 Dịch mã điện Quan trắc Bề mặt (SYNOP / METAR)")
+                st.caption("Công cụ giải mã dựa theo QCVN 16:2008/BTNMT - Quy chuẩn kỹ thuật quốc gia về Mã luật khí tượng bề mặt. "
+                           "Dán bản tin ở thanh menu bên trái, mỗi bản tin một dòng, rồi bấm 'GIẢI MÃ'.")
+                if btn_run_decode:
+                    raw_lines = [ln.strip() for ln in decode_input_text.splitlines() if ln.strip()]
+                    if not raw_lines:
+                        st.warning("Vui lòng dán ít nhất một bản tin để giải mã.")
+                    for i, line in enumerate(raw_lines):
+                        first_word = line.split()[0] if line.split() else ""
+                        st.markdown("---")
+                        st.markdown(f"#### 📨 Bản tin #{i+1}")
+                        st.code(line, language=None)
+
+                        if first_word in ("AAXX", "BBXX", "OOXX"):
+                            tom_tat, chi_tiet, ghi_chu = decode_synop(line)
+                            if tom_tat:
+                                hien_thi = [
+                                    ("Trạm", tom_tat.get("tram")),
+                                    ("Ngày / Giờ (UTC)", f"{tom_tat.get('ngay','?')} / {tom_tat.get('gio_utc','?')}:00" if tom_tat.get("ngay") else None),
+                                    ("Nhiệt độ", tom_tat.get("nhiet_do_khong_khi")),
+                                    ("Điểm sương", tom_tat.get("diem_suong")),
+                                    ("Khí áp mực biển", tom_tat.get("khi_ap_mbien")),
+                                    ("Khí áp mực trạm", tom_tat.get("khi_ap_tram")),
+                                    ("Hướng gió", tom_tat.get("huong_gio")),
+                                    ("Tốc độ gió", tom_tat.get("toc_do_gio")),
+                                    ("Tầm nhìn", tom_tat.get("tam_nhin")),
+                                    ("Lượng mây tổng quan", tom_tat.get("may_tong_quan")),
+                                    ("Giáng thủy", tom_tat.get("giang_thuy")),
+                                    ("Xu thế khí áp", tom_tat.get("xu_the_khi_ap")),
+                                ]
+                                hien_thi = [(l, v) for l, v in hien_thi if v]
+                                if hien_thi:
+                                    cols = st.columns(4)
+                                    for j, (label, val) in enumerate(hien_thi):
+                                        cols[j % 4].metric(label, val)
+                            for gcx in ghi_chu:
+                                st.info(gcx)
+                            with st.expander("📋 Xem giải mã chi tiết từng nhóm số", expanded=True):
+                                df_detail = pd.DataFrame(chi_tiet, columns=["Nhóm điện", "Diễn giải"])
+                                st.dataframe(df_detail, use_container_width=True, hide_index=True)
+
+                        elif first_word in ("METAR", "SPECI"):
+                            tom_tat, chi_tiet, ghi_chu = decode_metar(line)
+                            if tom_tat:
+                                hien_thi = [
+                                    ("Sân bay", tom_tat.get("san_bay")),
+                                    ("Ngày / Giờ (UTC)", f"{tom_tat.get('ngay','?')} / {tom_tat.get('gio_utc','?')}" if tom_tat.get("ngay") else None),
+                                    ("Gió", tom_tat.get("gio")),
+                                    ("Tầm nhìn", tom_tat.get("tam_nhin")),
+                                    ("Nhiệt độ", tom_tat.get("nhiet_do")),
+                                    ("Điểm sương", tom_tat.get("diem_suong")),
+                                    ("Khí áp QNH", tom_tat.get("khi_ap_qnh")),
+                                    ("Xu thế", tom_tat.get("xu_the")),
+                                ]
+                                hien_thi = [(l, v) for l, v in hien_thi if v]
+                                if hien_thi:
+                                    cols = st.columns(4)
+                                    for j, (label, val) in enumerate(hien_thi):
+                                        cols[j % 4].metric(label, val)
+                                if tom_tat.get("may"):
+                                    st.markdown("**Mây:** " + "; ".join(tom_tat["may"]))
+                                if tom_tat.get("hien_tuong_thoi_tiet"):
+                                    st.markdown("**Hiện tượng thời tiết:** " + "; ".join(tom_tat["hien_tuong_thoi_tiet"]))
+                            for gcx in ghi_chu:
+                                st.info(gcx)
+                            with st.expander("📋 Xem giải mã chi tiết từng nhóm số", expanded=True):
+                                df_detail = pd.DataFrame(chi_tiet, columns=["Nhóm điện", "Diễn giải"])
+                                st.dataframe(df_detail, use_container_width=True, hide_index=True)
+                        else:
+                            st.error(f"Không nhận diện được loại bản tin (cần bắt đầu bằng AAXX/BBXX/OOXX cho SYNOP, hoặc METAR/SPECI cho bản tin sân bay). "
+                                     f"Từ đầu tiên đọc được: '{first_word}'")
+                else:
+                    st.info("👈 Dán nội dung bản tin ở thanh menu bên trái rồi nhấn 'GIẢI MÃ'.")
 
     elif topic == "Dự báo điểm (KMA)":
         if not st.session_state['logged_in']:
