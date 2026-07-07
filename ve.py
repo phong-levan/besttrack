@@ -749,6 +749,13 @@ BANG_N = {
     '/': "Không quan trắc được lượng mây",
 }
 
+# Bảng mã 2700 - dạng rút gọn (phân số) dùng cho bảng xuất Excel
+BANG_N_NGAN = {
+    '0': "0/10", '1': "1/10", '2': "2-3/10", '3': "4/10", '4': "5/10",
+    '5': "6/10", '6': "7-8/10", '7': "9/10", '8': "10/10",
+    '9': "Che khuất", '/': "Không quan trắc",
+}
+
 # Bảng mã 1600 - h: độ cao chân mây thấp nhất (đơn giản hoá)
 BANG_h = {
     '0': "0 - 50 m", '1': "50 - 100 m", '2': "100 - 200 m", '3': "200 - 300 m",
@@ -767,6 +774,15 @@ BANG_a = {
     '5': "Giảm rồi tăng (khí áp hiện tại bằng hoặc thấp hơn 3 giờ trước)",
     '6': "Giảm rồi giữ nguyên, hoặc giảm chậm dần (khí áp hiện tại thấp hơn 3 giờ trước)",
     '7': "Giảm đều hoặc không đều",
+    '8': "Giữ nguyên hoặc tăng rồi giảm; hoặc giảm nhanh dần",
+}
+
+# Bảng mã 0200 - dạng rút gọn (không kèm chú giải trong ngoặc) dùng cho bảng xuất Excel
+BANG_a_NGAN = {
+    '0': "Tăng rồi giảm", '1': "Tăng rồi giữ nguyên, hoặc tăng chậm dần",
+    '2': "Tăng đều hoặc không đều", '3': "Giảm hoặc giữ nguyên rồi tăng; hoặc tăng nhanh dần",
+    '4': "Giữ nguyên", '5': "Giảm rồi tăng",
+    '6': "Giảm rồi giữ nguyên, hoặc giảm chậm dần", '7': "Giảm đều hoặc không đều",
     '8': "Giữ nguyên hoặc tăng rồi giảm; hoặc giảm nhanh dần",
 }
 
@@ -870,7 +886,25 @@ def mota_VV(vv_str):
     if v in table_90_99: return table_90_99[v]
     return "Không dùng"
 
-# Bảng mã 1677 - hshs: độ cao chân lớp/khối mây (chi tiết hơn h)
+# Bảng mã 4377 - VV: tầm nhìn ngang, dạng số (km) dùng cho bảng xuất Excel
+def mota_VV_km(vv_str):
+    try:
+        v = int(vv_str)
+    except Exception:
+        return None
+    if 0 <= v <= 50: return round(v / 10.0, 1)
+    if v == 56: return 6.0
+    if 57 <= v <= 80:
+        table_57_80 = {57:7,58:8,59:9,60:10,61:11,62:12,63:13,64:14,65:15,66:16,67:17,68:18,69:19,
+                       70:20,71:21,72:22,73:23,74:24,75:25,76:26,77:27,78:28,79:29,80:30}
+        return float(table_57_80.get(v)) if v in table_57_80 else None
+    table_81_89 = {81:35,82:40,83:45,84:50,85:55,86:60,87:65,88:70,89:70}
+    if v in table_81_89: return float(table_81_89[v])
+    table_90_99 = {90:0.05,91:0.05,92:0.2,93:0.5,94:1.0,95:2.0,96:4.0,97:10.0,98:20.0,99:50.0}
+    if v in table_90_99: return table_90_99[v]
+    return None
+
+
 def mota_hshs(code_str):
     try:
         v = int(code_str)
@@ -1006,6 +1040,11 @@ def decode_synop(raw):
         tom_tat["ngay"] = yy
         tom_tat["gio_utc"] = gg
         tom_tat["don_vi_gio_iw"] = iw
+        try:
+            tom_tat["ngay_so"] = int(yy)
+            tom_tat["gio_so"] = int(gg)
+        except Exception:
+            pass
 
     # Nhóm IIiii - số hiệu trạm
     if idx < len(tokens) and tokens[idx].isdigit() and len(tokens[idx]) == 5:
@@ -1014,9 +1053,11 @@ def decode_synop(raw):
         if ten_tram:
             chi_tiet.append((g, f"Số hiệu trạm WMO: {g} - Trạm {ten_tram}"))
             tom_tat["tram"] = f"{ten_tram} ({g})"
+            tom_tat["tram_ten"] = ten_tram
         else:
             chi_tiet.append((g, f"Số hiệu trạm WMO: {g}"))
             tom_tat["tram"] = g
+            tom_tat["tram_ten"] = g
 
     # Nhóm iRixhVV
     if idx < len(tokens) and len(tokens[idx]) == 5:
@@ -1028,6 +1069,7 @@ def decode_synop(raw):
             f"Độ cao chân mây thấp nhất h={h}: {BANG_h.get(h, 'không xác định')}; "
             f"Tầm nhìn ngang VV={vv}: {mota_VV(vv)}"))
         tom_tat["tam_nhin"] = mota_VV(vv)
+        tom_tat["tam_nhin_so"] = mota_VV_km(vv)
         tom_tat["do_cao_chan_may_thap_nhat"] = BANG_h.get(h, "?")
 
     # Nhóm Nddff
@@ -1039,8 +1081,13 @@ def decode_synop(raw):
             f"Tổng lượng mây N={n}: {BANG_N.get(n, 'không xác định')}; "
             f"Hướng gió dd={dd}: {mota_dd(dd)}; Tốc độ gió ff={ff} {don_vi}"))
         tom_tat["may_tong_quan"] = BANG_N.get(n, "?")
+        tom_tat["may_tong_quan_ngan"] = BANG_N_NGAN.get(n, "")
         tom_tat["huong_gio"] = mota_dd(dd)
         tom_tat["toc_do_gio"] = f"{int(ff)} {don_vi}" if ff.isdigit() else ff
+        if dd.isdigit() and dd not in ("00", "99"):
+            tom_tat["huong_gio_so"] = int(dd)
+        if ff.isdigit():
+            tom_tat["toc_do_gio_so"] = int(ff)
 
     # Các nhóm còn lại của Đoạn 1, Đoạn 2 (222), Đoạn 3 (333), Đoạn 4 (444), Đoạn 5 (555)
     doan_hien_tai = 1
@@ -1081,6 +1128,7 @@ def _giai_ma_doan1(g, tom_tat):
         sn, ttt = g[1], g[2:5]
         val = _sn_val(sn, int(ttt) / 10.0)
         tom_tat["nhiet_do_khong_khi"] = f"{val:.1f}°C"
+        tom_tat["nhiet_do_so"] = val
         return f"Nhiệt độ không khí = {val:.1f}°C"
     if d0 == '2' and len(g) == 5:
         sn, tdtdtd = g[1], g[2:5]
@@ -1088,29 +1136,35 @@ def _giai_ma_doan1(g, tom_tat):
             return f"Độ ẩm tương đối = {int(tdtdtd)}%"
         val = _sn_val(sn, int(tdtdtd) / 10.0)
         tom_tat["diem_suong"] = f"{val:.1f}°C"
+        tom_tat["diem_suong_so"] = val
         return f"Nhiệt độ điểm sương = {val:.1f}°C"
     if d0 == '3' and len(g) == 5:
         pppp = g[1:5]
         p = int(pppp) / 10.0
         if p < 500: p += 1000
         tom_tat["khi_ap_tram"] = f"{p:.1f} hPa"
+        tom_tat["khi_ap_tram_so"] = p
         return f"Khí áp mực trạm = {p:.1f} hPa"
     if d0 == '4' and len(g) == 5:
         pppp = g[1:5]
         p = int(pppp) / 10.0
         if p < 500: p += 1000
         tom_tat["khi_ap_mbien"] = f"{p:.1f} hPa"
+        tom_tat["khi_ap_mbien_so"] = p
         return f"Khí áp quy về mực nước biển (QNH tương đương) = {p:.1f} hPa"
     if d0 == '5' and len(g) == 5:
         a, ppp = g[1], g[2:5]
         thaydoi = int(ppp) / 10.0
         tom_tat["xu_the_khi_ap"] = f"{BANG_a.get(a,'?')}, biến thiên {thaydoi:.1f} hPa/3h"
+        tom_tat["xu_the_khi_ap_ngan"] = BANG_a_NGAN.get(a, "")
         return f"Xu thế khí áp 3 giờ qua: {BANG_a.get(a, 'không xác định')}; biến thiên = {thaydoi:.1f} hPa"
     if d0 == '6' and len(g) == 5:
         rrr, tr = g[1:4], g[4]
         val, mota = mota_RRR(rrr)
         khoang = BANG_tR.get(tr, "?")
         tom_tat["giang_thuy"] = f"{mota} (trong {khoang})"
+        if val is not None:
+            tom_tat["mua_so"] = val
         return f"Lượng giáng thủy trong {khoang} qua: {mota}"
     if d0 == '8' and len(g) == 5:
         nh, cl, cm, ch = g[1], g[2], g[3], g[4]
@@ -1181,6 +1235,27 @@ def _giai_ma_doan3(g, tom_tat):
             return f"Bầu trời bị che khuất; tầm nhìn thẳng đứng ≈ {mota_hshs(g[3:5])}"
         return (f"Lớp/khối mây: lượng Ns={ns} ({BANG_N.get(ns,'?')}), "
                 f"loại C={c} ({BANG_C.get(c,'?')}), độ cao chân mây ≈ {mota_hshs(hs)}")
+    if d0 == '9' and len(g) == 5:
+        sub3 = g[0:3]
+        if sub3 == '911':
+            ff = g[3:5]
+            if ff.isdigit():
+                tom_tat["gio_manh_nhat_911"] = int(ff)
+            return f"Nhóm 911ff: Tốc độ gió giật mạnh nhất tức thời (≥16 m/s) trong kỳ quan trắc = {ff} m/s"
+        if sub3 == '915':
+            dd = g[3:5]
+            if dd.isdigit():
+                tom_tat["huong_gio_manh_nhat_915"] = int(dd)
+            return f"Nhóm 915dd: Hướng gió ứng với tốc độ gió giật mạnh nhất (911ff) = mã {dd} ({mota_dd(dd)})"
+        if sub3 == '919':
+            return "Nhóm 919MwDa: Báo hiện tượng vòi rồng/lốc bụi - chưa hỗ trợ giải mã chi tiết."
+        if sub3 == '926':
+            return "Nhóm 926S0i0: Báo hiện tượng sương muối/giáng thủy nhuốm màu - chưa hỗ trợ giải mã chi tiết."
+        if sub3 == '939':
+            nn = g[3:5]
+            return f"Nhóm 939nn: Đường kính hạt mưa đá lớn nhất ≈ {nn} mm"
+        if sub3 in ('960', '961'):
+            return "Nhóm 9SpSpspsp bổ sung hiện tượng thời tiết (Bảng mã 4677/4687) - chưa hỗ trợ giải mã chi tiết."
     return None
 
 
@@ -1220,6 +1295,53 @@ def _giai_ma_ww(code):
     elif intensity == "VC":
         cau = f"{cau} (ở lân cận sân bay)"
     return cau
+
+
+# Thứ tự & tên cột chính xác theo file mẫu Excel do người dùng cung cấp
+COT_MAU_EXCEL = [
+    "Trạm", "Ngày", "giờ", "Nhiệt độ", "Điểm sương",
+    "Khí áp mực biển (hPa)", "Khí áp mực trạm (hPa)", "Hướng gió ",
+    "Tốc độ gió (m/s)", "Tầm nhìn (km)", "Mây tổng quan", "Mưa (mm)",
+    "Xu thế khí áp", "Gió mạnh nhất trong kỳ quan trắc (mã 911)",
+    "Hướng gió mạnh nhất trong kỳ quan trắc (mã 915)",
+]
+
+
+def synop_row_for_template(tom_tat):
+    """Chuyển tom_tat (kết quả decode_synop) sang 1 dòng dữ liệu đúng theo mẫu Excel."""
+    return {
+        "Trạm": tom_tat.get("tram_ten"),
+        "Ngày": tom_tat.get("ngay_so"),
+        "giờ": tom_tat.get("gio_so"),
+        "Nhiệt độ": tom_tat.get("nhiet_do_so"),
+        "Điểm sương": tom_tat.get("diem_suong_so"),
+        "Khí áp mực biển (hPa)": tom_tat.get("khi_ap_mbien_so"),
+        "Khí áp mực trạm (hPa)": tom_tat.get("khi_ap_tram_so"),
+        "Hướng gió ": tom_tat.get("huong_gio_so"),
+        "Tốc độ gió (m/s)": tom_tat.get("toc_do_gio_so"),
+        "Tầm nhìn (km)": tom_tat.get("tam_nhin_so"),
+        "Mây tổng quan": tom_tat.get("may_tong_quan_ngan"),
+        "Mưa (mm)": tom_tat.get("mua_so"),
+        "Xu thế khí áp": tom_tat.get("xu_the_khi_ap_ngan"),
+        "Gió mạnh nhất trong kỳ quan trắc (mã 911)": tom_tat.get("gio_manh_nhat_911"),
+        "Hướng gió mạnh nhất trong kỳ quan trắc (mã 915)": tom_tat.get("huong_gio_manh_nhat_915"),
+    }
+
+
+def xuat_excel_synop(danh_sach_dong):
+    """Xuất danh sách các dòng (dict theo COT_MAU_EXCEL) thành file Excel (bytes),
+    giữ đúng tên cột như file mẫu; cột 'Mây tổng quan' được định dạng dạng văn bản
+    để tránh Excel tự đổi '10/10' thành ngày tháng."""
+    df_xuat = pd.DataFrame(danh_sach_dong, columns=COT_MAU_EXCEL)
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df_xuat.to_excel(writer, index=False, sheet_name="Sheet1")
+        ws = writer.sheets["Sheet1"]
+        col_idx = COT_MAU_EXCEL.index("Mây tổng quan") + 1
+        for row in range(2, len(danh_sach_dong) + 2):
+            ws.cell(row=row, column=col_idx).number_format = "@"
+    buf.seek(0)
+    return buf.getvalue()
 
 
 def decode_metar(raw):
@@ -1825,6 +1947,7 @@ def main():
                     raw_lines = [ln.strip() for ln in decode_input_text.splitlines() if ln.strip()]
                     if not raw_lines:
                         st.warning("Vui lòng dán ít nhất một bản tin để giải mã.")
+                    danh_sach_dong_synop = []
                     for i, line in enumerate(raw_lines):
                         first_word = line.split()[0] if line.split() else ""
                         st.markdown("---")
@@ -1834,6 +1957,7 @@ def main():
                         if first_word in ("AAXX", "BBXX", "OOXX"):
                             tom_tat, chi_tiet, ghi_chu = decode_synop(line)
                             if tom_tat:
+                                danh_sach_dong_synop.append(synop_row_for_template(tom_tat))
                                 hien_thi = [
                                     ("Trạm", tom_tat.get("tram")),
                                     ("Ngày / Giờ (UTC)", f"{tom_tat.get('ngay','?')} / {tom_tat.get('gio_utc','?')}:00" if tom_tat.get("ngay") else None),
@@ -1889,6 +2013,21 @@ def main():
                         else:
                             st.error(f"Không nhận diện được loại bản tin (cần bắt đầu bằng AAXX/BBXX/OOXX cho SYNOP, hoặc METAR/SPECI cho bản tin sân bay). "
                                      f"Từ đầu tiên đọc được: '{first_word}'")
+
+                    if danh_sach_dong_synop:
+                        st.markdown("---")
+                        st.markdown("### 📊 Bảng tổng hợp (theo mẫu Excel)")
+                        st.caption("Chỉ áp dụng cho các bản tin SYNOP đã giải mã ở trên; các cột đúng tên/thứ tự theo file mẫu bạn cung cấp.")
+                        df_mau = pd.DataFrame(danh_sach_dong_synop, columns=COT_MAU_EXCEL)
+                        st.dataframe(df_mau, use_container_width=True, hide_index=True)
+                        excel_bytes = xuat_excel_synop(danh_sach_dong_synop)
+                        st.download_button(
+                            label="⬇️ Tải bảng Excel (.xlsx) theo mẫu",
+                            data=excel_bytes,
+                            file_name="giai_ma_synop.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="dl_btn_decode_excel"
+                        )
                 else:
                     st.info("👈 Dán nội dung bản tin ở thanh menu bên trái rồi nhấn 'GIẢI MÃ'.")
 
