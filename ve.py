@@ -231,6 +231,38 @@ def get_icon_name(row):
     if wind_speed <= 11:    return f"bnd_{status}"
     return f"sieubao_{status}"
 
+def them_nut_chup_anh_ban_do(m, ten_file="ban_do_bao", rong_px=6000, cao_px=4000):
+    """
+    Thêm nút điều khiển 'chụp ảnh' lên bản đồ Folium tương tác (dùng plugin leaflet-easyPrint),
+    cho phép tải xuống đúng khung hình đang xem (nền bản đồ, đường đi bão, lưới tọa độ...)
+    dưới dạng ảnh PNG độ phân giải cao (mặc định 6000x4000 px), không phụ thuộc độ phân giải màn hình.
+    """
+    ten_map = m.get_name()
+    script = f"""
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-easyprint@2.1.9/dist/bundle.js"></script>
+    <script>
+        (function() {{
+            var _cho_san_sang = setInterval(function() {{
+                if (typeof L !== 'undefined' && typeof L.easyPrint !== 'undefined' && window['{ten_map}']) {{
+                    clearInterval(_cho_san_sang);
+                    L.easyPrint({{
+                        title: 'Tải ảnh bản đồ (độ phân giải cao)',
+                        position: 'topright',
+                        exportOnly: true,
+                        hideControlContainer: false,
+                        filename: '{ten_file}',
+                        sizeModes: [
+                            {{ name: 'Độ phân giải cao', width: {rong_px}, height: {cao_px} }}
+                        ]
+                    }}).addTo(window['{ten_map}']);
+                }}
+            }}, 300);
+        }})();
+    </script>
+    """
+    m.get_root().html.add_child(folium.Element(script))
+
+
 def create_info_table(df, title):
     if df.empty: return ""
     if 'status_raw' in df.columns:
@@ -779,6 +811,11 @@ def run_interactive_folium_interpolation(
 # Dựa theo QCVN 16:2008/BTNMT - Quy chuẩn kỹ thuật quốc gia về Mã luật khí tượng bề mặt
 # ==============================================================================
 # -*- coding: utf-8 -*-
+"""
+Bộ giải mã điện khí tượng bề mặt (SYNOP / METAR)
+Xây dựng dựa trên QCVN 16:2008/BTNMT - Quy chuẩn kỹ thuật quốc gia
+về Mã luật khí tượng bề mặt.
+"""
 import re
 
 # ------------------------------------------------------------------
@@ -2076,6 +2113,7 @@ def main():
 
         fg_storm.add_to(m)
         folium.LayerControl(position='topleft', collapsed=False).add_to(m)
+        them_nut_chup_anh_ban_do(m, ten_file="ban_do_bao")
 
         if show_widgets:
             html_to_render = '<div class="floating-container">'
