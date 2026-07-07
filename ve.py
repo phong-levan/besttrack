@@ -1935,96 +1935,26 @@ def main():
                 else: st.info("👈 Vui lòng cấu hình dữ liệu, chọn màu, ngưỡng, tọa độ và nhấn 'VẼ BẢN ĐỒ TƯƠNG TÁC'.")
 
             elif obs_mode == "Dịch mã điện":
-                st.markdown("## 📡 Dịch mã điện Quan trắc Bề mặt (SYNOP / METAR)")
-                st.caption("Công cụ giải mã dựa theo QCVN 16:2008/BTNMT - Quy chuẩn kỹ thuật quốc gia về Mã luật khí tượng bề mặt. "
-                           "Dán bản tin ở thanh menu bên trái, mỗi bản tin một dòng, rồi bấm 'GIẢI MÃ'.")
                 if btn_run_decode:
                     raw_lines = [ln.strip() for ln in decode_input_text.splitlines() if ln.strip()]
-                    if not raw_lines:
-                        st.warning("Vui lòng dán ít nhất một bản tin để giải mã.")
                     danh_sach_dong_synop = []
-                    for i, line in enumerate(raw_lines):
+                    for line in raw_lines:
                         first_word = line.split()[0] if line.split() else ""
-                        st.markdown("---")
-                        st.markdown(f"#### 📨 Bản tin #{i+1}")
-                        st.code(line, language=None)
-
                         if first_word in ("AAXX", "BBXX", "OOXX"):
-                            tom_tat, chi_tiet, ghi_chu = decode_synop(line)
+                            tom_tat, _, _ = decode_synop(line)
                             if tom_tat:
                                 danh_sach_dong_synop.append(synop_row_for_template(tom_tat))
-                                hien_thi = [
-                                    ("Trạm", tom_tat.get("tram")),
-                                    ("Ngày / Giờ (UTC)", f"{tom_tat.get('ngay','?')} / {tom_tat.get('gio_utc','?')}:00" if tom_tat.get("ngay") else None),
-                                    ("Nhiệt độ", tom_tat.get("nhiet_do_khong_khi")),
-                                    ("Điểm sương", tom_tat.get("diem_suong")),
-                                    ("Khí áp mực biển", tom_tat.get("khi_ap_mbien")),
-                                    ("Khí áp mực trạm", tom_tat.get("khi_ap_tram")),
-                                    ("Hướng gió", tom_tat.get("huong_gio")),
-                                    ("Tốc độ gió", tom_tat.get("toc_do_gio")),
-                                    ("Tầm nhìn", tom_tat.get("tam_nhin")),
-                                    ("Lượng mây tổng quan", tom_tat.get("may_tong_quan")),
-                                    ("Giáng thủy", tom_tat.get("giang_thuy")),
-                                    ("Xu thế khí áp", tom_tat.get("xu_the_khi_ap")),
-                                ]
-                                hien_thi = [(l, v) for l, v in hien_thi if v]
-                                if hien_thi:
-                                    cols = st.columns(4)
-                                    for j, (label, val) in enumerate(hien_thi):
-                                        cols[j % 4].metric(label, val)
-                            for gcx in ghi_chu:
-                                st.info(gcx)
-                            with st.expander("📋 Xem giải mã chi tiết từng nhóm số", expanded=True):
-                                df_detail = pd.DataFrame(chi_tiet, columns=["Nhóm điện", "Diễn giải"])
-                                st.dataframe(df_detail, use_container_width=True, hide_index=True)
-
-                        elif first_word in ("METAR", "SPECI"):
-                            tom_tat, chi_tiet, ghi_chu = decode_metar(line)
-                            if tom_tat:
-                                hien_thi = [
-                                    ("Sân bay", tom_tat.get("san_bay")),
-                                    ("Ngày / Giờ (UTC)", f"{tom_tat.get('ngay','?')} / {tom_tat.get('gio_utc','?')}" if tom_tat.get("ngay") else None),
-                                    ("Gió", tom_tat.get("gio")),
-                                    ("Tầm nhìn", tom_tat.get("tam_nhin")),
-                                    ("Nhiệt độ", tom_tat.get("nhiet_do")),
-                                    ("Điểm sương", tom_tat.get("diem_suong")),
-                                    ("Khí áp QNH", tom_tat.get("khi_ap_qnh")),
-                                    ("Xu thế", tom_tat.get("xu_the")),
-                                ]
-                                hien_thi = [(l, v) for l, v in hien_thi if v]
-                                if hien_thi:
-                                    cols = st.columns(4)
-                                    for j, (label, val) in enumerate(hien_thi):
-                                        cols[j % 4].metric(label, val)
-                                if tom_tat.get("may"):
-                                    st.markdown("**Mây:** " + "; ".join(tom_tat["may"]))
-                                if tom_tat.get("hien_tuong_thoi_tiet"):
-                                    st.markdown("**Hiện tượng thời tiết:** " + "; ".join(tom_tat["hien_tuong_thoi_tiet"]))
-                            for gcx in ghi_chu:
-                                st.info(gcx)
-                            with st.expander("📋 Xem giải mã chi tiết từng nhóm số", expanded=True):
-                                df_detail = pd.DataFrame(chi_tiet, columns=["Nhóm điện", "Diễn giải"])
-                                st.dataframe(df_detail, use_container_width=True, hide_index=True)
-                        else:
-                            st.error(f"Không nhận diện được loại bản tin (cần bắt đầu bằng AAXX/BBXX/OOXX cho SYNOP, hoặc METAR/SPECI cho bản tin sân bay). "
-                                     f"Từ đầu tiên đọc được: '{first_word}'")
-
                     if danh_sach_dong_synop:
-                        st.markdown("---")
-                        st.markdown("### 📊 Bảng tổng hợp (theo mẫu Excel)")
-                        st.caption("Chỉ áp dụng cho các bản tin SYNOP đã giải mã ở trên; các cột đúng tên/thứ tự theo file mẫu bạn cung cấp.")
                         df_mau = pd.DataFrame(danh_sach_dong_synop, columns=COT_MAU_EXCEL)
                         st.dataframe(df_mau, use_container_width=True, hide_index=True)
                         excel_bytes = xuat_excel_synop(danh_sach_dong_synop)
                         st.download_button(
-                            label="⬇️ Tải bảng Excel (.xlsx) theo mẫu",
+                            label="⬇️ Tải bảng Excel (.xlsx)",
                             data=excel_bytes,
                             file_name="giai_ma_synop.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             key="dl_btn_decode_excel"
                         )
-                else:
-                    st.info("👈 Dán nội dung bản tin ở thanh menu bên trái rồi nhấn 'GIẢI MÃ'.")
 
     elif topic == "Dự báo điểm (KMA)":
         if not st.session_state['logged_in']:
