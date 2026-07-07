@@ -17,6 +17,7 @@ import matplotlib.colors as mcolors
 from matplotlib.colors import LinearSegmentedColormap, Normalize, BoundaryNorm
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+from matplotlib.ticker import MultipleLocator, FuncFormatter
 import geopandas as gpd
 from shapely.geometry import Point, box, Polygon, mapping
 from shapely.prepared import prep
@@ -96,10 +97,28 @@ st.markdown(f"""
         display: block !important; visibility: visible !important;
         width: {SIDEBAR_WIDTH} !important; min-width: {SIDEBAR_WIDTH} !important; max-width: {SIDEBAR_WIDTH} !important;
         position: fixed !important; left: 0 !important; top: 0 !important; height: 100vh !important;
-        transform: none !important; z-index: 100000 !important; background-color: {COLOR_SIDEBAR} !important; border-right: 1px solid #ddd;
+        z-index: 100000 !important; background-color: {COLOR_SIDEBAR} !important; border-right: 1px solid #ddd;
+        transition: transform 0.25s ease;
     }}
-    [data-testid="stSidebarCollapseBtn"], [data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
-    [data-testid="stAppViewContainer"] {{ padding-left: {SIDEBAR_WIDTH} !important; padding-top: 0 !important; }}
+    section[data-testid="stSidebar"][aria-expanded="false"] {{
+        transform: translateX(-100%) !important;
+    }}
+    [data-testid="stSidebarCollapseButton"], [data-testid="stSidebarCollapseBtn"], [data-testid="stSidebarCollapsedControl"] {{
+        display: flex !important; align-items: center !important; justify-content: center !important;
+        position: fixed !important; top: 14px !important; left: 14px !important;
+        width: 38px !important; height: 38px !important;
+        background: #ffffff !important; border: 1px solid {COLOR_BORDER} !important; border-radius: 8px !important;
+        z-index: 100001 !important; box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important; cursor: pointer !important;
+    }}
+    [data-testid="stSidebarCollapseButton"] svg, [data-testid="stSidebarCollapseBtn"] svg, [data-testid="stSidebarCollapsedControl"] svg {{
+        display: none !important;
+    }}
+    [data-testid="stSidebarCollapseButton"]::after, [data-testid="stSidebarCollapseBtn"]::after, [data-testid="stSidebarCollapsedControl"]::after {{
+        content: "☰"; font-size: 20px !important; line-height: 1 !important; color: {COLOR_TEXT} !important;
+    }}
+    [data-testid="stAppViewContainer"] {{ padding-left: {SIDEBAR_WIDTH} !important; padding-top: 0 !important; transition: padding-left 0.25s ease; }}
+    section[data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] {{ padding-left: 0 !important; }}
+    body:has(section[data-testid="stSidebar"][aria-expanded="false"]) [data-testid="stAppViewContainer"] {{ padding-left: 0 !important; }}
     [data-testid="stMainViewContainer"] {{ margin-left: 0 !important; width: 100% !important; padding-top: 0 !important; }}
     iframe {{ width: 100% !important; height: 100vh !important; border: none !important; display: block !important; }}
     .floating-container {{ position: fixed; top: 20px; right: 60px; z-index: 9999; display: flex; flex-direction: column; align-items: center; }}
@@ -236,6 +255,21 @@ def create_info_table(df, title):
         rows += f"<tr><td>{t}</td><td>{r.get('lon',0):.1f}E</td><td>{r.get('lat',0):.1f}N</td><td>{bf_str}</td><td>{p_str}</td></tr>"
     return textwrap.dedent(f"""<div class="info-box"><div class="info-title">{title}</div><div class="info-subtitle">{subtitle}</div><table><thead><tr><th>Ngày-Giờ</th><th>Kinh độ</th><th>Vĩ độ</th><th>Cấp gió</th><th>Pmin (hPa)</th></tr></thead><tbody>{rows}</tbody></table></div>""")
 
+def _buoc_luoi_dep(pham_vi):
+    """Chọn bước lưới tọa độ (độ) hợp lý để nhãn không bị dày đặc, dựa trên độ rộng vùng hiển thị."""
+    for buoc in (1, 2, 5, 10, 15, 20, 30):
+        if pham_vi / buoc <= 10:
+            return buoc
+    return 30
+
+def _dinh_dang_kinh_do(x, pos=None):
+    if abs(x) < 1e-9: return "0°"
+    return f"{abs(x):.0f}°E" if x > 0 else f"{abs(x):.0f}°W"
+
+def _dinh_dang_vi_do(y, pos=None):
+    if abs(y) < 1e-9: return "0°"
+    return f"{abs(y):.0f}°N" if y > 0 else f"{abs(y):.0f}°S"
+
 def generate_storm_static_fig(df, title_text, bounds=None):
     fig, ax = plt.subplots(figsize=(12, 10))
     ax.set_facecolor('#edf3f5')
@@ -253,7 +287,14 @@ def generate_storm_static_fig(df, title_text, bounds=None):
 
     ax.set_xlim(minx, maxx)
     ax.set_ylim(miny, maxy)
-    ax.grid(True, linestyle='--', color='#cccccc', alpha=0.5, zorder=1)
+    buoc_x = _buoc_luoi_dep(maxx - minx)
+    buoc_y = _buoc_luoi_dep(maxy - miny)
+    ax.xaxis.set_major_locator(MultipleLocator(buoc_x))
+    ax.yaxis.set_major_locator(MultipleLocator(buoc_y))
+    ax.xaxis.set_major_formatter(FuncFormatter(_dinh_dang_kinh_do))
+    ax.yaxis.set_major_formatter(FuncFormatter(_dinh_dang_vi_do))
+    ax.tick_params(axis='both', labelsize=9)
+    ax.grid(True, which='major', linestyle='--', color='#999999', alpha=0.6, zorder=1, linewidth=0.6)
 
     if os.path.exists(SHP_MASK_PATH):
         try:
@@ -274,7 +315,6 @@ def generate_storm_static_fig(df, title_text, bounds=None):
 
     ax.set_xlabel("Kinh độ", fontsize=11)
     ax.set_ylabel("Vĩ độ", fontsize=11)
-    ax.ticklabel_format(useOffset=False, style='plain')
 
     if not df.empty:
         groups = df['storm_no'].unique() if 'storm_no' in df.columns else [None]
@@ -729,6 +769,11 @@ def run_interactive_folium_interpolation(
 # Dựa theo QCVN 16:2008/BTNMT - Quy chuẩn kỹ thuật quốc gia về Mã luật khí tượng bề mặt
 # ==============================================================================
 # -*- coding: utf-8 -*-
+"""
+Bộ giải mã điện khí tượng bề mặt (SYNOP / METAR)
+Xây dựng dựa trên QCVN 16:2008/BTNMT - Quy chuẩn kỹ thuật quốc gia
+về Mã luật khí tượng bề mặt.
+"""
 import re
 
 # ------------------------------------------------------------------
@@ -1983,19 +2028,17 @@ def main():
         if use_storm_bounds and storm_bounds_dict:
             m.fit_bounds([[storm_bounds_dict['miny'], storm_bounds_dict['minx']], [storm_bounds_dict['maxy'], storm_bounds_dict['maxx']]])
 
-        folium.TileLayer('CartoDB positron', name='Bản đồ Sáng (Mặc định)', overlay=False, control=True).add_to(m)
-        folium.TileLayer('OpenStreetMap', name='Bản đồ Chi tiết', overlay=False, control=True).add_to(m)
-        folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri', name='Vệ tinh (Nền)', overlay=False, control=True).add_to(m)
+        folium.TileLayer('CartoDB positron', name='Bản đồ Nền (Mặc định)', overlay=False, control=False).add_to(m)
 
         ts = get_rainviewer_ts()
         if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
 
         if show_grid:
             grid_fg = folium.FeatureGroup(name="🌐 Lưới Tọa độ", show=True)
-            for lat in range(0, 45, 5):
-                folium.PolyLine([[lat, 90], [lat, 140]], color='gray', weight=1, dash_array='4, 4', opacity=0.4).add_to(grid_fg)
-            for lon in range(90, 145, 5):
-                folium.PolyLine([[0, lon], [45, lon]], color='gray', weight=1, dash_array='4, 4', opacity=0.4).add_to(grid_fg)
+            for lat in range(-85, 86, 5):
+                folium.PolyLine([[lat, -180], [lat, 180]], color='gray', weight=1, dash_array='4, 4', opacity=0.4).add_to(grid_fg)
+            for lon in range(-180, 181, 5):
+                folium.PolyLine([[-85, lon], [85, lon]], color='gray', weight=1, dash_array='4, 4', opacity=0.4).add_to(grid_fg)
             grid_fg.add_to(m)
 
         fg_storm = folium.FeatureGroup(name="🌀 Đường đi Bão")
