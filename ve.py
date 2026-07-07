@@ -853,11 +853,6 @@ def run_interactive_folium_interpolation(
 # Dựa theo QCVN 16:2008/BTNMT - Quy chuẩn kỹ thuật quốc gia về Mã luật khí tượng bề mặt
 # ==============================================================================
 # -*- coding: utf-8 -*-
-"""
-Bộ giải mã điện khí tượng bề mặt (SYNOP / METAR)
-Xây dựng dựa trên QCVN 16:2008/BTNMT - Quy chuẩn kỹ thuật quốc gia
-về Mã luật khí tượng bề mặt.
-"""
 import re
 
 # ------------------------------------------------------------------
