@@ -231,32 +231,74 @@ def get_icon_name(row):
     if wind_speed <= 11:    return f"bnd_{status}"
     return f"sieubao_{status}"
 
-def them_nut_chup_anh_ban_do(m, ten_file="ban_do_bao", rong_px=6000, cao_px=4000):
+def them_nut_chup_anh_ban_do(m, ten_file="ban_do_bao", rong_px=6000, cao_px=4000, ten_tile_layer=None):
     """
-    Thêm nút điều khiển 'chụp ảnh' lên bản đồ Folium tương tác (dùng plugin leaflet-easyPrint),
-    cho phép tải xuống đúng khung hình đang xem (nền bản đồ, đường đi bão, lưới tọa độ...)
-    dưới dạng ảnh PNG độ phân giải cao (mặc định 6000x4000 px), không phụ thuộc độ phân giải màn hình.
+    Thêm nút 'chụp ảnh' (📷) lên bản đồ Folium tương tác, dùng plugin leaflet-easyPrint để xuất
+    đúng khung hình đang xem (nền bản đồ, đường đi bão, lưới tọa độ...) ra file PNG độ phân giải cao.
+    Nút do ta tự vẽ (luôn hiển thị ngay cả khi thư viện chưa tải xong) và đặt ở góc dưới-phải
+    để tránh bị che bởi khung Chú Thích/Bảng tin ở góc trên-phải.
     """
     ten_map = m.get_name()
+    ten_tile = ten_tile_layer.get_name() if ten_tile_layer is not None else "null"
     script = f"""
-    <script src="https://cdn.jsdelivr.net/npm/leaflet-easyprint@2.1.9/dist/bundle.js"></script>
     <script>
         (function() {{
-            var _cho_san_sang = setInterval(function() {{
-                if (typeof L !== 'undefined' && typeof L.easyPrint !== 'undefined' && window['{ten_map}']) {{
-                    clearInterval(_cho_san_sang);
-                    L.easyPrint({{
-                        title: 'Tải ảnh bản đồ (độ phân giải cao)',
-                        position: 'topright',
-                        exportOnly: true,
-                        hideControlContainer: false,
-                        filename: '{ten_file}',
-                        sizeModes: [
-                            {{ name: 'Độ phân giải cao', width: {rong_px}, height: {cao_px} }}
-                        ]
-                    }}).addTo(window['{ten_map}']);
-                }}
-            }}, 300);
+            function _taiScript(src, ok, loi) {{
+                var s = document.createElement('script');
+                s.src = src;
+                s.onload = ok;
+                s.onerror = loi;
+                document.head.appendChild(s);
+            }}
+
+            function _khoiTaoNutChup() {{
+                var _cho = setInterval(function() {{
+                    if (typeof L === 'undefined' || !window['{ten_map}']) return;
+                    clearInterval(_cho);
+                    var _map = window['{ten_map}'];
+                    var _tile = window['{ten_tile}'] || null;
+
+                    var _NutChup = L.Control.extend({{
+                        options: {{ position: 'bottomright' }},
+                        onAdd: function() {{
+                            var btn = L.DomUtil.create('button');
+                            btn.innerHTML = '📷';
+                            btn.title = 'Tải ảnh bản đồ (độ phân giải cao)';
+                            btn.style.cssText = 'width:36px;height:36px;font-size:18px;background:#fff;' +
+                                'border:2px solid rgba(0,0,0,0.2);border-radius:4px;cursor:pointer;line-height:1;';
+                            L.DomEvent.disableClickPropagation(btn);
+                            L.DomEvent.on(btn, 'click', function(e) {{
+                                L.DomEvent.stop(e);
+                                if (typeof L.easyPrint === 'undefined') {{
+                                    alert('Công cụ xuất ảnh chưa tải xong, vui lòng đợi vài giây rồi thử lại.');
+                                    return;
+                                }}
+                                if (!window._easyPrintPlugin_{ten_map}) {{
+                                    var _opts = {{
+                                        hidden: true,
+                                        exportOnly: true,
+                                        filename: '{ten_file}',
+                                        sizeModes: [{{ name: 'HighRes', width: {rong_px}, height: {cao_px} }}]
+                                    }};
+                                    if (_tile) {{ _opts.tileLayer = _tile; }}
+                                    window._easyPrintPlugin_{ten_map} = L.easyPrint(_opts).addTo(_map);
+                                }}
+                                window._easyPrintPlugin_{ten_map}.printMap('HighRes', '{ten_file}');
+                            }});
+                            return btn;
+                        }}
+                    }});
+                    _map.addControl(new _NutChup());
+                }}, 300);
+            }}
+
+            if (typeof L !== 'undefined' && typeof L.easyPrint !== 'undefined') {{
+                _khoiTaoNutChup();
+            }} else {{
+                _taiScript('https://cdn.jsdelivr.net/npm/leaflet-easyprint@2.1.9/dist/bundle.js', _khoiTaoNutChup, function() {{
+                    _taiScript('https://unpkg.com/leaflet-easyprint@2.1.9/dist/bundle.js', _khoiTaoNutChup, _khoiTaoNutChup);
+                }});
+            }}
         }})();
     </script>
     """
@@ -811,7 +853,11 @@ def run_interactive_folium_interpolation(
 # Dựa theo QCVN 16:2008/BTNMT - Quy chuẩn kỹ thuật quốc gia về Mã luật khí tượng bề mặt
 # ==============================================================================
 # -*- coding: utf-8 -*-
-
+"""
+Bộ giải mã điện khí tượng bề mặt (SYNOP / METAR)
+Xây dựng dựa trên QCVN 16:2008/BTNMT - Quy chuẩn kỹ thuật quốc gia
+về Mã luật khí tượng bề mặt.
+"""
 import re
 
 # ------------------------------------------------------------------
@@ -2066,7 +2112,8 @@ def main():
         if use_storm_bounds and storm_bounds_dict:
             m.fit_bounds([[storm_bounds_dict['miny'], storm_bounds_dict['minx']], [storm_bounds_dict['maxy'], storm_bounds_dict['maxx']]])
 
-        folium.TileLayer('CartoDB positron', name='Bản đồ Nền (Mặc định)', overlay=False, control=False).add_to(m)
+        storm_tile_layer = folium.TileLayer('CartoDB positron', name='Bản đồ Nền (Mặc định)', overlay=False, control=False, cross_origin=True)
+        storm_tile_layer.add_to(m)
 
         ts = get_rainviewer_ts()
         if ts: folium.TileLayer(tiles=f"https://tile.rainviewer.com/{ts}/256/{{z}}/{{x}}/{{y}}/2/1_1.png", attr="RainViewer", name="☁️ Mây Vệ tinh", overlay=True, show=True, opacity=0.5).add_to(m)
@@ -2109,7 +2156,7 @@ def main():
 
         fg_storm.add_to(m)
         folium.LayerControl(position='topleft', collapsed=False).add_to(m)
-        them_nut_chup_anh_ban_do(m, ten_file="ban_do_bao")
+        them_nut_chup_anh_ban_do(m, ten_file="ban_do_bao", ten_tile_layer=storm_tile_layer)
 
         if show_widgets:
             html_to_render = '<div class="floating-container">'
