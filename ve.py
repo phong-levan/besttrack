@@ -83,6 +83,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ---- Trạng thái đóng/mở sidebar do ta tự quản lý (đáng tin cậy hơn dò DOM của Streamlit) ----
+if 'sidebar_open' not in st.session_state:
+    st.session_state['sidebar_open'] = True
+_SB_TRANSFORM = "translateX(0)" if st.session_state['sidebar_open'] else "translateX(-100%)"
+_SB_PADDING = SIDEBAR_WIDTH if st.session_state['sidebar_open'] else "0px"
+
 # ==============================================================================
 # 2. CSS CHUNG
 # ==============================================================================
@@ -98,27 +104,21 @@ st.markdown(f"""
         width: {SIDEBAR_WIDTH} !important; min-width: {SIDEBAR_WIDTH} !important; max-width: {SIDEBAR_WIDTH} !important;
         position: fixed !important; left: 0 !important; top: 0 !important; height: 100vh !important;
         z-index: 100000 !important; background-color: {COLOR_SIDEBAR} !important; border-right: 1px solid #ddd;
-        transition: transform 0.25s ease;
-    }}
-    section[data-testid="stSidebar"][aria-expanded="false"] {{
-        transform: translateX(-100%) !important;
+        transform: {_SB_TRANSFORM} !important; transition: transform 0.25s ease;
     }}
     [data-testid="stSidebarCollapseButton"], [data-testid="stSidebarCollapseBtn"], [data-testid="stSidebarCollapsedControl"] {{
-        display: flex !important; align-items: center !important; justify-content: center !important;
-        position: fixed !important; top: 14px !important; left: 14px !important;
-        width: 38px !important; height: 38px !important;
-        background: #ffffff !important; border: 1px solid {COLOR_BORDER} !important; border-radius: 8px !important;
-        z-index: 100001 !important; box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important; cursor: pointer !important;
-    }}
-    [data-testid="stSidebarCollapseButton"] svg, [data-testid="stSidebarCollapseBtn"] svg, [data-testid="stSidebarCollapsedControl"] svg {{
         display: none !important;
     }}
-    [data-testid="stSidebarCollapseButton"]::after, [data-testid="stSidebarCollapseBtn"]::after, [data-testid="stSidebarCollapsedControl"]::after {{
-        content: "☰"; font-size: 20px !important; line-height: 1 !important; color: {COLOR_TEXT} !important;
+    [data-testid="stAppViewContainer"] {{ padding-left: {_SB_PADDING} !important; padding-top: 0 !important; transition: padding-left 0.25s ease; }}
+    .st-key-btn_toggle_sidebar_wrap {{
+        position: fixed !important; top: 14px !important; left: 14px !important; z-index: 100001 !important;
+        width: 42px !important;
     }}
-    [data-testid="stAppViewContainer"] {{ padding-left: {SIDEBAR_WIDTH} !important; padding-top: 0 !important; transition: padding-left 0.25s ease; }}
-    section[data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] {{ padding-left: 0 !important; }}
-    body:has(section[data-testid="stSidebar"][aria-expanded="false"]) [data-testid="stAppViewContainer"] {{ padding-left: 0 !important; }}
+    .st-key-btn_toggle_sidebar_wrap button {{
+        width: 42px !important; height: 42px !important; padding: 0 !important; font-size: 18px !important;
+        border-radius: 8px !important; border: 1px solid {COLOR_BORDER} !important;
+        background: #ffffff !important; box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important;
+    }}
     [data-testid="stMainViewContainer"] {{ margin-left: 0 !important; width: 100% !important; padding-top: 0 !important; }}
     iframe {{ width: 100% !important; height: 100vh !important; border: none !important; display: block !important; }}
     .floating-container {{ position: fixed; top: 20px; right: 60px; z-index: 9999; display: flex; flex-direction: column; align-items: center; }}
@@ -133,6 +133,16 @@ st.markdown(f"""
     .info-subtitle {{ font-size: 10px !important; margin-bottom: 5px; font-style: italic; }}
     </style>
 """, unsafe_allow_html=True)
+
+# ---- Nút đóng/mở sidebar (ô vuông ☰) - tự quản lý bằng session_state, luôn hiển thị ----
+try:
+    _toggle_ctx = st.container(key="btn_toggle_sidebar_wrap")
+except TypeError:
+    _toggle_ctx = st.container()
+with _toggle_ctx:
+    if st.button("☰", key="btn_toggle_sidebar"):
+        st.session_state['sidebar_open'] = not st.session_state['sidebar_open']
+        st.rerun()
 
 # ==============================================================================
 # 3. HÀM XỬ LÝ LOGIC
